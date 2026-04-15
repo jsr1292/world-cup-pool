@@ -28,13 +28,13 @@
 
   <!-- Pool Header -->
   <div style="margin-bottom: 20px;">
-    <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold);">{pool.name}</h1>
-    <div style="display: flex; gap: 12px; margin-top: 6px; font-size: 10px; color: var(--text-muted);">
+    <h1 style="font-family: 'Libre Baskerville', serif; font-size: 24px; color: var(--gold);">{pool.name}</h1>
+    <div style="display: flex; gap: 12px; margin-top: 8px; font-size: 11px; color: var(--text-muted);">
       <span>👥 {data.members.length} miembros</span>
       {#if pool.buy_in > 0}
         <span>💰 {pool.buy_in}€ buy-in</span>
       {/if}
-      <span>🔗 Code: <span style="color: var(--gold); font-weight: 600;">{pool.invite_code}</span></span>
+      <span>🔗 Código: <span style="color: var(--gold); font-weight: 600;">{pool.invite_code}</span></span>
     </div>
     {#if data.isAdmin}
       <div style="margin-top: 8px;">
@@ -44,11 +44,11 @@
   </div>
 
   <!-- Tabs -->
-  <div style="display: flex; gap: 0; margin-bottom: 16px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden;">
+  <div style="display: flex; gap: 0; margin-bottom: 20px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
     {#each tabs as t, i}
       <button
         onclick={() => tab = t.id}
-        style="flex: 1; padding: 8px 4px; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; border: none; background: {tab === t.id ? 'rgba(201,168,76,0.1)' : 'transparent'}; color: {tab === t.id ? 'var(--gold)' : 'var(--text-muted)'}; {i > 0 ? 'border-left: 1px solid var(--border);' : ''}"
+        style="flex: 1; padding: 10px 8px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; border: none; background: {tab === t.id ? 'rgba(201,168,76,0.1)' : 'transparent'}; color: {tab === t.id ? 'var(--gold)' : 'var(--text-muted)'}; {i > 0 ? 'border-left: 1px solid var(--border);' : ''}"
       >{t.label}</button>
     {/each}
   </div>

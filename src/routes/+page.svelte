@@ -4,7 +4,7 @@
 
 <div>
   <div style="margin-bottom: 24px;">
-    <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold);">
+    <h1 style="font-family: 'Libre Baskerville', serif; font-size: 28px; color: var(--gold);">
       ¡Hola{data.user?.display_name ? ', ' + data.user.display_name : ''}! 👋
     </h1>
     <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">

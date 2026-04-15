@@ -108,7 +108,7 @@
     {/if}
   </div>
 
-  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px;">
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
     {#each GROUP_NAMES as group}
       {@const groupTeams = data.teamsByGroup[group] || []}
       <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">

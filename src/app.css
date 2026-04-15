@@ -128,10 +128,10 @@ button {
     min-height: 100dvh;
   }
   .sidebar {
-    width: 220px;
+    width: 240px;
     background: var(--bg-card-solid);
     border-right: 1px solid var(--border);
-    padding: 20px 12px;
+    padding: 24px 16px;
     position: fixed;
     top: 0;
     bottom: 0;
@@ -140,12 +140,26 @@ button {
     z-index: 40;
   }
   .main-content {
-    margin-left: 220px;
+    margin-left: 240px;
     flex: 1;
-    padding: 24px;
-    max-width: 960px;
+    padding: 32px 48px;
+    max-width: 1200px;
   }
   .bottom-nav { display: none; }
+}
+
+@media (min-width: 1400px) {
+  .main-content {
+    max-width: 1400px;
+    padding: 40px 64px;
+  }
+  .sidebar {
+    width: 260px;
+    padding: 28px 20px;
+  }
+  .main-content {
+    margin-left: 260px;
+  }
 }
 
 @media (max-width: 767px) {
