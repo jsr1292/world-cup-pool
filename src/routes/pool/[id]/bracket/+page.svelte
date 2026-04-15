@@ -257,9 +257,9 @@
                   <button
                     disabled={!canClick}
                     onclick={() => canClick && pickTeam('r32', mi, ti, tid)}
-                    style="display: flex; align-items: center; gap: 3px; padding: 4px 6px; background: transparent; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 10px; font-family: inherit; transition: background 0.1s;"
-                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.15)')}
-                    onmouseleave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    style="display: flex; align-items: center; gap: 3px; padding: 4px 6px; background: {explicitPicks.r32?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent'}; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 10px; font-family: inherit; transition: background 0.1s;"
+                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.25)')}
+                    onmouseleave={(e) => (e.currentTarget.style.background = explicitPicks.r32?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent')}
                   >
                     <span style="color: var(--text-dim); font-size: 8px; width: 8px; flex-shrink: 0;">{mi * 2 + ti + 1}</span>
                     {#if t}
@@ -301,9 +301,9 @@
                   <button
                     disabled={!canClick}
                     onclick={() => canClick && pickTeam('r16', mi, ti, tid)}
-                    style="display: flex; align-items: center; gap: 3px; padding: 4px 6px; background: transparent; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 10px; font-family: inherit; transition: background 0.1s;"
-                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.15)')}
-                    onmouseleave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    style="display: flex; align-items: center; gap: 3px; padding: 4px 6px; background: {explicitPicks.r16?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent'}; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 10px; font-family: inherit; transition: background 0.1s;"
+                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.25)')}
+                    onmouseleave={(e) => (e.currentTarget.style.background = explicitPicks.r16?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent')}
                   >
                     <span style="color: var(--text-dim); font-size: 8px; width: 8px; flex-shrink: 0;">{mi * 2 + ti + 1}</span>
                     {#if t}
@@ -343,9 +343,9 @@
                   <button
                     disabled={!canClick}
                     onclick={() => canClick && pickTeam('qf', mi, ti, tid)}
-                    style="display: flex; align-items: center; gap: 3px; padding: 4px 6px; background: transparent; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 10px; font-family: inherit; transition: background 0.1s;"
-                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.15)')}
-                    onmouseleave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    style="display: flex; align-items: center; gap: 3px; padding: 4px 6px; background: {explicitPicks.qf?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent'}; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 10px; font-family: inherit; transition: background 0.1s;"
+                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.25)')}
+                    onmouseleave={(e) => (e.currentTarget.style.background = explicitPicks.qf?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent')}
                   >
                     <span style="color: var(--text-dim); font-size: 8px; width: 8px; flex-shrink: 0;">{mi * 2 + ti + 1}</span>
                     {#if t}
@@ -386,9 +386,9 @@
                   <button
                     disabled={!canClick}
                     onclick={() => canClick && pickTeam('sf', mi, ti, tid)}
-                    style="display: flex; align-items: center; gap: 3px; padding: 4px 6px; background: transparent; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 10px; font-family: inherit; transition: background 0.1s;"
-                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.15)')}
-                    onmouseleave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    style="display: flex; align-items: center; gap: 3px; padding: 4px 6px; background: {explicitPicks.sf?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent'}; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 10px; font-family: inherit; transition: background 0.1s;"
+                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.25)')}
+                    onmouseleave={(e) => (e.currentTarget.style.background = explicitPicks.sf?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent')}
                   >
                     <span style="color: var(--text-dim); font-size: 8px; width: 8px; flex-shrink: 0;">{mi * 2 + ti + 1}</span>
                     {#if t}
@@ -426,9 +426,9 @@
                 <button
                   disabled={!canClick}
                   onclick={() => canClick && pickTeam('final', 0, ti, tid)}
-                  style="display: flex; align-items: center; gap: 4px; padding: 5px 8px; background: transparent; border: none; border-top: {ti === 1 ? '1px solid rgba(201,168,76,0.3)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--gold-light)' : 'var(--text-dim)'}; font-size: 11px; font-family: inherit; transition: background 0.1s;"
+                  style="display: flex; align-items: center; gap: 4px; padding: 5px 8px; background: {explicitPicks.final?.[0]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent'}; border: none; border-top: {ti === 1 ? '1px solid rgba(201,168,76,0.3)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--gold-light)' : 'var(--text-dim)'}; font-size: 11px; font-family: inherit; transition: background 0.1s;"
                   onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.2)')}
-                  onmouseleave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  onmouseleave={(e) => (e.currentTarget.style.background = explicitPicks.final?.[0]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent')}
                 >
                   <span style="color: var(--text-dim); font-size: 8px; width: 8px; flex-shrink: 0;">{ti + 1}</span>
                   {#if t}
@@ -456,9 +456,9 @@
                   <button
                     disabled={!canClick}
                     onclick={() => canClick && pickTeam('3rd', 0, ti, tid)}
-                    style="display: flex; align-items: center; gap: 4px; padding: 5px 8px; background: transparent; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 11px; font-family: inherit; transition: background 0.1s;"
-                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.15)')}
-                    onmouseleave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    style="display: flex; align-items: center; gap: 4px; padding: 5px 8px; background: {explicitPicks['3rd']?.[0]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent'}; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 11px; font-family: inherit; transition: background 0.1s;"
+                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.25)')}
+                    onmouseleave={(e) => (e.currentTarget.style.background = explicitPicks['3rd']?.[0]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent')}
                   >
                     <span style="color: var(--text-dim); font-size: 8px; width: 8px; flex-shrink: 0;">{ti +
 1}</span>
