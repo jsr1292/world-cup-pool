@@ -40,26 +40,27 @@
 
   const teamMap = $derived(buildTeamMap());
 
+  function getGroupTeam(group, pos) {
+    const gp = data.groupPredictions?.[group];
+    if (!gp) return null;
+    return [gp.pos1, gp.pos2, gp.pos3, gp.pos4][pos - 1] ?? null;
+  }
+
   $effect(() => {
     const t = {};
     const exp = {};
 
+    // R32: derive from group predictions
     t.r32 = [];
     exp.r32 = [];
     for (let i = 0; i < 16; i++) {
       const m = R32_MAP[i];
-      let team1 = null, team2 = null;
-      if (m.t1g !== '?') {
-        const gp = data.groupPredictions?.[m.t1g];
-        team1 = gp ? [gp.pos1, gp.pos2, gp.pos3, gp.pos4][m.t1p - 1] : null;
-      }
-      if (m.t2g !== '?') {
-        const gp = data.groupPredictions?.[m.t2g];
-        team2 = gp ? [gp.pos1, gp.pos2, gp.pos3, gp.pos4][m.t2p - 1] : null;
-      }
+      const team1 = m.t1g !== '?' ? getGroupTeam(m.t1g, m.t1p) : null;
+      const team2 = m.t2g !== '?' ? getGroupTeam(m.t2g, m.t2p) : null;
       t.r32.push([team1, team2]);
       exp.r32.push([false, false]);
     }
+    // Restore saved R32 picks
     for (let i = 0; i < 32; i++) {
       const slot = i + 1;
       const mi = Math.floor(i / 2);
@@ -70,35 +71,18 @@
       }
     }
 
-    t.r16 = []; exp.r16 = [];
-    for (let i = 0; i < 8; i++) { t.r16.push([null, null]); exp.r16.push([false, false]); }
-    for (let i = 0; i < 16; i++) {
-      const slot = i + 1, mi = Math.floor(i / 2), ti = i % 2;
-      if (data.existingBracket?.r16?.[slot]) { t.r16[mi][ti] = data.existingBracket.r16[slot]; exp.r16[mi][ti] = true; }
-    }
-
-    t.qf = []; exp.qf = [];
-    for (let i = 0; i < 4; i++) { t.qf.push([null, null]); exp.qf.push([false, false]); }
-    for (let i = 0; i < 8; i++) {
-      const slot = i + 1, mi = Math.floor(i / 2), ti = i % 2;
-      if (data.existingBracket?.qf?.[slot]) { t.qf[mi][ti] = data.existingBracket.qf[slot]; exp.qf[mi][ti] = true; }
-    }
-
-    t.sf = []; exp.sf = [];
-    for (let i = 0; i < 2; i++) { t.sf.push([null, null]); exp.sf.push([false, false]); }
-    for (let i = 0; i < 4; i++) {
-      const slot = i + 1, mi = Math.floor(i / 2), ti = i % 2;
-      if (data.existingBracket?.sf?.[slot]) { t.sf[mi][ti] = data.existingBracket.sf[slot]; exp.sf[mi][ti] = true; }
-    }
-
-    t.final = [[null, null]]; exp.final = [[false, false]];
-    for (let i = 0; i < 2; i++) {
-      if (data.existingBracket?.final?.[i + 1]) { t.final[0][i] = data.existingBracket.final[i + 1]; exp.final[0][i] = true; }
-    }
-
-    t['3rd'] = [[null, null]]; exp['3rd'] = [[false, false]];
-    for (let i = 0; i < 2; i++) {
-      if (data.existingBracket?.['3rd']?.[i + 1]) { t['3rd'][0][i] = data.existingBracket['3rd'][i + 1]; exp['3rd'][0][i] = true; }
+    // R16+
+    const phaseSizes = { r16: 8, qf: 4, sf: 2, final: 1, '3rd': 1 };
+    for (const [phase, size] of Object.entries(phaseSizes)) {
+      t[phase] = Array.from({ length: size }, () => [null, null]);
+      exp[phase] = Array.from({ length: size }, () => [false, false]);
+      for (let i = 0; i < size * 2; i++) {
+        const slot = i + 1, mi = Math.floor(i / 2), ti = i % 2;
+        if (data.existingBracket?.[phase]?.[slot]) {
+          t[phase][mi][ti] = data.existingBracket[phase][slot];
+          exp[phase][mi][ti] = true;
+        }
+      }
     }
 
     teams = t;
@@ -107,23 +91,29 @@
   });
 
   function cascadeAll() {
-    for (let i = 0; i < 8; i++) {
-      for (let j = 0; j < 2; j++) {
-        if (!explicitPicks.r16[i][j]) teams.r16[i][j] = getWinner('r32', i * 2 + j);
-      }
+    // Restore non-explicit R32 slots from group predictions
+    for (let i = 0; i < 16; i++) {
+      const m = R32_MAP[i];
+      if (m.t1g === '?') continue;
+      if (!explicitPicks.r32[i][0]) teams.r32[i][0] = getGroupTeam(m.t1g, m.t1p);
+      if (!explicitPicks.r32[i][1]) teams.r32[i][1] = getGroupTeam(m.t2g, m.t2p);
     }
-    for (let i = 0; i < 4; i++) {
-      for (let j = 0; j < 2; j++) {
-        if (!explicitPicks.qf[i][j]) teams.qf[i][j] = getWinner('r16', i * 2 + j);
+
+    // Cascade forward
+    const cascades = [
+      { from: 'r32', to: 'r16', fromSize: 16, toSize: 8 },
+      { from: 'r16', to: 'qf', fromSize: 8, toSize: 4 },
+      { from: 'qf', to: 'sf', fromSize: 4, toSize: 2 },
+      { from: 'sf', to: 'final', fromSize: 2, toSize: 1 },
+    ];
+    for (const { from, to, toSize } of cascades) {
+      for (let i = 0; i < toSize; i++) {
+        for (let j = 0; j < 2; j++) {
+          if (!explicitPicks[to][i][j]) {
+            teams[to][i][j] = getWinner(from, i * 2 + j);
+          }
+        }
       }
-    }
-    for (let i = 0; i < 2; i++) {
-      for (let j = 0; j < 2; j++) {
-        if (!explicitPicks.sf[i][j]) teams.sf[i][j] = getWinner('qf', i * 2 + j);
-      }
-    }
-    for (let j = 0; j < 2; j++) {
-      if (!explicitPicks.final[0][j]) teams.final[0][j] = getWinner('sf', j);
     }
   }
 
@@ -131,18 +121,23 @@
     const m = teams[phase]?.[matchIdx];
     if (!m) return null;
     const [a, b] = m;
-    if (a && b) return null;
+    if (a && b) return null; // both present → no winner yet
     return a || b;
   }
 
   function pickTeam(phase, matchIdx, teamIdx, teamId) {
-    const cur = teams[phase][matchIdx][teamIdx];
-    if (cur === teamId) {
-      teams[phase][matchIdx][teamIdx] = null;
+    // If already explicitly picked → deselect (restore auto-fill)
+    if (explicitPicks[phase][matchIdx][teamIdx]) {
       explicitPicks[phase][matchIdx][teamIdx] = false;
+      teams[phase][matchIdx][teamIdx] = null;
+      // Also clear the opponent's explicit pick so both get restored
+      explicitPicks[phase][matchIdx][1 - teamIdx] = false;
+      teams[phase][matchIdx][1 - teamIdx] = null;
     } else {
+      // Select this team as winner
       teams[phase][matchIdx][teamIdx] = teamId;
       explicitPicks[phase][matchIdx][teamIdx] = true;
+      // Clear opponent
       teams[phase][matchIdx][1 - teamIdx] = null;
       explicitPicks[phase][matchIdx][1 - teamIdx] = false;
     }
@@ -150,7 +145,8 @@
   }
 
   async function saveBracket() {
-    saving = true; saved = false;
+    saving = true;
+    saved = false;
     try {
       const picks = {};
       for (const phase of PHASES) {
@@ -160,8 +156,7 @@
         for (let i = 0; i < pt.length; i++) {
           for (let j = 0; j < 2; j++) {
             const slot = i * 2 + j + 1;
-            const tid = pt[i][j];
-            picks[phase][slot] = tid; // always send, even null (server handles deletion)
+            picks[phase][slot] = pt[i][j];
           }
         }
       }
@@ -170,10 +165,18 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prediction_id: data.predictionId, picks }),
       });
-      if (res.ok) { saved = true; setTimeout(() => { saved = false; }, 2500); }
-      else { saveError = 'Save failed'; setTimeout(() => { saveError = null; }, 3000); }
-    } catch (e) { console.error(e); }
-    finally { saving = false; }
+      if (res.ok) {
+        saved = true;
+        setTimeout(() => { saved = false; }, 2500);
+      } else {
+        saveError = 'Save failed';
+        setTimeout(() => { saveError = null; }, 3000);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      saving = false;
+    }
   }
 
   function flagEmoji(code) {
@@ -181,23 +184,22 @@
     if (code === 'GB-ENG') return '🏴󠁧󠁢󠁥󠁮󠁧󠁿';
     if (code === 'GB-SCT') return '🏴󠁧󠁢󠁳󠁣󠁴󠁿';
     if (code.length !== 2) return '🏳️';
-    const offset = 127397;
-    return code.toUpperCase().split('').map(c => String.fromCodePoint(c.codePointAt(0) + offset)).join('');
+    return code.toUpperCase().split('').map(c => String.fromCodePoint(c.codePointAt(0) + 127397)).join('');
   }
 
   function shortName(name) {
     const map = {
       'United States': 'USA', 'South Korea': 'S. Korea', 'South Africa': 'S. Africa',
-      'Ivory Coast': 'Ivory Coast', 'New Zealand': 'N. Zealand', 'Cape Verde': 'Cape Verde',
+      'Ivory Coast': 'Côte d\'Ivoire', 'New Zealand': 'N. Zealand', 'Cape Verde': 'Cape Verde',
       'Czech Republic': 'Czechia', 'Saudi Arabia': 'S. Arabia',
       'Bosnia and Herzegovina': 'Bosnia', 'DR Congo': 'DR Congo', 'North Macedonia': 'N. Macedonia',
     };
-    return map[name] || (name ? name.substring(0, 12) : '');
+    return map[name] || (name ? name.substring(0, 14) : '');
   }
 
   function r32Label(mi) {
     const m = R32_MAP[mi];
-    if (m.t1g === '?') return `R32-${mi + 1}`;
+    if (m.t1g === '?') return `3rd #${mi - 11}`;
     return `${m.t1g}${m.t1p} vs ${m.t2g}${m.t2p}`;
   }
 
@@ -206,31 +208,29 @@
     for (const phase of PHASES) {
       const pt = teams[phase];
       if (!pt) continue;
-      for (const m of pt) { if (m[0] !== null) n++; if (m[1] !== null) n++; }
+      for (const m of pt) {
+        if (m[0] !== null) n++;
+        if (m[1] !== null) n++;
+      }
     }
     return n;
   });
 </script>
 
-<div>
-  <a href="/pool/{data.pool.id}" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 16px;">
-    ← Back to pool
-  </a>
+<!-- Header -->
+<div class="bracket-page">
+  <a href="/pool/{data.pool.id}" class="back-link">← Back to pool</a>
 
-  <div style="margin-bottom: 20px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+  <div class="bracket-header">
     <div>
-      <h1 style="font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--gold);">Knockout Bracket</h1>
-      <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
-        Click a team to advance them. Picks cascade from group predictions.
-      </p>
+      <h1 class="bracket-title">Knockout Bracket</h1>
+      <p class="bracket-subtitle">Click a team to pick the winner. Click the winner again to undo.</p>
     </div>
     {#if data.isLocked}
-      <div style="padding: 8px 12px; background: rgba(255,77,106,0.1); border: 1px solid var(--red); border-radius: 6px; font-size: 10px; color: var(--red); white-space: nowrap;">
-        ⚠️ Locked
-      </div>
+      <div class="lock-badge">⚠️ Locked</div>
     {:else}
-      <div style="display: flex; gap: 12px; align-items: center;">
-        <span style="font-size: 10px; color: var(--text-dim);">{totalPicks} slots filled</span>
+      <div class="save-area">
+        <span class="pick-count">{totalPicks} picks</span>
         <button class="btn-primary" disabled={saving} onclick={saveBracket}>
           {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Bracket'}
         </button>
@@ -238,242 +238,201 @@
     {/if}
   </div>
 
-  <div style="overflow-x: auto; padding-bottom: 16px;">
-    <div style="display: flex; gap: 0; min-width: 1100px; align-items: flex-start;">
+  <!-- Bracket Grid -->
+  <div class="bracket-scroll">
+    <div class="bracket-grid">
 
-      <!-- R32 column -->
-      <div style="flex: 0 0 auto; padding-right: 4px;">
-        <div style="text-align: center; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.25); border-radius: 4px; padding: 4px 6px; min-width: 80px;">Round of 32</div>
-        <div style="display: flex; flex-direction: column; gap: 3px;">
+      <!-- R32 -->
+      <div class="bracket-col">
+        <div class="col-header">Round of 32</div>
+        <div class="match-list r32-list">
           {#each (teams.r32 || []) as match, mi}
             {@const m = R32_MAP[mi]}
             {@const isPlaceholder = m.t1g === '?'}
-            <div style="background: var(--bg-card); border: 1px solid {isPlaceholder ? 'rgba(100,100,100,0.2)' : 'var(--border)'}; border-radius: 4px; overflow: hidden; min-width: 80px; opacity: {isPlaceholder ? 0.5 : 1};">
-              <div style="display: flex; flex-direction: column; gap: 0;">
-                {#each [0, 1] as ti}
-                  {@const tid = match[ti]}
-                  {@const t = teamMap[tid]}
-                  {@const canClick = !data.isLocked && !isPlaceholder && tid !== null}
-                  <button
-                    disabled={!canClick}
-                    onclick={() => canClick && pickTeam('r32', mi, ti, tid)}
-                    style="display: flex; align-items: center; gap: 3px; padding: 4px 6px; background: {explicitPicks.r32?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent'}; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 10px; font-family: inherit; transition: background 0.1s;"
-                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.25)')}
-                    onmouseleave={(e) => (e.currentTarget.style.background = explicitPicks.r32?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent')}
-                  >
-                    <span style="color: var(--text-dim); font-size: 8px; width: 8px; flex-shrink: 0;">{mi * 2 + ti + 1}</span>
-                    {#if t}
-                      <span>{flagEmoji(t.flag_code)}</span>
-                      <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(t.name)}</span>
-                      {#if explicitPicks.r32?.[mi]?.[ti]}<span style="color: var(--gold); font-size: 8px;">★</span>{/if}
-                    {:else if isPlaceholder}
-                      <span style="color: var(--text-dim); font-style: italic; font-size: 9px;">TBD</span>
-                    {:else}
-                      <span style="flex: 1; color: var(--text-dim); font-style: italic; font-size: 9px;">—</span>
-                    {/if}
-                  </button>
-                {/each}
-              </div>
-              <div style="text-align: center; font-size: 8px; color: var(--text-dim); padding: 1px 4px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2);">{r32Label(mi)}</div>
-            </div>
-          {/each}
-        </div>
-      </div>
-
-      <!-- R32→R16 connector -->
-      <div style="display: flex; flex-direction: column; justify-content: space-around; padding: 22px 2px; gap: 0; flex: 0 0 auto;">
-        {#each Array(8) as _, i}
-          <div style="width: 14px; height: 4px; background: rgba(201,168,76,0.2); margin: {i < 4 ? (i === 0 ? '0' : '6px 0') : (i === 4 ? '6px 0' : '6px 0')};"></div>
-        {/each}
-      </div>
-
-      <!-- R16 column -->
-      <div style="flex: 0 0 auto; padding: 0 4px;">
-        <div style="text-align: center; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.25); border-radius: 4px; padding: 4px 6px; min-width: 80px;">Round of 16</div>
-        <div style="display: flex; flex-direction: column; gap: 3px;">
-          {#each (teams.r16 || []) as match, mi}
-            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; min-width: 80px; margin-top: {mi > 0 ? (mi === 4 ? '0' : '9px') : '0'};">
-              <div style="display: flex; flex-direction: column; gap: 0;">
-                {#each [0, 1] as ti}
-                  {@const tid = match[ti]}
-                  {@const t = teamMap[tid]}
-                  {@const canClick = !data.isLocked && tid !== null}
-                  <button
-                    disabled={!canClick}
-                    onclick={() => canClick && pickTeam('r16', mi, ti, tid)}
-                    style="display: flex; align-items: center; gap: 3px; padding: 4px 6px; background: {explicitPicks.r16?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent'}; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 10px; font-family: inherit; transition: background 0.1s;"
-                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.25)')}
-                    onmouseleave={(e) => (e.currentTarget.style.background = explicitPicks.r16?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent')}
-                  >
-                    <span style="color: var(--text-dim); font-size: 8px; width: 8px; flex-shrink: 0;">{mi * 2 + ti + 1}</span>
-                    {#if t}
-                      <span>{flagEmoji(t.flag_code)}</span>
-                      <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(t.name)}</span>
-                      {#if explicitPicks.r16?.[mi]?.[ti]}<span style="color: var(--gold); font-size: 8px;">★</span>{/if}
-                    {:else}
-                      <span style="flex: 1; color: var(--text-dim); font-style: italic; font-size: 9px;">—</span>
-                    {/if}
-                  </button>
-                {/each}
-              </div>
-              <div style="text-align: center; font-size: 8px; color: var(--text-dim); padding: 1px 4px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2);">R16-{mi + 1}</div>
-            </div>
-          {/each}
-        </div>
-      </div>
-
-      <!-- R16→QF connector -->
-      <div style="display: flex; flex-direction: column; justify-content: space-around; padding: 22px 2px; gap: 0; flex: 0 0 auto;">
-        {#each Array(4) as _, i}
-          <div style="width: 14px; height: 4px; background: rgba(201,168,76,0.2); margin: {i % 2 === 0 ? '0' : '14px 0'};"></div>
-        {/each}
-      </div>
-
-      <!-- QF column -->
-      <div style="flex: 0 0 auto; padding: 0 4px;">
-        <div style="text-align: center; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.25); border-radius: 4px; padding: 4px 6px; min-width: 80px;">Quarterfinals</div>
-        <div style="display: flex; flex-direction: column; gap: 3px;">
-          {#each (teams.qf || []) as match, mi}
-            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; min-width: 80px; margin-top: {mi > 0 ? '21px' : '0'};">
-              <div style="display: flex; flex-direction: column; gap: 0;">
-                {#each [0, 1] as ti}
-                  {@const tid = match[ti]}
-                  {@const t = teamMap[tid]}
-                  {@const canClick = !data.isLocked && tid !== null}
-                  <button
-                    disabled={!canClick}
-                    onclick={() => canClick && pickTeam('qf', mi, ti, tid)}
-                    style="display: flex; align-items: center; gap: 3px; padding: 4px 6px; background: {explicitPicks.qf?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent'}; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 10px; font-family: inherit; transition: background 0.1s;"
-                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.25)')}
-                    onmouseleave={(e) => (e.currentTarget.style.background = explicitPicks.qf?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent')}
-                  >
-                    <span style="color: var(--text-dim); font-size: 8px; width: 8px; flex-shrink: 0;">{mi * 2 + ti + 1}</span>
-                    {#if t}
-                      <span>{flagEmoji(t.flag_code)}</span>
-                      <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(t.name)}</span>
-                      {#if explicitPicks.qf?.[mi]?.[ti]}<span style="color: var(--gold); font-size: 8px;">★</span>{/if}
-                    {:else}
-                      <span style="flex: 1; color: var(--text-dim); font-style: italic; font-size: 9px;">—</span>
-                    {/if}
-                  </button>
-                {/each}
-              </div>
-              <div style="text-align: center; font-size: 8px; color: var(--text-dim); padding: 1px 4px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2);">QF-{mi + 1}</div>
-            </div>
-          {/each}
-        </div>
-      </div>
-
-      <!-- QF→SF connector -->
-      <div style="display: flex; flex-direction: column; justify-content: space-around; padding: 22px 2px; gap: 0; flex: 0 0 auto;">
-        <div style="width: 14px; height: 4px; background: rgba(201,168,76,0.2); margin: 0;"></div>
-        <div style="width: 14px; height: 4px; background: rgba(201,168,76,0.2); margin: 46px 0;"></div>
-        <div style="width: 14px; height: 4px; background: rgba(201,168,76,0.2); margin: 46px 0;"></div>
-        <div style="width: 14px; height: 4px; background: rgba(201,168,76,0.2); margin: 0;"></div>
-      </div>
-
-      <!-- SF column -->
-      <div style="flex: 0 0 auto; padding: 0 4px;">
-        <div style="text-align: center; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.25); border-radius: 4px; padding: 4px 6px; min-width: 80px;">Semifinals</div>
-        <div style="display: flex; flex-direction: column; gap: 3px;">
-          {#each (teams.sf || []) as match, mi}
-            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; min-width: 80px; margin-top: {mi > 0 ? '85px' : '0'};">
-              <div style="display: flex; flex-direction: column; gap: 0;">
-                {#each [0, 1] as ti}
-                  {@const tid = match[ti]}
-                  {@const t = teamMap[tid]}
-                  {@const canClick = !data.isLocked && tid !== null}
-                  <button
-                    disabled={!canClick}
-                    onclick={() => canClick && pickTeam('sf', mi, ti, tid)}
-                    style="display: flex; align-items: center; gap: 3px; padding: 4px 6px; background: {explicitPicks.sf?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent'}; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 10px; font-family: inherit; transition: background 0.1s;"
-                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.25)')}
-                    onmouseleave={(e) => (e.currentTarget.style.background = explicitPicks.sf?.[mi]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent')}
-                  >
-                    <span style="color: var(--text-dim); font-size: 8px; width: 8px; flex-shrink: 0;">{mi * 2 + ti + 1}</span>
-                    {#if t}
-                      <span>{flagEmoji(t.flag_code)}</span>
-                      <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(t.name)}</span>
-                      {#if explicitPicks.sf?.[mi]?.[ti]}<span style="color: var(--gold); font-size: 8px;">★</span>{/if}
-                    {:else}
-                      <span style="flex: 1; color: var(--text-dim); font-style: italic; font-size: 9px;">—</span>
-                    {/if}
-                  </button>
-                {/each}
-              </div>
-              <div style="text-align: center; font-size: 8px; color: var(--text-dim); padding: 1px 4px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2);">SF-{mi + 1}</div>
-            </div>
-          {/each}
-        </div>
-      </div>
-
-      <!-- SF→Final connector -->
-      <div style="display: flex; flex-direction: column; justify-content: center; padding: 22px 2px; gap: 0; flex: 0 0 auto;">
-        <div style="width: 14px; height: 4px; background: rgba(201,168,76,0.2);"></div>
-      </div>
-
-      <!-- Final + 3rd column -->
-      <div style="flex: 0 0 auto; padding: 0 4px;">
-        <div style="text-align: center; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.25); border-radius: 4px; padding: 4px 6px; min-width: 100px;">Final</div>
-        <div style="display: flex; flex-direction: column; gap: 3px;">
-          <!-- Final -->
-          <div style="background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.3); border-radius: 4px; overflow: hidden; min-width: 100px;">
-            <div style="display: flex; flex-direction: column; gap: 0;">
+            <div class="match-card" class:placeholder={isPlaceholder}>
               {#each [0, 1] as ti}
-                {@const tid = teams.final?.[0]?.[ti]}
+                {@const tid = match[ti]}
                 {@const t = teamMap[tid]}
-                {@const canClick = !data.isLocked && tid !== null}
+                {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
+                {@const canClick = !data.isLocked && !isPlaceholder && tid !== null}
                 <button
+                  class="team-btn"
+                  class:picked={isPicked}
+                  class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null}
                   disabled={!canClick}
-                  onclick={() => canClick && pickTeam('final', 0, ti, tid)}
-                  style="display: flex; align-items: center; gap: 4px; padding: 5px 8px; background: {explicitPicks.final?.[0]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent'}; border: none; border-top: {ti === 1 ? '1px solid rgba(201,168,76,0.3)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--gold-light)' : 'var(--text-dim)'}; font-size: 11px; font-family: inherit; transition: background 0.1s;"
-                  onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.2)')}
-                  onmouseleave={(e) => (e.currentTarget.style.background = explicitPicks.final?.[0]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent')}
+                  onclick={() => canClick && pickTeam('r32', mi, ti, tid)}
                 >
-                  <span style="color: var(--text-dim); font-size: 8px; width: 8px; flex-shrink: 0;">{ti + 1}</span>
                   {#if t}
-                    <span style="font-size: 13px;">{flagEmoji(t.flag_code)}</span>
-                    <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600;">{shortName(t.name)}</span>
-                    {#if explicitPicks.final?.[0]?.[ti]}<span style="color: var(--gold); font-size: 8px;">★</span>{/if}
+                    <span class="team-flag">{flagEmoji(t.flag_code)}</span>
+                    <span class="team-name">{shortName(t.name)}</span>
+                    {#if isPicked}<span class="pick-star">★</span>{/if}
+                  {:else if isPlaceholder}
+                    <span class="team-tbd">TBD</span>
                   {:else}
-                    <span style="flex: 1; color: var(--text-dim); font-style: italic; font-size: 10px;">—</span>
+                    <span class="team-empty">—</span>
                   {/if}
                 </button>
               {/each}
+              <div class="match-label">{r32Label(mi)}</div>
             </div>
-            <div style="text-align: center; font-size: 8px; color: var(--gold); padding: 2px 4px; border-top: 1px solid rgba(201,168,76,0.3); background: rgba(0,0,0,0.3); letter-spacing: 0.1em;">🏆 FINAL</div>
+          {/each}
+        </div>
+      </div>
+
+      <!-- R16 -->
+      <div class="bracket-col">
+        <div class="col-header">Round of 16</div>
+        <div class="match-list r16-list">
+          {#each (teams.r16 || []) as match, mi}
+            <div class="match-card">
+              {#each [0, 1] as ti}
+                {@const tid = match[ti]}
+                {@const t = teamMap[tid]}
+                {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
+                {@const canClick = !data.isLocked && tid !== null}
+                <button
+                  class="team-btn"
+                  class:picked={isPicked}
+                  class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null}
+                  disabled={!canClick}
+                  onclick={() => canClick && pickTeam('r16', mi, ti, tid)}
+                >
+                  {#if t}
+                    <span class="team-flag">{flagEmoji(t.flag_code)}</span>
+                    <span class="team-name">{shortName(t.name)}</span>
+                    {#if isPicked}<span class="pick-star">★</span>{/if}
+                  {:else}
+                    <span class="team-empty">—</span>
+                  {/if}
+                </button>
+              {/each}
+              <div class="match-label">R16-{mi + 1}</div>
+            </div>
+          {/each}
+        </div>
+      </div>
+
+      <!-- QF -->
+      <div class="bracket-col">
+        <div class="col-header">Quarterfinals</div>
+        <div class="match-list qf-list">
+          {#each (teams.qf || []) as match, mi}
+            <div class="match-card">
+              {#each [0, 1] as ti}
+                {@const tid = match[ti]}
+                {@const t = teamMap[tid]}
+                {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
+                {@const canClick = !data.isLocked && tid !== null}
+                <button
+                  class="team-btn"
+                  class:picked={isPicked}
+                  class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null}
+                  disabled={!canClick}
+                  onclick={() => canClick && pickTeam('qf', mi, ti, tid)}
+                >
+                  {#if t}
+                    <span class="team-flag">{flagEmoji(t.flag_code)}</span>
+                    <span class="team-name">{shortName(t.name)}</span>
+                    {#if isPicked}<span class="pick-star">★</span>{/if}
+                  {:else}
+                    <span class="team-empty">—</span>
+                  {/if}
+                </button>
+              {/each}
+              <div class="match-label">QF-{mi + 1}</div>
+            </div>
+          {/each}
+        </div>
+      </div>
+
+      <!-- SF -->
+      <div class="bracket-col">
+        <div class="col-header">Semifinals</div>
+        <div class="match-list sf-list">
+          {#each (teams.sf || []) as match, mi}
+            <div class="match-card">
+              {#each [0, 1] as ti}
+                {@const tid = match[ti]}
+                {@const t = teamMap[tid]}
+                {@const isPicked = explicitPicks.sf?.[mi]?.[ti]}
+                {@const canClick = !data.isLocked && tid !== null}
+                <button
+                  class="team-btn"
+                  class:picked={isPicked}
+                  class:eliminated={explicitPicks.sf?.[mi]?.[1 - ti] && !isPicked && tid !== null}
+                  disabled={!canClick}
+                  onclick={() => canClick && pickTeam('sf', mi, ti, tid)}
+                >
+                  {#if t}
+                    <span class="team-flag">{flagEmoji(t.flag_code)}</span>
+                    <span class="team-name">{shortName(t.name)}</span>
+                    {#if isPicked}<span class="pick-star">★</span>{/if}
+                  {:else}
+                    <span class="team-empty">—</span>
+                  {/if}
+                </button>
+              {/each}
+              <div class="match-label">SF-{mi + 1}</div>
+            </div>
+          {/each}
+        </div>
+      </div>
+
+      <!-- Final + 3rd -->
+      <div class="bracket-col">
+        <div class="col-header">Final</div>
+        <div class="match-list final-list">
+          <!-- Final match -->
+          <div class="match-card match-final">
+            {#each [0, 1] as ti}
+              {@const tid = teams.final?.[0]?.[ti]}
+              {@const t = teamMap[tid]}
+              {@const isPicked = explicitPicks.final?.[0]?.[ti]}
+              {@const canClick = !data.isLocked && tid !== null}
+              <button
+                class="team-btn"
+                class:picked={isPicked}
+                class:eliminated={explicitPicks.final?.[0]?.[1 - ti] && !isPicked && tid !== null}
+                disabled={!canClick}
+                onclick={() => canClick && pickTeam('final', 0, ti, tid)}
+              >
+                {#if t}
+                  <span class="team-flag">{flagEmoji(t.flag_code)}</span>
+                  <span class="team-name">{shortName(t.name)}</span>
+                  {#if isPicked}<span class="pick-star">★</span>{/if}
+                {:else}
+                  <span class="team-empty">—</span>
+                {/if}
+              </button>
+            {/each}
+            <div class="match-label match-label-final">🏆 FINAL</div>
           </div>
 
           <!-- 3rd place -->
-          <div style="margin-top: 16px;">
-            <div style="text-align: center; font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 4px;">3rd Place</div>
-            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; min-width: 100px;">
-              <div style="display: flex; flex-direction: column; gap: 0;">
-                {#each [0, 1] as ti}
-                  {@const tid = teams['3rd']?.[0]?.[ti]}
-                  {@const t = teamMap[tid]}
-                  {@const canClick = !data.isLocked && tid !== null}
-                  <button
-                    disabled={!canClick}
-                    onclick={() => canClick && pickTeam('3rd', 0, ti, tid)}
-                    style="display: flex; align-items: center; gap: 4px; padding: 5px 8px; background: {explicitPicks['3rd']?.[0]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent'}; border: none; border-top: {ti === 1 ? '1px solid var(--border)' : 'none'}; cursor: {canClick ? 'pointer' : 'default'}; text-align: left; width: 100%; color: {tid ? 'var(--text)' : 'var(--text-dim)'}; font-size: 11px; font-family: inherit; transition: background 0.1s;"
-                    onmouseenter={(e) => canClick && (e.currentTarget.style.background = 'rgba(201,168,76,0.25)')}
-                    onmouseleave={(e) => (e.currentTarget.style.background = explicitPicks['3rd']?.[0]?.[ti] ? 'rgba(201,168,76,0.15)' : 'transparent')}
-                  >
-                    <span style="color: var(--text-dim); font-size: 8px; width: 8px; flex-shrink: 0;">{ti +
-1}</span>
-                    {#if t}
-                      <span style="font-size: 12px;">{flagEmoji(t.flag_code)}</span>
-                      <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(t.name)}</span>
-                      {#if explicitPicks['3rd']?.[0]?.[ti]}<span style="color: var(--gold); font-size: 8px;">&starf;</span>{/if}
-                    {:else}
-                      <span style="flex: 1; color: var(--text-dim); font-style: italic; font-size: 10px;">&mdash;</span>
-                    {/if}
-                  </button>
-                {/each}
-              </div>
-              <div style="text-align: center; font-size: 8px; color: var(--text-dim); padding: 1px 4px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2);">3RD</div>
-            </div>
+          <div class="match-card match-3rd">
+            <div class="match-label-3rd">3rd Place</div>
+            {#each [0, 1] as ti}
+              {@const tid = teams['3rd']?.[0]?.[ti]}
+              {@const t = teamMap[tid]}
+              {@const isPicked = explicitPicks['3rd']?.[0]?.[ti]}
+              {@const canClick = !data.isLocked && tid !== null}
+              <button
+                class="team-btn"
+                class:picked={isPicked}
+                class:eliminated={explicitPicks['3rd']?.[0]?.[1 - ti] && !isPicked && tid !== null}
+                disabled={!canClick}
+                onclick={() => canClick && pickTeam('3rd', 0, ti, tid)}
+              >
+                {#if t}
+                  <span class="team-flag">{flagEmoji(t.flag_code)}</span>
+                  <span class="team-name">{shortName(t.name)}</span>
+                  {#if isPicked}<span class="pick-star">★</span>{/if}
+                {:else}
+                  <span class="team-empty">—</span>
+                {/if}
+              </button>
+            {/each}
+            <div class="match-label">3RD</div>
           </div>
         </div>
       </div>
@@ -482,18 +441,359 @@
   </div>
 
   <!-- Legend -->
-  <div style="margin-top: 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-    <div style="display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--text-dim);">
-      <span style="color: var(--gold);">&starf;</span> <span>Your pick</span>
-    </div>
-    <div style="display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--text-dim);">
-      <span style="background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.25); border-radius: 3px; padding: 1px 5px; font-size: 8px; color: var(--gold);">A1 vs B2</span>
-      <span>Group matchup label</span>
-    </div>
-    <div style="display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--text-dim);">
-      <span style="opacity: 0.5; border: 1px solid rgba(100,100,100,0.2); border-radius: 3px; padding: 1px 5px; font-size: 8px; color: var(--text-dim);">TBD</span>
-      <span>3rd place (TBD)</span>
-    </div>
+  <div class="bracket-legend">
+    <span class="legend-item"><span class="pick-star">★</span> Your pick</span>
+    <span class="legend-item"><span class="legend-match">A1 vs B2</span> Group matchup</span>
+    <span class="legend-item"><span class="legend-tbd">TBD</span> 3rd place qualifiers</span>
   </div>
-
 </div>
+
+<style>
+  .bracket-page {
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .back-link {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 16px;
+  }
+
+  .bracket-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+
+  .bracket-title {
+    font-family: 'Libre Baskerville', serif;
+    font-size: 20px;
+    color: var(--gold);
+  }
+
+  .bracket-subtitle {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .lock-badge {
+    padding: 8px 12px;
+    background: rgba(255, 77, 106, 0.1);
+    border: 1px solid var(--red);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--red);
+    white-space: nowrap;
+  }
+
+  .save-area {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .pick-count {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* Bracket grid */
+  .bracket-scroll {
+    overflow-x: auto;
+    padding-bottom: 16px;
+  }
+
+  .bracket-grid {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+    min-width: 900px;
+  }
+
+  .bracket-col {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .col-header {
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 10px;
+    background: rgba(201, 168, 76, 0.12);
+    border: 1px solid rgba(201, 168, 76, 0.25);
+    border-radius: 4px;
+    padding: 5px 10px;
+    width: 100%;
+    max-width: 140px;
+  }
+
+  /* Match lists with proper spacing between rounds */
+  .match-list {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 140px;
+  }
+
+  .r32-list { gap: 4px; }
+  .r16-list { gap: 10px; }
+  .qf-list { gap: 28px; }
+  .sf-list { gap: 70px; }
+  .final-list { gap: 20px; }
+
+  /* Vertically center each column */
+  .bracket-col {
+    justify-content: center;
+    min-height: 0;
+  }
+
+  .match-list {
+    justify-content: center;
+    flex: 1;
+  }
+
+  /* Match cards */
+  .match-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .match-card.placeholder {
+    opacity: 0.5;
+    border-color: rgba(100, 100, 100, 0.2);
+  }
+
+  .match-card.match-final {
+    border-color: rgba(201, 168, 76, 0.3);
+    background: rgba(201, 168, 76, 0.06);
+  }
+
+  .match-card.match-3rd {
+    border-color: var(--border);
+  }
+
+  .match-label-3rd {
+    text-align: center;
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 3px 4px 0;
+  }
+
+  /* Team buttons */
+  .team-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    color: var(--text);
+    font-size: 11px;
+    font-family: inherit;
+    transition: background 0.12s, opacity 0.12s;
+  }
+
+  .team-btn:first-child {
+    border-top: none;
+  }
+
+  .team-btn:not(:disabled):hover {
+    background: rgba(201, 168, 76, 0.2);
+  }
+
+  .team-btn.picked {
+    background: rgba(201, 168, 76, 0.15);
+  }
+
+  .team-btn.picked:not(:disabled):hover {
+    background: rgba(201, 168, 76, 0.25);
+  }
+
+  .team-btn.eliminated {
+    opacity: 0.35;
+    text-decoration: line-through;
+  }
+
+  .team-btn:disabled {
+    cursor: default;
+  }
+
+  /* Final match bigger */
+  .match-final .team-btn {
+    padding: 8px 10px;
+    font-size: 13px;
+    gap: 6px;
+  }
+
+  .match-3rd .team-btn {
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+
+  .team-flag {
+    flex-shrink: 0;
+  }
+
+  .match-final .team-flag { font-size: 15px; }
+  .match-3rd .team-flag { font-size: 13px; }
+
+  .team-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .match-final .team-name {
+    font-weight: 600;
+    color: var(--gold-light);
+  }
+
+  .pick-star {
+    color: var(--gold);
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  .match-final .pick-star { font-size: 12px; }
+
+  .team-tbd {
+    color: var(--text-dim);
+    font-style: italic;
+    font-size: 10px;
+  }
+
+  .team-empty {
+    color: var(--text-dim);
+    font-style: italic;
+    font-size: 10px;
+    flex: 1;
+  }
+
+  .match-label {
+    text-align: center;
+    font-size: 8px;
+    color: var(--text-dim);
+    padding: 2px 4px;
+    border-top: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .match-label-final {
+    color: var(--gold);
+    letter-spacing: 0.1em;
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  /* Legend */
+  .bracket-legend {
+    margin-top: 24px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-match {
+    background: rgba(201, 168, 76, 0.12);
+    border: 1px solid rgba(201, 168, 76, 0.25);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 8px;
+    color: var(--gold);
+  }
+
+  .legend-tbd {
+    opacity: 0.5;
+    border: 1px solid rgba(100, 100, 100, 0.2);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 8px;
+  }
+
+  /* Desktop: expand to fill screen */
+  @media (min-width: 1200px) {
+    .bracket-grid {
+      min-width: unset;
+      gap: 12px;
+    }
+
+    .col-header {
+      max-width: 180px;
+      font-size: 11px;
+      padding: 6px 14px;
+    }
+
+    .match-list {
+      max-width: 180px;
+    }
+
+    .team-btn {
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+
+    .match-final .team-btn {
+      padding: 10px 14px;
+      font-size: 15px;
+    }
+
+    .team-flag { font-size: 15px; }
+    .match-final .team-flag { font-size: 18px; }
+    .team-name { font-size: 13px; }
+    .match-final .team-name { font-size: 15px; }
+    .pick-star { font-size: 12px; }
+    .match-final .pick-star { font-size: 14px; }
+
+    .match-label { font-size: 9px; padding: 3px 6px; }
+
+    .bracket-title { font-size: 24px; }
+    .bracket-subtitle { font-size: 13px; }
+  }
+
+  @media (max-width: 600px) {
+    .team-btn {
+      padding: 5px 6px;
+      font-size: 10px;
+      gap: 3px;
+    }
+
+    .team-flag { font-size: 11px; }
+    .team-name { font-size: 10px; }
+
+    .bracket-title { font-size: 16px; }
+    .col-header { font-size: 9px; padding: 4px 8px; }
+  }
+</style>
