@@ -24,7 +24,6 @@
 
   let teams = $state({});
   let explicitPicks = $state({});
-  let losers = $state({}); // track losers for 3rd place
   let saving = $state(false);
   let saved = $state(false);
   let saveError = $state(null);
@@ -88,71 +87,78 @@
 
     teams = t;
     explicitPicks = exp;
-    losers = { sf: [[null, null], [null, null]] };
     cascadeAll();
   });
 
   function cascadeAll() {
-    // Restore non-explicit R32 slots from group predictions
+    // Step 1: Restore all R32 slots from group predictions first
     for (let i = 0; i < 16; i++) {
       const m = R32_MAP[i];
       if (m.t1g === '?') continue;
-      if (!explicitPicks.r32[i][0]) teams.r32[i][0] = getGroupTeam(m.t1g, m.t1p);
-      if (!explicitPicks.r32[i][1]) teams.r32[i][1] = getGroupTeam(m.t2g, m.t2p);
+      teams.r32[i][0] = getGroupTeam(m.t1g, m.t1p);
+      teams.r32[i][1] = getGroupTeam(m.t2g, m.t2p);
     }
 
-    // Cascade forward
+    // Step 2: For explicitly picked R32 matches, override with the pick
+    // (teams stay as-is; explicitPicks just marks who the winner is)
+
+    // Step 3: Cascade winners forward
     const cascades = [
-      { from: 'r32', to: 'r16', fromSize: 16, toSize: 8 },
-      { from: 'r16', to: 'qf', fromSize: 8, toSize: 4 },
-      { from: 'qf', to: 'sf', fromSize: 4, toSize: 2 },
-      { from: 'sf', to: 'final', fromSize: 2, toSize: 1 },
+      { from: 'r32', to: 'r16', toSize: 8 },
+      { from: 'r16', to: 'qf', toSize: 4 },
+      { from: 'qf', to: 'sf', toSize: 2 },
+      { from: 'sf', to: 'final', toSize: 1 },
     ];
     for (const { from, to, toSize } of cascades) {
       for (let i = 0; i < toSize; i++) {
         for (let j = 0; j < 2; j++) {
           if (!explicitPicks[to][i][j]) {
-            teams[to][i][j] = getWinner(from, i * 2 + j);
+            teams[to][i][j] = getExplicitWinner(from, i * 2 + j);
           }
         }
       }
     }
 
-    // 3rd place: auto-fill from SF losers
-    if (!explicitPicks['3rd'][0][0]) teams['3rd'][0][0] = losers.sf?.[0] ?? null;
-    if (!explicitPicks['3rd'][0][1]) teams['3rd'][0][1] = losers.sf?.[1] ?? null;
+    // Step 4: 3rd place from SF losers
+    const sf0 = getExplicitLoser('sf', 0);
+    const sf1 = getExplicitLoser('sf', 1);
+    if (!explicitPicks['3rd'][0][0]) teams['3rd'][0][0] = sf0;
+    if (!explicitPicks['3rd'][0][1]) teams['3rd'][0][1] = sf1;
   }
 
-  function getWinner(phase, matchIdx) {
+  function getExplicitWinner(phase, matchIdx) {
     const m = teams[phase]?.[matchIdx];
     if (!m) return null;
-    const [a, b] = m;
-    if (a && b) return null; // both present → no winner yet
-    return a || b;
+    const exp = explicitPicks[phase]?.[matchIdx];
+    if (!exp) return null;
+    if (exp[0]) return m[0]; // team 0 was explicitly picked as winner
+    if (exp[1]) return m[1]; // team 1 was explicitly picked as winner
+    return null; // no explicit pick → no winner yet
+  }
+
+  function getExplicitLoser(phase, matchIdx) {
+    const m = teams[phase]?.[matchIdx];
+    if (!m) return null;
+    const exp = explicitPicks[phase]?.[matchIdx];
+    if (!exp) return null;
+    if (exp[0]) return m[1]; // team 0 won → team 1 lost
+    if (exp[1]) return m[0]; // team 1 won → team 0 lost
+    return null;
   }
 
   function pickTeam(phase, matchIdx, teamIdx, teamId) {
-    // If already explicitly picked → deselect (restore auto-fill)
-    if (explicitPicks[phase][matchIdx][teamIdx]) {
-      explicitPicks[phase][matchIdx][teamIdx] = false;
-      teams[phase][matchIdx][teamIdx] = null;
-      explicitPicks[phase][matchIdx][1 - teamIdx] = false;
-      teams[phase][matchIdx][1 - teamIdx] = null;
-      if (phase === 'sf' || phase === 'qf' || phase === 'r16' || phase === 'r32') {
-        if (losers[phase]) losers[phase][matchIdx] = [null, null];
-      }
+    const exp = explicitPicks[phase][matchIdx];
+    if (exp[teamIdx]) {
+      // This team is the winner → deselect (undo)
+      exp[teamIdx] = false;
+      exp[1 - teamIdx] = false;
+    } else if (exp[1 - teamIdx]) {
+      // Opponent is winner → switch pick to this team
+      exp[1 - teamIdx] = false;
+      exp[teamIdx] = true;
     } else {
-      // Track the loser before clearing
-      const opponentId = teams[phase][matchIdx][1 - teamIdx];
-      if (phase === 'sf' && losers.sf) {
-        losers.sf[matchIdx] = opponentId;
-      }
-      // Select this team as winner
-      teams[phase][matchIdx][teamIdx] = teamId;
-      explicitPicks[phase][matchIdx][teamIdx] = true;
-      // Clear opponent
-      teams[phase][matchIdx][1 - teamIdx] = null;
-      explicitPicks[phase][matchIdx][1 - teamIdx] = false;
+      // No winner yet → pick this team
+      exp[teamIdx] = true;
     }
     cascadeAll();
   }
@@ -167,9 +173,17 @@
         const pt = teams[phase];
         if (!pt) continue;
         for (let i = 0; i < pt.length; i++) {
+          // Save winner per match (only 1 slot per match)
+          const exp = explicitPicks[phase][i];
           for (let j = 0; j < 2; j++) {
             const slot = i * 2 + j + 1;
-            picks[phase][slot] = pt[i][j];
+            // If this team was explicitly picked as winner, save their ID
+            // Otherwise save null (cleared)
+            if (exp[j]) {
+              picks[phase][slot] = pt[i][j];
+            } else {
+              picks[phase][slot] = null;
+            }
           }
         }
       }
