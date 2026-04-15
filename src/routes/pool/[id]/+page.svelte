@@ -23,7 +23,7 @@
 
   <!-- Tabs -->
   <div style="display: flex; gap: 0; margin-bottom: 16px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden;">
-    {#each ['leaderboard', 'predictions', 'members', 'scoring'] as t}
+    {#each ['leaderboard', 'predictions', 'bracket', 'members', 'scoring'] as t}
       <button
         onclick={() => tab = t}
         style="flex: 1; padding: 8px 4px; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; border: none; background: {tab === t ? 'rgba(201,168,76,0.1)' : 'transparent'}; color: {tab === t ? 'var(--gold)' : 'var(--text-muted)'}; {t !== 'leaderboard' ? 'border-left: 1px solid var(--border);' : ''}"
@@ -76,6 +76,18 @@
         </div>
       {/each}
     {/if}
+  {/if}
+
+  <!-- Bracket Tab -->
+  {#if tab === 'bracket'}
+    <div style="text-align: center; padding: 24px;">
+      <div style="font-size: 32px; margin-bottom: 8px;">🏆</div>
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Fill in group predictions first, then predict the knockout bracket.</p>
+      <div style="display: flex; gap: 8px; justify-content: center;">
+        <a href="/pool/{pool.id}/predict" class="btn-primary" style="font-size: 9px; padding: 8px 16px;">Group Stage</a>
+        <a href="/pool/{pool.id}/bracket" class="btn-ghost" style="font-size: 9px; padding: 8px 16px;">Knockout Bracket</a>
+      </div>
+    </div>
   {/if}
 
   <!-- Members Tab -->
