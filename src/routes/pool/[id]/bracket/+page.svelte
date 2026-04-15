@@ -24,6 +24,7 @@
 
   let teams = $state({});
   let explicitPicks = $state({});
+  let losers = $state({}); // track losers for 3rd place
   let saving = $state(false);
   let saved = $state(false);
   let saveError = $state(null);
@@ -87,6 +88,7 @@
 
     teams = t;
     explicitPicks = exp;
+    losers = { sf: [[null, null], [null, null]] };
     cascadeAll();
   });
 
@@ -115,6 +117,10 @@
         }
       }
     }
+
+    // 3rd place: auto-fill from SF losers
+    if (!explicitPicks['3rd'][0][0]) teams['3rd'][0][0] = losers.sf?.[0] ?? null;
+    if (!explicitPicks['3rd'][0][1]) teams['3rd'][0][1] = losers.sf?.[1] ?? null;
   }
 
   function getWinner(phase, matchIdx) {
@@ -130,10 +136,17 @@
     if (explicitPicks[phase][matchIdx][teamIdx]) {
       explicitPicks[phase][matchIdx][teamIdx] = false;
       teams[phase][matchIdx][teamIdx] = null;
-      // Also clear the opponent's explicit pick so both get restored
       explicitPicks[phase][matchIdx][1 - teamIdx] = false;
       teams[phase][matchIdx][1 - teamIdx] = null;
+      if (phase === 'sf' || phase === 'qf' || phase === 'r16' || phase === 'r32') {
+        if (losers[phase]) losers[phase][matchIdx] = [null, null];
+      }
     } else {
+      // Track the loser before clearing
+      const opponentId = teams[phase][matchIdx][1 - teamIdx];
+      if (phase === 'sf' && losers.sf) {
+        losers.sf[matchIdx] = opponentId;
+      }
       // Select this team as winner
       teams[phase][matchIdx][teamIdx] = teamId;
       explicitPicks[phase][matchIdx][teamIdx] = true;
