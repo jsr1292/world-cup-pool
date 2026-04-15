@@ -26,6 +26,7 @@
   let explicitPicks = $state({});
   let saving = $state(false);
   let saved = $state(false);
+  let saveError = $state<string | null>(null);
 
   function buildTeamMap() {
     const map = {};
@@ -160,7 +161,7 @@
           for (let j = 0; j < 2; j++) {
             const slot = i * 2 + j + 1;
             const tid = pt[i][j];
-            if (tid !== null) picks[phase][slot] = tid;
+            picks[phase][slot] = tid; // always send, even null (server handles deletion)
           }
         }
       }
@@ -170,6 +171,7 @@
         body: JSON.stringify({ prediction_id: data.predictionId, picks }),
       });
       if (res.ok) { saved = true; setTimeout(() => { saved = false; }, 2500); }
+      else { saveError = 'Save failed'; setTimeout(() => { saveError = null; }, 3000); }
     } catch (e) { console.error(e); }
     finally { saving = false; }
   }

@@ -50,7 +50,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   // Verify ownership
-  const pred = db.prepare('SELECT user_id FROM predictions WHERE id = ?').get(predictionId) as any;
+  const pred = db.prepare('SELECT user_id FROM predictions WHERE id = ?').get(prediction_id) as any;
   if (!pred || pred.user_id !== locals.user.id) {
     return json({ error: 'Not your prediction' }, { status: 403 });
   }
