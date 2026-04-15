@@ -10,7 +10,6 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   const poolId = Number(url.searchParams.get('pool_id'));
   if (!poolId) return json({ error: 'Missing pool_id' }, { status: 400 });
 
-  // Verify admin
   const pool = db.prepare('SELECT created_by FROM pools WHERE id = ?').get(poolId) as any;
   if (!pool || pool.created_by !== locals.user.id) {
     return json({ error: 'Forbidden' }, { status: 403 });
@@ -20,31 +19,59 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 };
 
 // POST /api/admin/scoring
-// Body: { pool_id, rules: { group_position: 3, r32_winner: 5, ... } }
+// Body: { pool_id, rules?: {...}, deadline_group?, deadline_knockout? }
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { pool_id, rules } = await request.json() as { pool_id: number; rules: Record<string, number> };
-  if (!pool_id || !rules) return json({ error: 'Missing pool_id or rules' }, { status: 400 });
+  const body = await request.json() as {
+    pool_id: number;
+    rules?: Record<string, number>;
+    deadline_group?: string | null;
+    deadline_knockout?: string | null;
+  };
+  const { pool_id, rules } = body;
+
+  if (!pool_id) return json({ error: 'Missing pool_id' }, { status: 400 });
 
   const pool = db.prepare('SELECT created_by FROM pools WHERE id = ?').get(pool_id) as any;
   if (!pool || pool.created_by !== locals.user.id) {
     return json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const upsert = db.prepare(`
-    INSERT INTO scoring_config (pool_id, rule, points) VALUES (?, ?, ?)
-    ON CONFLICT(pool_id, rule) DO UPDATE SET points = ?
-  `);
+  // Update scoring rules if provided
+  if (rules) {
+    const upsert = db.prepare(`
+      INSERT INTO scoring_config (pool_id, rule, points) VALUES (?, ?, ?)
+      ON CONFLICT(pool_id, rule) DO UPDATE SET points = ?
+    `);
 
-  const saveAll = db.transaction(() => {
-    for (const [rule, points] of Object.entries(rules)) {
-      if (typeof points === 'number' && points >= 0) {
-        upsert.run(pool_id, rule, points, points);
+    const saveAll = db.transaction(() => {
+      for (const [rule, points] of Object.entries(rules)) {
+        if (typeof points === 'number' && points >= 0) {
+          upsert.run(pool_id, rule, points, points);
+        }
       }
-    }
-  });
+    });
+    saveAll();
+  }
 
-  saveAll();
+  // Update deadlines if provided
+  if (body.deadline_group !== undefined || body.deadline_knockout !== undefined) {
+    const updates: string[] = [];
+    const values: any[] = [];
+    if (body.deadline_group !== undefined) {
+      updates.push('deadline_group = ?');
+      values.push(body.deadline_group || null);
+    }
+    if (body.deadline_knockout !== undefined) {
+      updates.push('deadline_knockout = ?');
+      values.push(body.deadline_knockout || null);
+    }
+    if (updates.length > 0) {
+      values.push(pool_id);
+      db.prepare(`UPDATE pools SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+    }
+  }
+
   return json({ ok: true });
 };

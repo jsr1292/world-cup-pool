@@ -50,9 +50,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   // Verify ownership
-  const pred = db.prepare('SELECT user_id FROM predictions WHERE id = ?').get(prediction_id) as any;
+  const pred = db.prepare('SELECT user_id, pool_id FROM predictions WHERE id = ?').get(prediction_id) as any;
   if (!pred || pred.user_id !== locals.user.id) {
     return json({ error: 'Not your prediction' }, { status: 403 });
+  }
+
+  // Check deadline
+  const pool = db.prepare('SELECT deadline_group FROM pools WHERE id = ?').get(pred.pool_id) as any;
+  if (pool?.deadline_group && new Date(pool.deadline_group) <= new Date()) {
+    return json({ error: 'Deadline has passed' }, { status: 403 });
   }
 
   // Validate group names

@@ -4,6 +4,27 @@
   const GROUP_NAMES = ['A','B','C','D','E','F','G','H','I','J','K','L'];
   const POSITION_LABELS = ['1º', '2º', '3º', '4º'];
 
+  // Deadline countdown
+  let countdown = $state('');
+  let init = false;
+  $effect(() => {
+    if (init) return;
+    init = true;
+    const dl = data.pool.deadline_group;
+    if (!dl) return;
+    const update = () => {
+      const diff = new Date(dl).getTime() - Date.now();
+      if (diff <= 0) { countdown = 'Fecha límite pasada'; return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      countdown = `${h}h ${m}m ${s}s`;
+    };
+    update();
+    const iv = setInterval(update, 1000);
+    return () => clearInterval(iv);
+  });
+
   // selections[group] = { pos1: teamId|null, pos2: ..., pos3: ..., pos4: ... }
   let selections = $state({});
 
@@ -101,6 +122,11 @@
     <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
       Predice la clasificación final de cada grupo. Selecciona del 1º al 4º puesto.
     </p>
+    {#if countdown && !data.isLocked}
+      <div style="margin-top: 8px; padding: 8px 12px; background: rgba(201,168,76,0.1); border: 1px solid var(--gold); border-radius: 6px; font-size: 10px; color: var(--gold);">
+        ⏰ Cierre en: {countdown}
+      </div>
+    {/if}
     {#if data.isLocked}
       <div style="margin-top: 8px; padding: 8px 12px; background: rgba(255,77,106,0.1); border: 1px solid var(--red); border-radius: 6px; font-size: 10px; color: var(--red);">
         ⚠️ Los pronósticos están bloqueados — la fecha límite ha pasado.

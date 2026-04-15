@@ -48,9 +48,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   // Verify ownership
-  const pred = db.prepare('SELECT user_id FROM predictions WHERE id = ?').get(prediction_id) as any;
+  const pred = db.prepare('SELECT user_id, pool_id FROM predictions WHERE id = ?').get(prediction_id) as any;
   if (!pred || pred.user_id !== locals.user.id) {
     return json({ error: 'Not your prediction' }, { status: 403 });
+  }
+
+  // Check deadline
+  const poolCheck = db.prepare('SELECT deadline_knockout FROM pools WHERE id = ?').get(pred.pool_id) as any;
+  if (poolCheck?.deadline_knockout && new Date(poolCheck.deadline_knockout) <= new Date()) {
+    return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
   }
 
   // Validate phases

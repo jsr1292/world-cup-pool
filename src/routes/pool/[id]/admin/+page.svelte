@@ -46,6 +46,31 @@
     else { message = '✗ Error al guardar'; }
   }
 
+  // Deadline state
+  let deadlineGroup = $state(pool.deadline_group ? pool.deadline_group.slice(0, 16) : '');
+  let deadlineKnockout = $state(pool.deadline_knockout ? pool.deadline_knockout.slice(0, 16) : '');
+  let savingDeadline = $state(false);
+  let deadlineMsg = $state('');
+
+  async function saveDeadlines() {
+    savingDeadline = true;
+    deadlineMsg = '';
+    try {
+      const res = await fetch('/api/admin/scoring', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pool_id: pool.id,
+          deadline_group: deadlineGroup || null,
+          deadline_knockout: deadlineKnockout || null,
+        }),
+      });
+      if (res.ok) { deadlineMsg = '✓ Fechas guardadas'; setTimeout(() => deadlineMsg = '', 2000); }
+      else { deadlineMsg = '✗ Error'; }
+    } catch { deadlineMsg = '✗ Error'; }
+    savingDeadline = false;
+  }
+
   async function togglePaid(userId, current) {
     const res = await fetch('/api/admin/payment', {
       method: 'POST',
@@ -86,6 +111,29 @@
     <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 12px; text-align: center;">
       <div style="font-size: 18px; font-weight: 700;">{data.stats.finishedMatches}/{data.stats.totalMatches}</div>
       <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em;">Partidos</div>
+    </div>
+  </div>
+
+  <!-- Deadlines -->
+  <div style="margin-bottom: 24px;">
+    <h2 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">Fechas límite</h2>
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+      <div>
+        <label style="display: block; font-size: 9px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px;">Fase de grupos</label>
+        <input type="datetime-local" bind:value={deadlineGroup} style="font-size: 12px; padding: 6px 8px;" />
+      </div>
+      <div>
+        <label style="display: block; font-size: 9px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px;">Eliminatorias</label>
+        <input type="datetime-local" bind:value={deadlineKnockout} style="font-size: 12px; padding: 6px 8px;" />
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="btn-primary" onclick={saveDeadlines} disabled={savingDeadline} style="font-size: 9px; padding: 8px 16px;">
+          {savingDeadline ? 'Guardando...' : 'Guardar fechas'}
+        </button>
+        {#if deadlineMsg}
+          <span style="font-size: 11px; color: var(--green);">{deadlineMsg}</span>
+        {/if}
+      </div>
     </div>
   </div>
 
