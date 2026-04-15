@@ -1,0 +1,16 @@
+{
+  "name": "Mundial 2026",
+  "short_name": "Mundial",
+  "description": "Quiniela del Mundial 2026",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07090f",
+  "theme_color": "#07090f",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
