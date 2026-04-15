@@ -16,13 +16,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'Missing fields' }, { status: 400 });
   }
 
-  // Get match and verify pool ownership
+  // Verify user is a pool creator (any pool)
+  const ownedPool = db.prepare('SELECT id FROM pools WHERE created_by = ? LIMIT 1').get(locals.user.id) as any;
+  if (!ownedPool) return json({ error: 'Forbidden' }, { status: 403 });
+
+  // Get match
   const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(match_id) as any;
   if (!match) return json({ error: 'Match not found' }, { status: 404 });
-
-  // Find pool via pool that has predictions referencing this match's teams
-  // Since matches aren't directly tied to a pool, we need to find which pool(s) to recalc
-  // We'll recalculate ALL pools that have predictions (safe, idempotent)
   
   // Update match result
   db.prepare(
