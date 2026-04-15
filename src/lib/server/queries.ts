@@ -1,16 +1,4 @@
 import { db } from './db.js';
-import bcrypt from 'crypto';
-
-// Simple hash using Web Crypto (no bcrypt dependency needed)
-function hashPassword(password: string): string {
-  // Using a simple SHA-256 with salt for v1 — upgrade to argon2 later if needed
-  const salt = bcrypt.randomBytes(16).toString('hex');
-  const hash = crypto.createHash('sha256').update(salt + password).digest('hex');
-  return `${salt}:${hash}`;
-}
-
-// Hmm, we need the crypto module. Let me use a simpler approach.
-// Actually let's just use Node's built-in scrypt
 import crypto from 'crypto';
 
 export function hashPwd(password: string): string {
@@ -180,5 +168,5 @@ export function deleteSession(token: string) {
 }
 
 export function cleanSessions() {
-  db.prepare('DELETE FROM sessions WHERE expires_at < datetime("now")').run();
+  db.prepare("DELETE FROM sessions WHERE expires_at < datetime('now')").run();
 }

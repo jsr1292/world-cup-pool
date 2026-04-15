@@ -43,7 +43,7 @@
 
     <div>
       <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5px; letter-spacing: 0.12em; text-transform: uppercase;">Buy-in (€) — 0 for free</label>
-      <input type="number" min="0" step="0.01" bind:value={buyIn} placeholder="10" />
+      <input type="number" min="0" step="0.01" bind:value={buyIn} placeholder="10" oninput="if(this.value<0)this.value=0" />
     </div>
 
     {#if error}

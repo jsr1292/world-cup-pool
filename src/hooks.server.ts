@@ -20,7 +20,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   // Check session
   if (token) {
     const user = db.prepare(
-      'SELECT u.id, u.username, u.display_name, u.is_admin FROM users u JOIN sessions s ON s.user_id = u.id WHERE s.token = ? AND s.expires_at > datetime("now")'
+      'SELECT u.id, u.username, u.display_name, u.is_admin FROM users u JOIN sessions s ON s.user_id = u.id WHERE s.token = ? AND s.expires_at > datetime(\'now\')'
     ).get(token) as any;
 
     if (user) {

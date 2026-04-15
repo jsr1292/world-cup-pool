@@ -27,10 +27,10 @@ export const POST: RequestHandler = async ({ request, cookies, url }) => {
     try {
       const result = createUser(username, password, display_name);
       const token = createSession(Number(result.lastInsertRowid));
-      cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax' });
+      cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: false });
       return json({ ok: true });
     } catch (e: any) {
-      if (e.code === 'SQLITE_CONSTRAINT') {
+      if (e.message?.includes('UNIQUE constraint')) {
         return json({ error: 'Username already taken' }, { status: 409 });
       }
       return json({ error: 'Registration failed' }, { status: 500 });
@@ -45,7 +45,7 @@ export const POST: RequestHandler = async ({ request, cookies, url }) => {
     if (!user) return json({ error: 'Invalid credentials' }, { status: 401 });
 
     const token = createSession(user.id);
-    cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax' });
+    cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: false });
     return json({ ok: true });
   }
 
