@@ -4,20 +4,20 @@
 
 <div>
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-    <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold);">My Pools</h1>
+    <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold);">Mis Quinielas</h1>
     <div style="display: flex; gap: 8px;">
-      <a href="/join" class="btn-ghost" style="font-size: 9px; padding: 6px 14px;">Join</a>
-      <a href="/pools/create" class="btn-primary" style="font-size: 9px; padding: 6px 14px;">+ Create</a>
+      <a href="/join" class="btn-ghost" style="font-size: 9px; padding: 6px 14px;">Unirse</a>
+      <a href="/pools/create" class="btn-primary" style="font-size: 9px; padding: 6px 14px;">+ Crear</a>
     </div>
   </div>
 
   {#if data.pools.length === 0}
     <div style="text-align: center; padding: 48px 20px; color: var(--text-muted);">
       <div style="font-size: 40px; margin-bottom: 12px;">🏆</div>
-      <p style="font-size: 13px; margin-bottom: 16px;">You're not in any pools yet</p>
+      <p style="font-size: 13px; margin-bottom: 16px;">Aún no estás en ninguna quiniela</p>
       <div style="display: flex; gap: 8px; justify-content: center;">
-        <a href="/pools/create" class="btn-primary" style="font-size: 9px; padding: 8px 16px;">Create Pool</a>
-        <a href="/join" class="btn-ghost" style="font-size: 9px; padding: 8px 16px;">Join Pool</a>
+        <a href="/pools/create" class="btn-primary" style="font-size: 9px; padding: 8px 16px;">Crear quiniela</a>
+        <a href="/join" class="btn-ghost" style="font-size: 9px; padding: 8px 16px;">Unirse</a>
       </div>
     </div>
   {:else}
@@ -28,10 +28,10 @@
             <div>
               <div style="font-size: 14px; font-weight: 600; color: var(--text);">{pool.name}</div>
               <div style="font-size: 10px; color: var(--text-muted); margin-top: 3px;">
-                {pool.member_count} member{pool.member_count !== 1 ? 's' : ''}
+                {pool.member_count} miembro{pool.member_count !== 1 ? 's' : ''}
                 {pool.buy_in > 0 ? ` · ${pool.buy_in}€` : ''}
                 {#if pool.is_active}
-                  <span style="color: var(--green);"> · Active</span>
+                  <span style="color: var(--green);"> · Activa</span>
                 {/if}
               </div>
             </div>
@@ -39,9 +39,9 @@
               {#if pool.has_paid}
                 <span style="font-size: 9px; color: var(--green);">✓</span>
               {:else if pool.buy_in > 0}
-                <span style="font-size: 9px; color: var(--gold);">Unpaid</span>
+                <span style="font-size: 9px; color: var(--gold);">Pendiente</span>
               {/if}
-              <div style="font-size: 9px; color: var(--text-dim); margin-top: 2px;">Code: {pool.invite_code}</div>
+              <div style="font-size: 9px; color: var(--text-dim); margin-top: 2px;">Código: {pool.invite_code}</div>
             </div>
           </div>
         </a>

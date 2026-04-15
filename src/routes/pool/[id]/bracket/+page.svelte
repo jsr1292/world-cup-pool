@@ -238,20 +238,20 @@
   });
 </script>
 <div class="bracket-page">
-  <a href="/pool/{data.pool.id}" class="back-link">← Back to pool</a>
+  <a href="/pool/{data.pool.id}" class="back-link">← Volver a la quiniela</a>
 
   <div class="bracket-header">
     <div>
-      <h1 class="bracket-title">Knockout Bracket</h1>
-      <p class="bracket-subtitle">Click a team to pick the winner. Click the winner again to undo.</p>
+      <h1 class="bracket-title">Cuadro Eliminatorio</h1>
+      <p class="bracket-subtitle">Haz clic en una selección para elegirla ganadora. Haz clic de nuevo para deshacer.</p>
     </div>
     {#if data.isLocked}
-      <div class="lock-badge">⚠️ Locked</div>
+      <div class="lock-badge">⚠️ Bloqueado</div>
     {:else}
       <div class="save-area">
         <span class="pick-count">{totalPicks} picks</span>
         <button class="btn-primary" disabled={saving} onclick={saveBracket}>
-          {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Bracket'}
+          {saving ? 'Guardando...' : saved ? '✓ Guardado' : 'Guardar Cuadro'}
         </button>
       </div>
     {/if}
@@ -263,7 +263,7 @@
 
       <!-- R32 -->
       <div class="bracket-col">
-        <div class="col-header">Round of 32</div>
+        <div class="col-header">Dieciseisavos</div>
         <div class="match-list r32-list">
           {#each (teams.r32 || []) as match, mi}
             {@const m = R32_MAP[mi]}
@@ -300,7 +300,7 @@
 
       <!-- R16 -->
       <div class="bracket-col">
-        <div class="col-header">Round of 16</div>
+        <div class="col-header">Octavos</div>
         <div class="match-list r16-list">
           {#each (teams.r16 || []) as match, mi}
             <div class="match-card">
@@ -333,7 +333,7 @@
 
       <!-- QF -->
       <div class="bracket-col">
-        <div class="col-header">Quarterfinals</div>
+        <div class="col-header">Cuartos</div>
         <div class="match-list qf-list">
           {#each (teams.qf || []) as match, mi}
             <div class="match-card">
@@ -366,7 +366,7 @@
 
       <!-- SF -->
       <div class="bracket-col">
-        <div class="col-header">Semifinals</div>
+        <div class="col-header">Semifinales</div>
         <div class="match-list sf-list">
           {#each (teams.sf || []) as match, mi}
             <div class="match-card">
@@ -429,7 +429,7 @@
 
           <!-- 3rd place -->
           <div class="match-card match-3rd">
-            <div class="match-label-3rd">3rd Place</div>
+            <div class="match-label-3rd">3er puesto</div>
             {#each [0, 1] as ti}
               {@const tid = teams['3rd']?.[0]?.[ti]}
               {@const t = teamMap[tid]}
@@ -451,7 +451,7 @@
                 {/if}
               </button>
             {/each}
-            <div class="match-label">3RD</div>
+            <div class="match-label">3ER</div>
           </div>
         </div>
       </div>
@@ -461,9 +461,9 @@
 
   <!-- Legend -->
   <div class="bracket-legend">
-    <span class="legend-item"><span class="pick-star">★</span> Your pick</span>
-    <span class="legend-item"><span class="legend-match">A1 vs B2</span> Group matchup</span>
-    <span class="legend-item"><span class="legend-tbd">TBD</span> 3rd place qualifiers</span>
+    <span class="legend-item"><span class="pick-star">★</span> Tu elección</span>
+    <span class="legend-item"><span class="legend-match">A1 vs B2</span> Enfrentamiento de grupo</span>
+    <span class="legend-item"><span class="legend-tbd">TBD</span> Clasificados de 3er puesto</span>
   </div>
 </div>
 

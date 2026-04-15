@@ -12,10 +12,10 @@
   }
 
   const navItems = [
-    { path: '/', label: 'Home', icon: '🏠' },
-    { path: '/pools', label: 'Pools', icon: '⚽' },
-    { path: '/bracket', label: 'Bracket', icon: '🏆' },
-    { path: '/profile', label: 'Profile', icon: '👤' },
+    { path: '/', label: 'Inicio', icon: '🏠' },
+    { path: '/pools', label: 'Quinielas', icon: '⚽' },
+    { path: '/bracket', label: 'Cuadro', icon: '🏆' },
+    { path: '/profile', label: 'Perfil', icon: '👤' },
   ];
 </script>
 
@@ -23,8 +23,8 @@
   <!-- Desktop Sidebar -->
   <nav class="sidebar">
     <div style="padding: 0 8px 20px; border-bottom: 1px solid var(--border); margin-bottom: 16px;">
-      <div style="font-family: 'Libre Baskerville', serif; font-size: 16px; color: var(--gold); margin-bottom: 4px;">⚽ World Cup</div>
-      <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase;">Pool 2026</div>
+      <div style="font-family: 'Libre Baskerville', serif; font-size: 16px; color: var(--gold); margin-bottom: 4px;">⚽ Mundial</div>
+      <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase;">Quiniela 2026</div>
     </div>
 
     {#each navItems as item}
@@ -41,7 +41,7 @@
       <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
         <div style="font-size: 8px; color: var(--text-dim); letter-spacing: 0.15em; text-transform: uppercase; padding: 0 12px 8px;">Admin</div>
         <a href="/admin" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; font-size: 12px; color: var(--text-muted);">
-          <span>⚙️</span> Settings
+          <span>⚙️</span> Ajustes
         </a>
       </div>
     {/if}

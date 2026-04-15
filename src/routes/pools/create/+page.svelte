@@ -22,7 +22,7 @@
         window.location.href = `/pool/${data.id}`;
       }
     } catch {
-      error = 'Connection error';
+      error = 'Error de conexión';
     } finally {
       loading = false;
     }
@@ -30,19 +30,19 @@
 </script>
 
 <div style="max-width: 440px; margin: 0 auto;">
-  <a href="/" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 16px;">← Back</a>
+  <a href="/" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 16px;">← Inicio</a>
 
-  <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold); margin-bottom: 4px;">Create Pool</h1>
-  <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 24px;">Set up a new prediction pool for your friends</p>
+  <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold); margin-bottom: 4px;">Crear Quiniela</h1>
+  <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 24px;">Configura una nueva quiniela para tus amigos</p>
 
   <form onsubmit={handleSubmit} style="display: flex; flex-direction: column; gap: 14px;">
     <div>
-      <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5px; letter-spacing: 0.12em; text-transform: uppercase;">Pool Name *</label>
-      <input bind:value={name} placeholder="e.g. Oficina Pool" required />
+      <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5px; letter-spacing: 0.12em; text-transform: uppercase;">Nombre *</label>
+      <input bind:value={name} placeholder="Ej: Quiniela Oficina" required />
     </div>
 
     <div>
-      <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5px; letter-spacing: 0.12em; text-transform: uppercase;">Buy-in (€) — 0 for free</label>
+      <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5px; letter-spacing: 0.12em; text-transform: uppercase;">Buy-in (€) — 0 para gratis</label>
       <input type="number" min="0" step="0.01" bind:value={buyIn} placeholder="10" oninput={(e) => { if (Number(e.target.value) < 0) buyIn = '0'; }} />
     </div>
 
@@ -51,7 +51,7 @@
     {/if}
 
     <button type="submit" class="btn-primary" style="width: 100%;" disabled={loading}>
-      {loading ? 'Creating...' : 'Create Pool'}
+      {loading ? 'Creando...' : 'Crear Quiniela'}
     </button>
   </form>
 </div>

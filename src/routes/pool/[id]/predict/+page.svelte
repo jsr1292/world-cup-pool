@@ -2,7 +2,7 @@
   let { data } = $props();
 
   const GROUP_NAMES = ['A','B','C','D','E','F','G','H','I','J','K','L'];
-  const POSITION_LABELS = ['1st', '2nd', '3rd', '4th'];
+  const POSITION_LABELS = ['1º', '2º', '3º', '4º'];
 
   // selections[group] = { pos1: teamId|null, pos2: ..., pos3: ..., pos4: ... }
   let selections = $state({});
@@ -93,17 +93,17 @@
 
 <div>
   <a href="/pool/{data.pool.id}" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 16px;">
-    ← Back to pool
+    ← Volver a la quiniela
   </a>
 
   <div style="margin-bottom: 20px;">
-    <h1 style="font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--gold);">Group Stage Predictions</h1>
+    <h1 style="font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--gold);">Pronósticos de Fase de Grupos</h1>
     <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
-      Predict the final standings for each group. Select 1st–4th place.
+      Predice la clasificación final de cada grupo. Selecciona del 1º al 4º puesto.
     </p>
     {#if data.isLocked}
       <div style="margin-top: 8px; padding: 8px 12px; background: rgba(255,77,106,0.1); border: 1px solid var(--red); border-radius: 6px; font-size: 10px; color: var(--red);">
-        ⚠️ Predictions are locked — the deadline has passed.
+        ⚠️ Los pronósticos están bloqueados — la fecha límite ha pasado.
       </div>
     {/if}
   </div>
@@ -117,7 +117,7 @@
           <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold);">
             {group}
           </div>
-          <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Group {group}</span>
+          <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>
         </div>
 
         <!-- Position selectors: 1st, 2nd, 3rd, 4th -->
@@ -135,7 +135,7 @@
                 onchange={(e) => selectTeam(group, posKey, e.target.value)}
                 style="flex: 1; padding: 6px 8px; font-size: 11px; text-align: left; background: rgba(0,0,0,0.3); {selectedTeam ? 'color: var(--text); border-color: rgba(201,168,76,0.3);' : 'color: var(--text-muted);'}"
               >
-                <option value="">Select {label}</option>
+                <option value="">Selecciona {label}</option>
                 {#each groupTeams as team}
                   <option value={team.id} selected={selectedTeamId === team.id}>
                     {flagEmoji(team.flag_code)} {shortName(team.name)}
@@ -157,10 +157,10 @@
         disabled={saving}
         onclick={savePredictions}
       >
-        {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Predictions'}
+        {saving ? 'Guardando...' : saved ? '✓ Guardado' : 'Guardar Pronósticos'}
       </button>
       {#if saved}
-        <span style="font-size: 10px; color: var(--green);">Group predictions saved!</span>
+        <span style="font-size: 10px; color: var(--green);">¡Pronósticos de grupos guardados!</span>
       {/if}
     </div>
   {/if}

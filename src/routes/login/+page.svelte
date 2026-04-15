@@ -30,7 +30,7 @@
         window.location.href = '/';
       }
     } catch {
-      error = 'Connection error';
+      error = 'Error de conexión';
     } finally {
       loading = false;
     }
@@ -39,41 +39,38 @@
 
 <div style="min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 20px;">
   <div style="width: 100%; max-width: 360px;">
-    <!-- Logo -->
     <div style="text-align: center; margin-bottom: 32px;">
       <div style="font-size: 40px; margin-bottom: 8px;">⚽</div>
-      <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold);">World Cup Pool</h1>
-      <p style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px;">2026</p>
+      <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold);">Mundial 2026</h1>
+      <p style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px;">Quiniela</p>
     </div>
 
-    <!-- Toggle -->
     <div style="display: flex; gap: 0; margin-bottom: 24px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden;">
       <button
         onclick={() => { mode = 'login'; error = ''; }}
         style="flex: 1; padding: 10px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; border: none; background: {mode === 'login' ? 'rgba(201,168,76,0.1)' : 'transparent'}; color: {mode === 'login' ? 'var(--gold)' : 'var(--text-muted)'};"
-      >Login</button>
+      >Entrar</button>
       <button
         onclick={() => { mode = 'register'; error = ''; }}
         style="flex: 1; padding: 10px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; border: none; border-left: 1px solid var(--border); background: {mode === 'register' ? 'rgba(201,168,76,0.1)' : 'transparent'}; color: {mode === 'register' ? 'var(--gold)' : 'var(--text-muted)'};"
-      >Register</button>
+      >Registro</button>
     </div>
 
-    <!-- Form -->
     <form onsubmit={handleSubmit} style="display: flex; flex-direction: column; gap: 14px;">
       <div>
-        <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5; letter-spacing: 0.12em; text-transform: uppercase;">Username</label>
-        <input bind:value={username} placeholder="username" required autocomplete="username" />
+        <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5; letter-spacing: 0.12em; text-transform: uppercase;">Usuario</label>
+        <input bind:value={username} placeholder="usuario" required autocomplete="username" />
       </div>
 
       {#if mode === 'register'}
         <div>
-          <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5; letter-spacing: 0.12em; text-transform: uppercase;">Display Name</label>
-          <input bind:value={displayName} placeholder="Your name" required />
+          <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5; letter-spacing: 0.12em; text-transform: uppercase;">Nombre</label>
+          <input bind:value={displayName} placeholder="Tu nombre" required />
         </div>
       {/if}
 
       <div>
-        <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5; letter-spacing: 0.12em; text-transform: uppercase;">Password</label>
+        <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5; letter-spacing: 0.12em; text-transform: uppercase;">Contraseña</label>
         <input type="password" bind:value={password} placeholder="••••••••" required autocomplete={mode === 'login' ? 'current-password' : 'new-password'} />
       </div>
 
@@ -82,7 +79,7 @@
       {/if}
 
       <button type="submit" class="btn-primary" style="width: 100%;" disabled={loading}>
-        {loading ? '...' : mode === 'login' ? 'Login' : 'Create Account'}
+        {loading ? '...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
       </button>
     </form>
   </div>
