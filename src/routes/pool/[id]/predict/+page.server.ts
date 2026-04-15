@@ -1,5 +1,5 @@
 import { getPoolById, getAllTeams, createPrediction, getUserPredictions, getGroupPredictions } from '$lib/server/queries.js';
-import { redirect } from '@sveltejs/kit';
+import { redirect, error } from '@sveltejs/kit';
 import type { ServerLoad } from '@sveltejs/kit';
 
 export const load: ServerLoad = async ({ params, locals }) => {
@@ -7,7 +7,7 @@ export const load: ServerLoad = async ({ params, locals }) => {
 
   const poolId = Number(params.id);
   const pool = getPoolById(poolId) as any;
-  if (!pool) throw new Error('Pool not found');
+  if (!pool) throw error(404, 'Pool not found');
 
   const teams = getAllTeams() as any[];
 

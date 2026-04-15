@@ -4,15 +4,13 @@
   const GROUP_NAMES = ['A','B','C','D','E','F','G','H','I','J','K','L'];
   const POSITION_LABELS = ['1st', '2nd', '3rd', '4th'];
 
-  // Build initial state from existing predictions or defaults
+  // selections[group] = { pos1: teamId|null, pos2: ..., pos3: ..., pos4: ... }
   let selections = $state({});
 
-  // Initialize selections reactively
   $effect(() => {
     const sel = {};
     for (const group of GROUP_NAMES) {
       const existing = data.existingGroupPreds?.[group] || {};
-      const teamsInGroup = data.teamsByGroup[group] || [];
       sel[group] = {
         pos1: existing.pos1 ?? null,
         pos2: existing.pos2 ?? null,
@@ -25,6 +23,20 @@
 
   let saving = $state(false);
   let saved = $state(false);
+
+  // Set a team for a position, removing it from any other position in the same group
+  function selectTeam(group, position, teamId) {
+    const num = Number(teamId) || null;
+    // Remove this team from any other position
+    if (num !== null) {
+      for (const pos of ['pos1', 'pos2', 'pos3', 'pos4']) {
+        if (selections[group][pos] === num && pos !== position) {
+          selections[group][pos] = null;
+        }
+      }
+    }
+    selections[group][position] = num;
+  }
 
   async function savePredictions() {
     saving = true;
@@ -51,9 +63,31 @@
 
   function flagEmoji(code) {
     if (!code) return '';
-    // ISO 2-letter code → flag emoji via regional indicators
+    // Handle subdivision codes
+    if (code === 'GB-ENG') return '🏴󠁧󠁢󠁥󠁮󠁧󠁿';
+    if (code === 'GB-SCT') return '🏴󠁧󠁢󠁳󠁣󠁴󠁿';
+    // ISO 3166-1 alpha-2 → flag emoji
+    if (code.length !== 2) return '🏳️';
     const offset = 127397;
     return code.toUpperCase().split('').map(c => String.fromCodePoint(c.codePointAt(0) + offset)).join('');
+  }
+
+  // Abbreviate team name smartly
+  function shortName(name) {
+    const map = {
+      'United States': 'USA',
+      'South Korea': 'S. Korea',
+      'South Africa': 'S. Africa',
+      'Ivory Coast': 'Ivory Coast',
+      'New Zealand': 'N. Zealand',
+      'Cape Verde': 'Cape Verde',
+      'Czech Republic': 'Czechia',
+      'Saudi Arabia': 'S. Arabia',
+      'Bosnia and Herzegovina': 'Bosnia',
+      'DR Congo': 'DR Congo',
+      'North Macedonia': 'N. Macedonia',
+    };
+    return map[name] || name;
   }
 </script>
 
@@ -65,7 +99,7 @@
   <div style="margin-bottom: 20px;">
     <h1 style="font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--gold);">Group Stage Predictions</h1>
     <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
-      Predict the final group standings. Select 1st–4th for each group.
+      Predict the final standings for each group. Select 1st–4th place.
     </p>
     {#if data.isLocked}
       <div style="margin-top: 8px; padding: 8px 12px; background: rgba(255,77,106,0.1); border: 1px solid var(--red); border-radius: 6px; font-size: 10px; color: var(--red);">
@@ -79,65 +113,32 @@
       {@const groupTeams = data.teamsByGroup[group] || []}
       <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
         <!-- Group header -->
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-          <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--gold);">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
+          <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold);">
             {group}
           </div>
-          <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Group {group}</div>
+          <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Group {group}</span>
         </div>
 
-        <!-- Teams in group -->
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          {#each groupTeams as team}
-            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid var(--border);">
-              <span style="font-size: 16px;">{flagEmoji(team.flag_code)}</span>
-              <span style="font-size: 11px; flex: 1;">{team.name}</span>
-              <select
-                disabled={data.isLocked}
-                onchange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : null;
-                  // Find current position for this team and clear it, then set new position
-                  for (const pos of ['pos1','pos2','pos3','pos4']) {
-                    if (selections[group][pos] === team.id && pos !== e.target.name) {
-                      selections[group][pos] = null;
-                    }
-                  }
-                  selections[group][e.target.name] = val;
-                }}
-                name="pos{groupTeams.indexOf(team) + 1}"
-                style="width: auto; min-width: 60px; padding: 4px 6px; font-size: 10px; background: rgba(0,0,0,0.3);"
-              >
-                <option value="">—</option>
-                {#each POSITION_LABELS as label, pi}
-                  <option value={team.id}>{label}</option>
-                {/each}
-              </select>
-            </div>
-          {/each}
-        </div>
-
-        <!-- Position dropdowns for clarity, below each team -->
-        <div style="margin-top: 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; border-top: 1px solid var(--border); padding-top: 10px;">
+        <!-- Position selectors: 1st, 2nd, 3rd, 4th -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
           {#each POSITION_LABELS as label, pi}
-            {@const selectedTeamId = selections[group]?.[`pos${pi+1}`]}
+            {@const posKey = `pos${pi + 1}`}
+            {@const selectedTeamId = selections[group]?.[posKey]}
             {@const selectedTeam = groupTeams.find(t => t.id === selectedTeamId)}
-            <div style="text-align: center;">
-              <div style="font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 3px;">{label}</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="width: 22px; font-size: 10px; font-weight: 600; color: {pi === 0 ? 'var(--gold)' : pi === 1 ? '#c0c0c0' : pi === 2 ? '#cd7f32' : 'var(--text-dim)'}; text-align: center;">
+                {pi + 1}
+              </div>
               <select
                 disabled={data.isLocked}
-                name="pos{pi+1}"
-                onchange={(e) => {
-                  const val = e.target.value ? Number(e.target.value) : null;
-                  selections[group][`pos${pi+1}`] = val;
-                }}
-                style="width: 100%; padding: 4px 2px; font-size: 9px; text-align: center; text-align-last: center; background: rgba(0,0,0,0.3); {
-                  selectedTeam ? 'color: var(--gold); border-color: rgba(201,168,76,0.3);' : ''
-                }"
+                onchange={(e) => selectTeam(group, posKey, e.target.value)}
+                style="flex: 1; padding: 6px 8px; font-size: 11px; text-align: left; background: rgba(0,0,0,0.3); {selectedTeam ? 'color: var(--text); border-color: rgba(201,168,76,0.3);' : 'color: var(--text-muted);'}"
               >
-                <option value="">—</option>
+                <option value="">Select {label}</option>
                 {#each groupTeams as team}
                   <option value={team.id} selected={selectedTeamId === team.id}>
-                    {flagEmoji(team.flag_code)} {team.name.split(' ').slice(-1)[0]}
+                    {flagEmoji(team.flag_code)} {shortName(team.name)}
                   </option>
                 {/each}
               </select>
@@ -149,16 +150,18 @@
   </div>
 
   <!-- Save button -->
-  <div style="margin-top: 24px; display: flex; gap: 12px; align-items: center;">
-    <button
-      class="btn-primary"
-      disabled={saving || data.isLocked}
-      onclick={savePredictions}
-    >
-      {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Predictions'}
-    </button>
-    {#if saved}
-      <span style="font-size: 10px; color: var(--green);">Group predictions saved!</span>
-    {/if}
-  </div>
+  {#if !data.isLocked}
+    <div style="margin-top: 24px; display: flex; gap: 12px; align-items: center;">
+      <button
+        class="btn-primary"
+        disabled={saving}
+        onclick={savePredictions}
+      >
+        {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Predictions'}
+      </button>
+      {#if saved}
+        <span style="font-size: 10px; color: var(--green);">Group predictions saved!</span>
+      {/if}
+    </div>
+  {/if}
 </div>
