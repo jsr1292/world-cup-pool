@@ -4,7 +4,7 @@ import path from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = path.resolve(__dirname, '../../../../data');
+const dataDir = path.resolve(__dirname, '../../../data');
 if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
 const dbPath = path.join(dataDir, 'pool.db');

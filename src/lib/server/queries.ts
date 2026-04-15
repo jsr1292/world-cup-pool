@@ -133,7 +133,7 @@ export function createPrediction(poolId: number, userId: number, label = '') {
 }
 
 export function getUserPredictions(poolId: number, userId: number) {
-  return db.prepare('SELECT * FROM predictions WHERE pool_id = ? AND user_id = ?').all(poolId);
+  return db.prepare('SELECT * FROM predictions WHERE pool_id = ? AND user_id = ?').all(poolId, userId);
 }
 
 export function getPoolLeaderboard(poolId: number) {
@@ -169,4 +169,17 @@ export function deleteSession(token: string) {
 
 export function cleanSessions() {
   db.prepare("DELETE FROM sessions WHERE expires_at < datetime('now')").run();
+}
+
+// Teams
+export function getAllTeams() {
+  return db.prepare('SELECT * FROM teams ORDER BY group_name, fifa_rank').all();
+}
+
+export function getGroupPredictions(predictionId: number) {
+  return db.prepare(`
+    SELECT group_name, position_1, position_2, position_3, position_4
+    FROM group_predictions
+    WHERE prediction_id = ?
+  `).all(predictionId) as any[];
 }
