@@ -102,7 +102,7 @@ export function joinPool(poolId: number, userId: number) {
     db.prepare('INSERT INTO pool_members (pool_id, user_id) VALUES (?, ?)').run(poolId, userId);
     return true;
   } catch (e: any) {
-    if (e.code === 'SQLITE_CONSTRAINT') return false; // already joined
+    if (e.code?.startsWith('SQLITE_CONSTRAINT')) return false; // already joined
     throw e;
   }
 }
