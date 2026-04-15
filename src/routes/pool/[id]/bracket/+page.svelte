@@ -1,8 +1,6 @@
 <script>
   let { data } = $props();
 
-  const PHASES = ['r32', 'r16', 'qf', 'sf', 'final', '3rd'];
-
   const R32_MAP = [
     { t1g: 'A', t1p: 1, t2g: 'B', t2p: 2 },
     { t1g: 'C', t1p: 1, t2g: 'D', t2p: 2 },
@@ -22,13 +20,19 @@
     { t1g: '?', t1p: 1, t2g: '?', t2p: 2 },
   ];
 
-  let teams = $state({});
-  let explicitPicks = $state({});
-  let saving = $state(false);
-  let saved = $state(false);
-  let saveError = $state(null);
+  const PHASES = ['r32', 'r16', 'qf', 'sf', 'final', '3rd'];
 
-  function buildTeamMap() {
+  // Use a version counter to force reactivity
+  let version = $state(0);
+
+  // Store state in plain objects (not $state) - reactivity via version
+  let _teams = {};
+  let _picks = {}; // explicitPicks
+
+  function bump() { version++; }
+
+  // Build team map from data
+  const teamMap = $derived.by(() => {
     const map = {};
     if (data.teamsByGroup) {
       for (const gTeams of Object.values(data.teamsByGroup)) {
@@ -36,9 +40,7 @@
       }
     }
     return map;
-  }
-
-  const teamMap = $derived(buildTeamMap());
+  });
 
   function getGroupTeam(group, pos) {
     const gp = data.groupPredictions?.[group];
@@ -46,11 +48,11 @@
     return [gp.pos1, gp.pos2, gp.pos3, gp.pos4][pos - 1] ?? null;
   }
 
-  $effect(() => {
+  // Initialize state from server data
+  function initState() {
     const t = {};
     const exp = {};
 
-    // R32: derive from group predictions
     t.r32 = [];
     exp.r32 = [];
     for (let i = 0; i < 16; i++) {
@@ -60,18 +62,14 @@
       t.r32.push([team1, team2]);
       exp.r32.push([false, false]);
     }
-    // Restore saved R32 picks
     for (let i = 0; i < 32; i++) {
-      const slot = i + 1;
-      const mi = Math.floor(i / 2);
-      const ti = i % 2;
+      const slot = i + 1, mi = Math.floor(i / 2), ti = i % 2;
       if (data.existingBracket?.r32?.[slot]) {
         t.r32[mi][ti] = data.existingBracket.r32[slot];
         exp.r32[mi][ti] = true;
       }
     }
 
-    // R16+
     const phaseSizes = { r16: 8, qf: 4, sf: 2, final: 1, '3rd': 1 };
     for (const [phase, size] of Object.entries(phaseSizes)) {
       t[phase] = Array.from({ length: size }, () => [null, null]);
@@ -85,22 +83,34 @@
       }
     }
 
-    teams = t;
-    explicitPicks = exp;
-    cascadeAll();
+    _teams = t;
+    _picks = exp;
+    recascade();
+  }
+
+  // Derive display state reactively based on version
+  const teams = $derived.by(() => { void version; return JSON.parse(JSON.stringify(_teams)); });
+  const explicitPicks = $derived.by(() => { void version; return JSON.parse(JSON.stringify(_picks)); });
+
+  // Initialize once on mount - use untracked to avoid infinite loop
+  let initialized = false;
+  $effect(() => {
+    if (initialized) return;
+    initialized = true;
+    initState();
+    bump();
   });
 
-  function cascadeAll() {
-    const t = {};
-
-    // Step 1: Restore all R32 slots from group predictions
-    t.r32 = teams.r32.map((match, i) => {
+  function recascade() {
+    // Restore R32 from group predictions
+    for (let i = 0; i < 16; i++) {
       const m = R32_MAP[i];
-      if (m.t1g === '?') return [...match];
-      return [getGroupTeam(m.t1g, m.t1p), getGroupTeam(m.t2g, m.t2p)];
-    });
+      if (m.t1g === '?') continue;
+      _teams.r32[i][0] = getGroupTeam(m.t1g, m.t1p);
+      _teams.r32[i][1] = getGroupTeam(m.t2g, m.t2p);
+    }
 
-    // Step 2: Cascade winners forward using immutable updates
+    // Cascade forward
     const cascades = [
       { from: 'r32', to: 'r16' },
       { from: 'r16', to: 'qf' },
@@ -108,83 +118,73 @@
       { from: 'sf', to: 'final' },
     ];
     for (const { from, to } of cascades) {
-      t[to] = teams[to].map((match, i) => {
-        return match.map((existing, j) => {
-          if (explicitPicks[to][i][j]) return existing;
-          return getExplicitWinnerFrom(from, i * 2 + j, t);
-        });
-      });
+      for (let i = 0; i < _teams[to].length; i++) {
+        for (let j = 0; j < 2; j++) {
+          if (!_picks[to][i][j]) {
+            _teams[to][i][j] = getWinner(from, i * 2 + j);
+          }
+        }
+      }
     }
 
-    // Step 3: 3rd place from SF losers
-    t['3rd'] = teams['3rd'].map((match, i) => {
-      return match.map((existing, j) => {
-        if (explicitPicks['3rd'][i][j]) return existing;
-        return getExplicitLoserFrom('sf', j, t);
-      });
-    });
-
-    teams = t;
+    // 3rd place from SF losers
+    if (!_picks['3rd'][0][0]) _teams['3rd'][0][0] = getLoser('sf', 0);
+    if (!_picks['3rd'][0][1]) _teams['3rd'][0][1] = getLoser('sf', 1);
   }
 
-  function getExplicitWinnerFrom(phase, matchIdx, t) {
-    const m = t[phase]?.[matchIdx];
+  function getWinner(phase, matchIdx) {
+    const m = _teams[phase]?.[matchIdx];
     if (!m) return null;
-    const exp = explicitPicks[phase]?.[matchIdx];
+    const exp = _picks[phase]?.[matchIdx];
     if (exp?.[0]) return m[0];
     if (exp?.[1]) return m[1];
     return null;
   }
 
-  function getExplicitLoserFrom(phase, matchIdx, t) {
-    const m = t[phase]?.[matchIdx];
+  function getLoser(phase, matchIdx) {
+    const m = _teams[phase]?.[matchIdx];
     if (!m) return null;
-    const exp = explicitPicks[phase]?.[matchIdx];
+    const exp = _picks[phase]?.[matchIdx];
     if (exp?.[0]) return m[1];
     if (exp?.[1]) return m[0];
     return null;
   }
 
   function pickTeam(phase, matchIdx, teamIdx, teamId) {
-    // Must create new array to trigger Svelte 5 reactivity on nested state
-    const exp = [...explicitPicks[phase][matchIdx]];
+    const exp = _picks[phase][matchIdx];
     if (exp[teamIdx]) {
+      // Undo
       exp[teamIdx] = false;
       exp[1 - teamIdx] = false;
     } else if (exp[1 - teamIdx]) {
+      // Switch
       exp[1 - teamIdx] = false;
       exp[teamIdx] = true;
     } else {
+      // Pick
       exp[teamIdx] = true;
     }
-    // Replace the array to trigger reactivity
-    const phasePicks = [...explicitPicks[phase]];
-    phasePicks[matchIdx] = exp;
-    explicitPicks[phase] = phasePicks;
-    cascadeAll();
+    recascade();
+    bump();
   }
 
+  let saving = $state(false);
+  let saved = $state(false);
+  let saveError = $state(null);
+
   async function saveBracket() {
-    saving = true;
-    saved = false;
+    saving = true; saved = false;
     try {
       const picks = {};
       for (const phase of PHASES) {
         picks[phase] = {};
-        const pt = teams[phase];
+        const pt = _teams[phase];
         if (!pt) continue;
         for (let i = 0; i < pt.length; i++) {
-          // Save winner per match (only 1 slot per match)
-          const exp = explicitPicks[phase][i];
+          const exp = _picks[phase][i];
           for (let j = 0; j < 2; j++) {
             const slot = i * 2 + j + 1;
-            // If this team was explicitly picked as winner, save their ID
-            // Otherwise save null (cleared)
-            if (exp[j]) {
-              picks[phase][slot] = pt[i][j];
-            } else {
-              picks[phase][slot] = null;
-            }
+            picks[phase][slot] = exp[j] ? pt[i][j] : null;
           }
         }
       }
@@ -193,18 +193,10 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prediction_id: data.predictionId, picks }),
       });
-      if (res.ok) {
-        saved = true;
-        setTimeout(() => { saved = false; }, 2500);
-      } else {
-        saveError = 'Save failed';
-        setTimeout(() => { saveError = null; }, 3000);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      saving = false;
-    }
+      if (res.ok) { saved = true; setTimeout(() => { saved = false; }, 2500); }
+      else { saveError = 'Save failed'; setTimeout(() => { saveError = null; }, 3000); }
+    } catch (e) { console.error(e); }
+    finally { saving = false; }
   }
 
   function flagEmoji(code) {
@@ -218,7 +210,7 @@
   function shortName(name) {
     const map = {
       'United States': 'USA', 'South Korea': 'S. Korea', 'South Africa': 'S. Africa',
-      'Ivory Coast': 'Côte d\'Ivoire', 'New Zealand': 'N. Zealand', 'Cape Verde': 'Cape Verde',
+      'Ivory Coast': "Côte d'Ivoire", 'New Zealand': 'N. Zealand', 'Cape Verde': 'Cape Verde',
       'Czech Republic': 'Czechia', 'Saudi Arabia': 'S. Arabia',
       'Bosnia and Herzegovina': 'Bosnia', 'DR Congo': 'DR Congo', 'North Macedonia': 'N. Macedonia',
     };
@@ -232,9 +224,10 @@
   }
 
   const totalPicks = $derived.by(() => {
+    void version;
     let n = 0;
     for (const phase of PHASES) {
-      const pt = teams[phase];
+      const pt = _teams[phase];
       if (!pt) continue;
       for (const m of pt) {
         if (m[0] !== null) n++;
@@ -244,8 +237,6 @@
     return n;
   });
 </script>
-
-<!-- Header -->
 <div class="bracket-page">
   <a href="/pool/{data.pool.id}" class="back-link">← Back to pool</a>
 
