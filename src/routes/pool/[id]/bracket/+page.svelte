@@ -26,7 +26,7 @@
   let explicitPicks = $state({});
   let saving = $state(false);
   let saved = $state(false);
-  let saveError = $state<string | null>(null);
+  let saveError = $state(null);
 
   function buildTeamMap() {
     const map = {};
