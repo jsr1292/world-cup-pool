@@ -112,7 +112,7 @@
         {/if}
       {/each}
 
-      {#if Object.keys(bracketPreds).length === 0}
+      {#if Object.keys(getBracketPreds()).length === 0}
         <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No has predicho eliminatorias aún.</p>
       {/if}
     </div>
