@@ -39,10 +39,17 @@
   <!-- Desktop Sidebar -->
   {#if data?.user}
   <nav class="sidebar">
-    <div style="padding: 0 8px 20px; border-bottom: 1px solid var(--border); margin-bottom: 16px;">
-      <div style="font-family: 'Libre Baskerville', serif; font-size: 16px; color: var(--gold); margin-bottom: 4px;">Mundial</div>
-      <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase;">Quiniela 2026</div>
+    <div class="sidebar-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 36px; height: 36px; background: linear-gradient(135deg, var(--gold), #b8943f); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px;">🏆</div>
+        <div>
+          <div style="font-family: 'Libre Baskerville', serif; font-size: 17px; color: var(--gold); line-height: 1.2;">Mundial 2026</div>
+          <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.14em; text-transform: uppercase; margin-top: 2px;">Quiniela</div>
+        </div>
+      </div>
     </div>
+
+    <div class="sidebar-nav">
 
     {#each navItems as item}
       <a
@@ -65,9 +72,20 @@
       </div>
     {/if}
 
-    <div style="position: absolute; bottom: 16px; left: 12px; right: 12px;">
+    </div>
+
+    <div class="sidebar-footer">
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 8px 6px;">
+        <div style="width: 30px; height: 30px; border-radius: 50%; background: rgba(201,168,76,0.15); border: 1px solid rgba(201,168,76,0.3); color: var(--gold); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center;">
+          {data.user?.display_name?.[0]?.toUpperCase() || '?'}
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 11px; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{data.user?.display_name}</div>
+          <div style="font-size: 9px; color: var(--text-dim);">@{data.user?.username}</div>
+        </div>
+      </div>
       <form method="POST" action="/api/auth/logout">
-        <button type="submit" class="btn-ghost" style="width: 100%; font-size: 10px;">
+        <button type="submit" class="btn-ghost" style="width: 100%; font-size: 9px; padding: 8px;">
           Cerrar sesión
         </button>
       </form>

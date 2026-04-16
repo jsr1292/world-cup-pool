@@ -61,23 +61,31 @@
   </div>
 
   <!-- Pool Header -->
-  <div style="margin-bottom: 20px;">
-    <h1 style="font-family: 'Libre Baskerville', serif; font-size: 24px; color: var(--gold);">{pool.name}</h1>
-    <div style="display: flex; gap: 12px; margin-top: 8px; font-size: 11px; color: var(--text-muted);">
-      <span>👥 {data.members.length} miembros</span>
-      {#if pool.buy_in > 0}
-        <span>💰 {pool.buy_in}€ entrada</span>
-      {/if}
-      <span>🔗 Código: <span style="color: var(--gold); font-weight: 600;">{pool.invite_code}</span></span>
-      <button onclick={copyCode} style="background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 9px; color: {copied ? 'var(--green)' : 'var(--text-muted)'}; cursor: pointer; transition: all 0.2s;">
-        {copied ? '✓ Enlace copiado' : 'Compartir enlace'}
-      </button>
-    </div>
-    {#if data.isAdmin}
-      <div style="margin-top: 8px;">
-        <a href="/pool/{pool.id}/admin" class="btn-ghost" style="font-size: 9px; padding: 6px 14px;">⚙️ Administración</a>
+  <div style="margin-bottom: 24px; padding: 24px; background: linear-gradient(135deg, rgba(201,168,76,0.08) 0%, transparent 100%); border-radius: 16px; border: 1px solid rgba(201,168,76,0.12);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <h1 style="font-family: 'Libre Baskerville', serif; font-size: 24px; color: var(--gold); margin-bottom: 8px;">{pool.name}</h1>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted);">
+          <span>👥 {data.members.length} miembros</span>
+          {#if pool.buy_in > 0}
+            <span>💰 {pool.buy_in}€ entrada</span>
+            {#if pool.prize_pool > 0}
+              <span style="color: var(--gold);">🏆 Bote: {pool.prize_pool}€</span>
+            {/if}
+          {/if}
+        </div>
       </div>
-    {/if}
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <span style="font-size: 10px; color: var(--text-muted);">🔗 <span style="color: var(--gold); font-weight: 600;">{pool.invite_code}</span></span>
+        <button onclick={copyCode} style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: {copied ? 'var(--green)' : 'var(--text-muted)'}; cursor: pointer; transition: all 0.2s;">
+          {copied ? '✓ Copiado' : 'Compartir enlace'}
+        </button>
+        {#if data.isAdmin}
+          <a href="/pool/{pool.id}/admin" class="btn-ghost" style="font-size: 9px; padding: 6px 14px; text-decoration: none;">⚙️ Admin</a>
+        {/if}
+      </div>
+    </div>
+  </div>
   </div>
 
   <!-- Tabs -->
