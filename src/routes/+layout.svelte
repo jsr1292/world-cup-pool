@@ -20,7 +20,21 @@
 </script>
 
 <div class="app-layout">
+  <!-- Top Bar (mobile only) -->
   {#if data?.user}
+    <header class="top-bar">
+      <div class="top-bar-inner">
+        <div class="top-bar-brand">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--gold);"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+          <span>Mundial 2026</span>
+        </div>
+        <a href="/profile" class="top-bar-avatar" title="Perfil">
+          {data.user.display_name?.charAt(0).toUpperCase() ?? '?'}
+        </a>
+      </div>
+    </header>
+  {/if}
+
   <!-- Desktop Sidebar -->
   <nav class="sidebar">
     <div style="padding: 0 8px 20px; border-bottom: 1px solid var(--border); margin-bottom: 16px;">
@@ -121,5 +135,60 @@
     font-size: 8px;
     letter-spacing: 0.05em;
     text-transform: uppercase;
+  }
+
+  /* Mobile top bar */
+  .top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
+    background: rgba(7, 9, 15, 0.95);
+    backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .top-bar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+  }
+
+  .top-bar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Libre Baskerville', serif;
+    font-size: 14px;
+    color: var(--gold);
+  }
+
+  .top-bar-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(201, 168, 76, 0.2);
+    border: 1px solid rgba(201, 168, 76, 0.4);
+    color: var(--gold);
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .top-bar-avatar:hover {
+    background: rgba(201, 168, 76, 0.3);
+  }
+
+  /* Desktop: hide top bar, show sidebar */
+  @media (min-width: 768px) {
+    .top-bar { display: none; }
   }
 </style>
