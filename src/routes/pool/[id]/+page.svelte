@@ -86,7 +86,6 @@
       </div>
     </div>
   </div>
-  </div>
 
   <!-- Tabs -->
   <div style="display: flex; gap: 0; margin-bottom: 20px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
