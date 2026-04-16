@@ -1,6 +1,7 @@
 <script lang="ts">
   let { data } = $props();
   let tab = $state('leaderboard');
+  let copied = $state(false);
 
   const pool = data.pool;
 
@@ -21,10 +22,41 @@
     final: 'Final',
     '3rd': '3er puesto',
   };
+
+  const scoringLabels: Record<string, string> = {
+    exact_score: 'Resultado exacto (fase de grupos)',
+    match_outcome: 'Resultado correcto (ganar/empatar/perder)',
+    group_position: 'Posición en grupo',
+    knockout_r32: 'Dieciseisavos — acierto',
+    knockout_r16: 'Octavos — acierto',
+    knockout_qf: 'Cuartos — acierto',
+    knockout_sf: 'Semifinales — acierto',
+    knockout_final: 'Final — acierto',
+    third_place: '3er puesto — acierto',
+    knockout_winner: 'Ganador eliminatoria',
+    r32_winner: 'Ganador dieciseisavos',
+    r16_winner: 'Ganador octavos',
+    qf_winner: 'Ganador cuartos',
+    sf_winner: 'Ganador semifinales',
+    final_winner: 'Ganador del mundial',
+    final_exact_score: 'Resultado exacto final',
+  };
+
+  function copyCode() {
+    navigator.clipboard.writeText(pool.invite_code).then(() => {
+      copied = true;
+      setTimeout(() => { copied = false; }, 2000);
+    });
+  }
 </script>
 
 <div>
-  <a href="/" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 16px;">← Inicio</a>
+  <!-- Sticky Back Link -->
+  <div style="position: sticky; top: 0; z-index: 10; background: var(--bg-base); padding: 8px 0; margin-bottom: 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px;">
+    <a href="/pools" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; text-decoration: none;">← Quinielas</a>
+    <span style="color: var(--border); font-size: 10px;">/</span>
+    <span style="font-size: 10px; color: var(--gold);">{pool.name}</span>
+  </div>
 
   <!-- Pool Header -->
   <div style="margin-bottom: 20px;">
@@ -35,6 +67,9 @@
         <span>💰 {pool.buy_in}€ buy-in</span>
       {/if}
       <span>🔗 Código: <span style="color: var(--gold); font-weight: 600;">{pool.invite_code}</span></span>
+      <button onclick={copyCode} style="background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 9px; color: {copied ? 'var(--green)' : 'var(--text-muted)'}; cursor: pointer; transition: all 0.2s;">
+        {copied ? '✓ Copiado' : 'Copiar'}
+      </button>
     </div>
     {#if data.isAdmin}
       <div style="margin-top: 8px;">
@@ -158,11 +193,12 @@
   {#if tab === 'scoring'}
     <div style="display: flex; flex-direction: column; gap: 4px;">
       {#each Object.entries(data.scoring) as [rule, points]}
-        <div style="display: flex; justify-content: space-between; padding: 8px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;">
-          <span style="font-size: 11px; color: var(--text-muted);">{rule.replace(/_/g, ' ')}</span>
-          <span style="font-size: 11px; font-weight: 600; color: var(--gold);">{points} pts</span>
+        <div style="display: flex; justify-content: space-between; padding: 10px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;">
+          <span style="font-size: 12px; color: var(--text);">{scoringLabels[rule] || rule.replace(/_/g, ' ')}</span>
+          <span style="font-size: 12px; font-weight: 600; color: var(--gold);">{points} pts</span>
         </div>
       {/each}
     </div>
+    <p style="font-size: 10px; color: var(--text-dim); margin-top: 12px; text-align: center;">Puntuación configurada por el creador de la quiniela.</p>
   {/if}
 </div>

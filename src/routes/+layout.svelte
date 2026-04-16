@@ -14,7 +14,8 @@
   }
 
   const navItems = [
-    { path: '/pools', label: 'Inicio', icon: 'home' },
+    { path: '/', label: 'Inicio', icon: 'home' },
+    { path: '/pools', label: 'Quinielas', icon: 'trophy' },
     { path: '/profile', label: 'Perfil', icon: 'user' },
   ];
 </script>
@@ -71,6 +72,7 @@
       <a href={item.path}>
         <button class:active={isActive(item.path)}>
           <svg class="nav-icon-mobile"><use href="/icon.svg#{item.icon}" /></svg>
+          <span class="nav-label">{item.label}</span>
         </button>
       </a>
     {/each}
@@ -105,12 +107,20 @@
   }
 
   .nav-icon-mobile {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     fill: none;
     stroke: currentColor;
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
+    display: block;
+    margin: 0 auto 2px;
+  }
+
+  .nav-label {
+    font-size: 8px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
   }
 </style>

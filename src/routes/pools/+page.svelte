@@ -4,7 +4,9 @@
 
 <div>
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-    <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold);">Mis Quinielas</h1>
+    <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold);">
+      {data.pools.length === 0 ? '¡Bienvenido!' : 'Mis Quinielas'}
+    </h1>
     <div style="display: flex; gap: 8px;">
       <a href="/join" class="btn-ghost" style="font-size: 9px; padding: 6px 14px;">Unirse</a>
       <a href="/pools/create" class="btn-primary" style="font-size: 9px; padding: 6px 14px;">+ Crear</a>
