@@ -36,6 +36,7 @@
   {/if}
 
   <!-- Desktop Sidebar -->
+  {#if data?.user}
   <nav class="sidebar">
     <div style="padding: 0 8px 20px; border-bottom: 1px solid var(--border); margin-bottom: 16px;">
       <div style="font-family: 'Libre Baskerville', serif; font-size: 16px; color: var(--gold); margin-bottom: 4px;">Mundial</div>
