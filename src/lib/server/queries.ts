@@ -46,13 +46,13 @@ export function authenticateUser(username: string, password: string) {
 }
 
 // Pool CRUD
-export function createPool(name: string, createdBy: number, buyIn = 0, currency = 'EUR') {
+export function createPool(name: string, createdBy: number, buyIn = 0, allowMultiple = 0, currency = 'EUR') {
   const inviteCode = generateInviteCode();
   const stmt = db.prepare(`
-    INSERT INTO pools (name, invite_code, created_by, buy_in, currency)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO pools (name, invite_code, created_by, buy_in, allow_multiple_predictions, currency)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
-  const result = stmt.run(name, inviteCode, createdBy, buyIn, currency);
+  const result = stmt.run(name, inviteCode, createdBy, buyIn, allowMultiple, currency);
 
   // Creator auto-joins
   db.prepare('INSERT INTO pool_members (pool_id, user_id) VALUES (?, ?)').run(Number(result.lastInsertRowid), createdBy);

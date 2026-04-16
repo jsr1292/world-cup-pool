@@ -2,7 +2,7 @@ import { getPoolById, getAllTeams, createPrediction, getUserPredictions, getGrou
 import { redirect, error } from '@sveltejs/kit';
 import type { ServerLoad } from '@sveltejs/kit';
 
-export const load: ServerLoad = async ({ params, locals }) => {
+export const load: ServerLoad = async ({ params, locals, url }) => {
   if (!locals.user) throw redirect(302, '/login');
 
   const poolId = Number(params.id);
@@ -18,20 +18,24 @@ export const load: ServerLoad = async ({ params, locals }) => {
     teamsByGroup[team.group_name].push(team);
   }
 
-  // Get or create prediction entry
+  // Get ALL user predictions for this pool
   let predictions = getUserPredictions(poolId, locals.user.id) as any[];
-  let predictionId: number | null = null;
+
+  // Check deadline
+  const deadline = pool.deadline_group ? new Date(pool.deadline_group as string) : null;
+  const isLocked = deadline ? new Date() >= deadline : false;
+
+  // Get selected prediction from query param or first one
+  const selectedLabel = url.searchParams.get('entry') || '';
+  let selectedPrediction = predictions.find(p => p.label === selectedLabel) || predictions[0] || null;
+  let selectedId: number | null = null;
+
+  // Load group predictions for selected entry
   const existingGroupPreds: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }> = {};
 
-  if (predictions.length === 0) {
-    // Auto-create prediction entry
-    const result = createPrediction(poolId, locals.user.id) as { lastInsertRowid: unknown };
-    predictionId = Number(result.lastInsertRowid);
-    predictions = [{ id: predictionId }];
-  } else {
-    predictionId = Number(predictions[0].id);
-    // Load existing group predictions
-    const rows = getGroupPredictions(predictionId) as any[];
+  if (selectedPrediction) {
+    selectedId = Number(selectedPrediction.id);
+    const rows = getGroupPredictions(selectedId) as any[];
     for (const row of rows) {
       existingGroupPreds[row.group_name] = {
         pos1: row.position_1,
@@ -42,14 +46,19 @@ export const load: ServerLoad = async ({ params, locals }) => {
     }
   }
 
-  // Check deadline
-  const deadline = pool.deadline_group ? new Date(pool.deadline_group as string) : null;
-  const isLocked = deadline ? new Date() >= deadline : false;
+  // Build entry list for dropdown (show labels)
+  const entries = predictions.map(p => ({
+    id: Number(p.id),
+    label: p.label || 'Entrada principal',
+    total_score: p.total_score || 0,
+  }));
 
   return {
     pool,
     teamsByGroup,
-    predictionId,
+    entries,
+    selectedId,
+    selectedLabel: selectedPrediction?.label || '',
     isLocked,
     existingGroupPreds,
   };

@@ -52,6 +52,26 @@
   let savingDeadline = $state(false);
   let deadlineMsg = $state('');
 
+  // Multiple predictions setting
+  let allowMultiple = $state(pool.allow_multiple_predictions === 1);
+  let savingSettings = $state(false);
+  let settingsMsg = $state('');
+
+  async function saveSettings() {
+    savingSettings = true;
+    settingsMsg = '';
+    try {
+      const res = await fetch('/api/admin/pool-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pool_id: pool.id, allow_multiple_predictions: allowMultiple }),
+      });
+      if (res.ok) { settingsMsg = '✓ Guardado'; setTimeout(() => settingsMsg = '', 2000); }
+      else { const d = await res.json(); settingsMsg = d.error || '✗ Error'; }
+    } catch { settingsMsg = '✗ Error'; }
+    savingSettings = false;
+  }
+
   async function saveDeadlines() {
     savingDeadline = true;
     deadlineMsg = '';
@@ -72,13 +92,25 @@
   }
 
   async function togglePaid(userId, current) {
+    // Confirmation dialog for unchecking paid status
+    if (current) {
+      confirmUncheck = { show: true, member: _members.find(m => m.id === userId) };
+      return;
+    }
+    await doTogglePaid(userId, false);
+  }
+
+  let confirmUncheck = $state({ show: false, member: null });
+
+  async function doTogglePaid(userId, newValue) {
+    confirmUncheck = { show: false, member: null };
     const res = await fetch('/api/admin/payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pool_id: pool.id, user_id: userId, has_paid: !current }),
+      body: JSON.stringify({ pool_id: pool.id, user_id: userId, has_paid: newValue }),
     });
     if (res.ok) {
-      _members = _members.map(m => m.id === userId ? { ...m, has_paid: !current ? 1 : 0 } : m);
+      _members = _members.map(m => m.id === userId ? { ...m, has_paid: newValue ? 1 : 0 } : m);
       version++;
     }
   }
@@ -111,6 +143,28 @@
     <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 12px; text-align: center;">
       <div style="font-size: 18px; font-weight: 700;">{data.stats.finishedMatches}/{data.stats.totalMatches}</div>
       <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em;">Partidos</div>
+    </div>
+  </div>
+
+  <!-- Pool Settings -->
+  <div style="margin-bottom: 24px;">
+    <h2 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">Configuración</h2>
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 14px;">
+      <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+        <input type="checkbox" bind:checked={allowMultiple} style="margin-top: 2px; width: 14px; height: 14px; accent-color: var(--gold);" />
+        <div>
+          <div style="font-size: 12px; color: var(--text); font-weight: 500;">Múltiples apuestas por usuario</div>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">Permite que cada usuario cree varias entradas con predicciones independientes en la misma quiniela.</div>
+        </div>
+      </label>
+      <div style="margin-top: 12px; display: flex; align-items: center; gap: 8px;">
+        <button onclick={saveSettings} disabled={savingSettings} class="btn-primary" style="font-size: 9px; padding: 8px 16px;">
+          {savingSettings ? 'Guardando...' : 'Guardar'}
+        </button>
+        {#if settingsMsg}
+          <span style="font-size: 11px; color: {settingsMsg.includes('✓') ? 'var(--green)' : 'var(--red)'};">{settingsMsg}</span>
+        {/if}
+      </div>
     </div>
   </div>
 
@@ -239,5 +293,33 @@
         {/each}
       </div>
     {/if}
-  </div>
+  </div>  <!-- Payment uncheck confirmation modal -->
+  {#if confirmUncheck.show && confirmUncheck.member}
+    <div style="position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);"
+      onclick={() => confirmUncheck = { show: false, member: null } }
+      onkeydown={(e) => { if (e.key === 'Escape') confirmUncheck = { show: false, member: null }; }}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px; max-width: 320px; width: 90%;"
+        onclick={(e) => e.stopPropagation()}
+      >
+        <div style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px;">⚠️ Confirmar cambio de pago</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">
+          ¿Marcar como <strong style="color: var(--red);">no pagado</strong> a <strong style="color: var(--text);">{confirmUncheck.member.display_name}</strong>?
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button onclick={() => confirmUncheck = { show: false, member: null }}
+            style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer;">
+            Cancelar
+          </button>
+          <button onclick={() => doTogglePaid(confirmUncheck.member.id, false)}
+            style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--red); border-radius: 6px; background: rgba(255,77,106,0.15); color: var(--red); cursor: pointer; font-weight: 500;">
+            Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
 </div>

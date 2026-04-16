@@ -171,8 +171,12 @@
   let saving = $state(false);
   let saved = $state(false);
   let saveError = $state(null);
+  let newEntryLabel = $state('');
+  let creating = $state(false);
+  let createMsg = $state('');
 
   async function saveBracket() {
+    if (!data.selectedId) return;
     saving = true; saved = false;
     try {
       const picks = {};
@@ -191,12 +195,39 @@
       const res = await fetch('/api/predictions/bracket', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prediction_id: data.predictionId, picks }),
+        body: JSON.stringify({ prediction_id: data.selectedId, picks }),
       });
       if (res.ok) { saved = true; setTimeout(() => { saved = false; }, 2500); }
       else { saveError = 'Save failed'; setTimeout(() => { saveError = null; }, 3000); }
     } catch (e) { console.error(e); }
     finally { saving = false; }
+  }
+
+  async function switchEntry(label) {
+    const url = new URL(window.location.href);
+    if (label) url.searchParams.set('entry', label);
+    else url.searchParams.delete('entry');
+    window.location.href = url.pathname + url.search;
+  }
+
+  async function createEntry() {
+    if (!newEntryLabel.trim()) return;
+    creating = true; createMsg = '';
+    try {
+      const res = await fetch('/api/predictions/entry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pool_id: data.pool.id, label: newEntryLabel.trim() }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        newEntryLabel = '';
+        window.location.href = `/pool/${data.pool.id}/bracket?entry=${encodeURIComponent(d.label)}`;
+      } else {
+        createMsg = d.error || 'Error';
+      }
+    } catch { createMsg = 'Error de conexión'; }
+    creating = false;
   }
 
   function flagEmoji(code) {
@@ -245,17 +276,57 @@
       <h1 class="bracket-title">Cuadro Eliminatorio</h1>
       <p class="bracket-subtitle">Haz clic en una selección para elegirla ganadora. Haz clic de nuevo para deshacer.</p>
     </div>
+
+    <!-- Entry selector -->
+    {#if data.entries.length > 1 || (data.pool.allow_multiple_predictions === 1)}
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        {#if data.entries.length > 1}
+          <select
+            value={data.selectedLabel}
+            onchange={(e) => switchEntry(e.target.value)}
+            style="font-size: 11px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text);"
+          >
+            {#each data.entries as entry}
+              <option value={entry.label}>{entry.label} {entry.total_score > 0 ? `(${entry.total_score} pts)` : ''}</option>
+            {/each}
+          </select>
+        {:else if data.entries.length === 1}
+          <span style="font-size: 11px; color: var(--gold); padding: 4px 8px; background: rgba(201,168,76,0.1); border-radius: 4px;">{data.entries[0].label}</span>
+        {/if}
+        {#if data.pool.allow_multiple_predictions === 1}
+          <button onclick={() => { newEntryLabel = ''; createMsg = ''; }}
+            style="font-size: 9px; padding: 6px 10px; border: 1px solid var(--gold); border-radius: 6px; background: rgba(201,168,76,0.1); color: var(--gold); cursor: pointer;">
+            + Nueva entrada
+          </button>
+        {/if}
+      </div>
+    {/if}
+
     {#if data.isLocked}
       <div class="lock-badge">⚠️ Bloqueado</div>
     {:else}
       <div class="save-area">
         <span class="pick-count">{totalPicks} picks</span>
-        <button class="btn-primary" disabled={saving} onclick={saveBracket}>
+        <button class="btn-primary" disabled={saving || !data.selectedId} onclick={saveBracket}>
           {saving ? 'Guardando...' : saved ? '✓ Guardado' : 'Guardar Cuadro'}
         </button>
       </div>
     {/if}
   </div>
+
+  <!-- Create entry form -->
+  {#if data.pool.allow_multiple_predictions === 1 && newEntryLabel !== ''}
+    <div style="margin-bottom: 16px; padding: 14px; background: var(--bg-card); border: 1px solid var(--gold); border-radius: 8px; display: flex; gap: 8px; align-items: flex-end;">
+      <div style="flex: 1;">
+        <input bind:value={newEntryLabel} placeholder="Nombre de la entrada..."
+          style="width: 100%; font-size: 12px; padding: 8px 10px;"
+          onkeydown={(e) => { if (e.key === 'Enter') createEntry(); }} />
+      </div>
+      <button onclick={createEntry} disabled={creating || !newEntryLabel.trim()} class="btn-primary" style="font-size: 9px; padding: 8px 16px; white-space: nowrap;">{creating ? '...' : 'Crear'}</button>
+      <button onclick={() => { newEntryLabel = ''; createMsg = ''; }} style="font-size: 9px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer;">✕</button>
+      {#if createMsg}<span style="font-size: 10px; color: var(--red);">{createMsg}</span>{/if}
+    </div>
+  {/if}
 
   <!-- Bracket Grid -->
   <div class="bracket-scroll">
