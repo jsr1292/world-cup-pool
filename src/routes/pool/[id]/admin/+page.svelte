@@ -91,19 +91,28 @@
     savingDeadline = false;
   }
 
+  let showConfirm = $state(false);
+  let confirmEntryId = $state(null);
+  let confirmOdUserId = $state(null);
+  let confirmDisplayName = $state('');
+
   async function togglePaid(entryId, current, displayName, odUserId) {
     // Confirmation dialog for unchecking paid status
     if (current) {
-      confirmUncheck = { show: true, entryId, displayName, odUserId };
+      showConfirm = true;
+      confirmEntryId = entryId;
+      confirmDisplayName = displayName;
+      confirmOdUserId = odUserId;
       return;
     }
     await doTogglePaid(entryId, !current, odUserId);
   }
 
-  let confirmUncheck = $state({ show: false, entryId: null, displayName: '', odUserId: null });
-
   async function doTogglePaid(entryId, newValue, odUserId) {
-    confirmUncheck = { show: false, entryId: null, displayName: '', odUserId: null };
+    showConfirm = false;
+    confirmEntryId = null;
+    confirmOdUserId = null;
+    confirmDisplayName = '';
     const res = await fetch('/api/admin/payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -293,7 +302,7 @@
         const res = await fetch('/api/admin/results', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ match_id: match.id, home_score: hs, away_score: as2 }),
+          body: JSON.stringify({ pool_id: pool.id, match_id: match.id, home_score: hs, away_score: as2 }),
         });
         if (res.ok) { match.status = 'finished'; match.home_score = hs; match.away_score = as2; }
       }}
@@ -302,26 +311,25 @@
         {/each}
       </div>
     {/if}
-  </div>  <!-- Payment uncheck confirmation modal -->
-  {#if confirmUncheck.show}
+  </div>  {#if showConfirm}
     <div style="position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);"
       role="dialog"
       aria-modal="true"
     >
       <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px; max-width: 320px; width: 90%;"
         onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => { if (e.key === 'Escape') confirmUncheck = { show: false, entryId: null, displayName: '', odUserId: null }; }}
+        onkeydown={(e) => { if (e.key === 'Escape') { showConfirm = false; confirmEntryId = null; confirmOdUserId = null; confirmDisplayName = ''; } }}
       >
         <div style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px;">⚠️ Confirmar cambio de pago</div>
         <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">
-          ¿Marcar como <strong style="color: var(--red);">no pagado</strong> a <strong style="color: var(--text);">{confirmUncheck.displayName}{confirmUncheck.entryId ? ' (entrada)' : ' (sin entrada)'}</strong>?
+          ¿Marcar como <strong style="color: var(--red);">no pagado</strong> a <strong style="color: var(--text);">{confirmDisplayName}{confirmEntryId ? ' (entrada)' : ' (sin entrada)'}</strong>?
         </div>
         <div style="display: flex; gap: 10px; justify-content: flex-end;">
-          <button onclick={() => confirmUncheck = { show: false, entryId: null, displayName: '', odUserId: null }}
+          <button onclick={() => { showConfirm = false; confirmEntryId = null; confirmOdUserId = null; confirmDisplayName = ''; }}
             style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer;">
             Cancelar
           </button>
-          <button onclick={() => doTogglePaid(confirmUncheck.entryId, false, confirmUncheck.odUserId)}
+          <button onclick={() => doTogglePaid(confirmEntryId, false, confirmOdUserId)}
             style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--red); border-radius: 6px; background: rgba(255,77,106,0.15); color: var(--red); cursor: pointer; font-weight: 500;">
             Confirmar
           </button>

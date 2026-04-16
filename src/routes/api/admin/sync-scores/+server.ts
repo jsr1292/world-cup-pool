@@ -8,11 +8,9 @@ import type { RequestHandler } from './$types.js';
 export const POST: RequestHandler = async ({ locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
-  // Check admin
+  // Only global admins can sync live scores
   if (!locals.user.is_admin) {
-    // Also check if they created any pools
-    const pool = db.prepare('SELECT id FROM pools WHERE created_by = ? LIMIT 1').get(locals.user.id) as any;
-    if (!pool) return json({ error: 'Prohibido' }, { status: 403 });
+    return json({ error: 'Prohibido' }, { status: 403 });
   }
 
   const result = await syncScores();
