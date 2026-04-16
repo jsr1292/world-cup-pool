@@ -1,5 +1,6 @@
-<script>
-  let { data } = $props();
+<script lang="ts">
+  import type { PageData } from './$types.js';
+  let { data }: { data: PageData } = $props();
 
   let currentPassword = $state('');
   let newPassword = $state('');
