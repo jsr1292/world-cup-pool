@@ -91,6 +91,12 @@
         </button>
       </a>
     {/each}
+    <form method="POST" action="/api/auth/logout" style="display:contents">
+      <button type="submit">
+        <svg class="nav-icon-mobile"><use href="/icon.svg#settings" /></svg>
+        <span class="nav-label">Salir</span>
+      </button>
+    </form>
   </div>
   {/if}
 </div>

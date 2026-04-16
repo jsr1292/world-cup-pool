@@ -75,7 +75,7 @@
 
 <div style="max-width: 600px; margin: 0 auto;">
   <!-- Header -->
-  <a href="/pool/{data.pool.id}" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 16px;">← {data.pool.name}</a>
+  <a href="/pool/{data.pool.id}" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 16px; position: sticky; top: 0; background: var(--bg-base); padding: 8px 0; z-index: 5;">← {data.pool.name}</a>
 
   <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold); margin-bottom: 4px;">Resultados</h1>
 

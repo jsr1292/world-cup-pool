@@ -15,7 +15,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   if (!pool) return json({ error: 'Quiniela no encontrada' }, { status: 404 });
 
   if (!pool.allow_multiple_predictions) {
-    return json({ error: 'No se permiten múltiples predicciones' }, { status: 403 });
+    // Check if user already has a prediction in this pool
+    const existing = db.prepare(
+      'SELECT id FROM predictions WHERE pool_id = ? AND user_id = ?'
+    ).get(pool_id, locals.user.id);
+    if (existing) {
+      return json({ error: 'Ya tienes una predicción en esta quiniela' }, { status: 403 });
+    }
   }
 
   // Check user already has a prediction with this label
