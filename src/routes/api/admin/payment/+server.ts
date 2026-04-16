@@ -29,11 +29,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     // All entries for this user in this pool
     db.prepare('UPDATE predictions SET has_paid = ? WHERE pool_id = ? AND user_id = ?')
       .run(val, pool_id, user_id);
-    // Also update legacy pool_members
+  }
+  // Always also update pool_members (source of truth for members without entries)
+  if (user_id) {
     db.prepare('UPDATE pool_members SET has_paid = ? WHERE pool_id = ? AND user_id = ?')
       .run(val, pool_id, user_id);
-  } else {
-    return json({ error: 'Must provide user_id or entry_id' }, { status: 400 });
   }
 
   return json({ ok: true });

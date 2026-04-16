@@ -112,16 +112,17 @@ export function markPaid(poolId: number, userId: number) {
 }
 
 export function getPoolMembers(poolId: number) {
-  // Return one row per entry, with payment status (pool_members.has_paid as fallback for legacy)
+  // Return all pool members + their prediction entries (one row per entry if exists)
+  // Members without predictions still show (just no entry_id)
   return db.prepare(`
-    SELECT u.id as user_id, u.username, u.display_name,
+    SELECT u.id as od_user_id, u.username, u.display_name,
       pr.id as entry_id, pr.label as entry_label, pr.total_score,
       COALESCE(pr.has_paid, pm.has_paid, 0) as has_paid,
       pm.joined_at
-    FROM predictions pr
-    JOIN users u ON u.id = pr.user_id
-    JOIN pool_members pm ON pm.pool_id = pr.pool_id AND pm.user_id = pr.user_id
-    WHERE pr.pool_id = ?
+    FROM pool_members pm
+    JOIN users u ON u.id = pm.user_id
+    LEFT JOIN predictions pr ON pr.pool_id = pm.pool_id AND pr.user_id = pm.user_id
+    WHERE pm.pool_id = ?
     ORDER BY u.display_name, pr.created_at
   `).all(poolId);
 }

@@ -91,26 +91,35 @@
     savingDeadline = false;
   }
 
-  async function togglePaid(entryId, current, displayName) {
+  async function togglePaid(entryId, current, displayName, odUserId) {
     // Confirmation dialog for unchecking paid status
     if (current) {
-      confirmUncheck = { show: true, entryId, displayName };
+      confirmUncheck = { show: true, entryId, displayName, odUserId };
       return;
     }
-    await doTogglePaid(entryId, false);
+    await doTogglePaid(entryId, !current, odUserId);
   }
 
-  let confirmUncheck = $state({ show: false, entryId: null, displayName: '' });
+  let confirmUncheck = $state({ show: false, entryId: null, displayName: '', odUserId: null });
 
-  async function doTogglePaid(entryId, newValue) {
-    confirmUncheck = { show: false, entryId: null, displayName: '' };
+  async function doTogglePaid(entryId, newValue, odUserId) {
+    confirmUncheck = { show: false, entryId: null, displayName: '', odUserId: null };
     const res = await fetch('/api/admin/payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pool_id: pool.id, entry_id: entryId, has_paid: newValue }),
+      body: JSON.stringify({
+        pool_id: pool.id,
+        entry_id: entryId || undefined,
+        user_id: odUserId || undefined,
+        has_paid: newValue
+      }),
     });
     if (res.ok) {
-      _members = _members.map(m => m.entry_id === entryId ? { ...m, has_paid: newValue ? 1 : 0 } : m);
+      if (entryId) {
+        _members = _members.map(m => m.entry_id === entryId ? { ...m, has_paid: newValue ? 1 : 0 } : m);
+      } else {
+        _members = _members.map(m => m.od_user_id === odUserId ? { ...m, has_paid: newValue ? 1 : 0 } : m);
+      }
       version++;
     }
   }
@@ -228,7 +237,7 @@
           <span style="font-size: 12px;">{member.display_name}</span>
           {#if pool.buy_in > 0}
             <button
-              onclick={() => togglePaid(member.entry_id, member.has_paid, member.display_name)}
+              onclick={() => togglePaid(member.entry_id, member.has_paid, member.display_name, member.od_user_id)}
               style="font-size: 9px; padding: 4px 10px; border-radius: 4px; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid {member.has_paid ? 'var(--green)' : 'var(--red)'}; background: {member.has_paid ? 'rgba(0,229,160,0.1)' : 'rgba(255,77,106,0.1)'}; color: {member.has_paid ? 'var(--green)' : 'var(--red)'}; cursor: pointer;"
             >
               {member.has_paid ? '✓ Pagado' : '✗ Pendiente'}
@@ -301,18 +310,18 @@
     >
       <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px; max-width: 320px; width: 90%;"
         onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => { if (e.key === 'Escape') confirmUncheck = { show: false, entryId: null, displayName: '' }; }}
+        onkeydown={(e) => { if (e.key === 'Escape') confirmUncheck = { show: false, entryId: null, displayName: '', odUserId: null }; }}
       >
         <div style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px;">⚠️ Confirmar cambio de pago</div>
         <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">
-          ¿Marcar como <strong style="color: var(--red);">no pagado</strong> a <strong style="color: var(--text);">{confirmUncheck.displayName}</strong>?
+          ¿Marcar como <strong style="color: var(--red);">no pagado</strong> a <strong style="color: var(--text);">{confirmUncheck.displayName}{confirmUncheck.entryId ? ' (entrada)' : ' (sin entrada)'}</strong>?
         </div>
         <div style="display: flex; gap: 10px; justify-content: flex-end;">
-          <button onclick={() => confirmUncheck = { show: false, entryId: null, displayName: '' }}
+          <button onclick={() => confirmUncheck = { show: false, entryId: null, displayName: '', odUserId: null }}
             style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer;">
             Cancelar
           </button>
-          <button onclick={() => doTogglePaid(confirmUncheck.entryId, false)}
+          <button onclick={() => doTogglePaid(confirmUncheck.entryId, false, confirmUncheck.odUserId)}
             style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--red); border-radius: 6px; background: rgba(255,77,106,0.15); color: var(--red); cursor: pointer; font-weight: 500;">
             Confirmar
           </button>
