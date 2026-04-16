@@ -19,6 +19,10 @@
       document.documentElement.removeAttribute('data-theme');
     }
     localStorage.setItem('theme', theme);
+    // Update body background and theme-color meta
+    document.body.style.background = isDark ? '#07090f' : '#f5f5f0';
+    const meta = document.querySelector('meta[name=theme-color]');
+    if (meta) meta.content = isDark ? '#07090f' : '#f5f5f0';
   }
 
   async function changePassword() {

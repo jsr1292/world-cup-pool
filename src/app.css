@@ -55,7 +55,7 @@ a:hover { color: var(--gold-light); }
 
 input, select, textarea {
   width: 100%;
-  background: rgba(255,255,255,0.04);
+  background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px 12px;

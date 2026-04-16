@@ -112,10 +112,10 @@
               <div style="font-size: 13px; font-weight: 600; {entry.user_id === data.userId ? 'color: var(--gold);' : ''}">{entry.display_name}{entry.label ? ` (${entry.label})` : ''}</div>
               <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">
                 {#if entry.group_correct > 0}
-                  <span style="font-size: 9px; color: var(--text-muted); background: rgba(255,255,255,0.04); padding: 2px 6px; border-radius: 3px;">Grupos: {entry.group_correct}</span>
+                  <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">Grupos: {entry.group_correct}</span>
                 {/if}
                 {#each Object.entries(entry.bracket_correct || {}) as [phase, count]}
-                  <span style="font-size: 9px; color: var(--text-muted); background: rgba(255,255,255,0.04); padding: 2px 6px; border-radius: 3px;">{phaseLabels[phase] || phase}: {count}</span>
+                  <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">{phaseLabels[phase] || phase}: {count}</span>
                 {/each}
               </div>
             </div>

@@ -253,7 +253,7 @@
               <select
                 disabled={data.isLocked}
                 onchange={(e) => selectTeam(group, posKey, e.target.value)}
-                style="flex: 1; padding: 6px 8px; font-size: 11px; text-align: left; background: rgba(0,0,0,0.3); {selectedTeam ? 'color: var(--text); border-color: rgba(201,168,76,0.3);' : 'color: var(--text-muted);'}"
+                style="flex: 1; padding: 6px 8px; font-size: 11px; text-align: left; background: var(--bg-surface); {selectedTeam ? 'color: var(--text); border-color: rgba(201,168,76,0.3);' : 'color: var(--text-muted);'}"
               >
                 <option value="">Selecciona {label}</option>
                 {#each groupTeams as team}
