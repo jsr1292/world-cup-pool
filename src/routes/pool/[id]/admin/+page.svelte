@@ -10,6 +10,13 @@
 
   const pool = data.pool;
 
+  const prizeSplits = [
+    { label: '1er puesto', pct: 0.6 },
+    { label: '2do puesto', pct: 0.25 },
+    { label: '3er puesto', pct: 0.15 },
+  ];
+  let totalPool = $derived((pool.buy_in || 0) * data.stats.totalPaid);
+
   const ruleLabels = {
     match_outcome: 'Resultado partido',
     exact_score: 'Resultado exacto',
@@ -168,13 +175,6 @@
   <div style="margin-bottom: 24px;">
     <h2 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">💰 Reparto de Premios</h2>
     <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 14px;">
-      {@const totalPool = (pool.buy_in || 0) * data.stats.totalPaid}
-      {@const prizeSplits = [
-        { label: '1er puesto', pct: 0.6 },
-        { label: '2do puesto', pct: 0.25 },
-        { label: '3er puesto', pct: 0.15 },
-      ]}
-
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
         <span style="font-size: 11px; color: var(--text-muted);">Bote total:</span>
         <span style="font-size: 18px; font-weight: 700; color: var(--gold);">{totalPool > 0 ? totalPool.toFixed(2) + '€' : '—'}</span>
