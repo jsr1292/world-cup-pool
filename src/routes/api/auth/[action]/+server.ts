@@ -1,5 +1,5 @@
 import { authenticateUser, createUser, createSession } from '$lib/server/queries.js';
-import { json, type RequestHandler } from '@sveltejs/kit';
+import { json, redirect, type RequestHandler } from '@sveltejs/kit';
 
 export const POST: RequestHandler = async ({ request, cookies, url }) => {
   const action = url.pathname.split('/').pop(); // 'login', 'register', or 'logout'
@@ -11,7 +11,7 @@ export const POST: RequestHandler = async ({ request, cookies, url }) => {
       deleteSession(token);
       cookies.delete('session', { path: '/' });
     }
-    return json({ ok: true });
+    throw redirect(303, "/login");
   }
 
   const body = await request.json();

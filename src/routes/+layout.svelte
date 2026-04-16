@@ -20,6 +20,7 @@
 </script>
 
 <div class="app-layout">
+  {#if data?.user}
   <!-- Desktop Sidebar -->
   <nav class="sidebar">
     <div style="padding: 0 8px 20px; border-bottom: 1px solid var(--border); margin-bottom: 16px;">
@@ -54,6 +55,7 @@
       </form>
     </div>
   </nav>
+  {/if}
 
   <!-- Main Content -->
   <main class="main-content">
@@ -61,6 +63,7 @@
   </main>
 
   <!-- Mobile Bottom Nav -->
+  {#if data?.user}
   <div class="bottom-nav">
     {#each navItems as item}
       <a href={item.path}>
@@ -71,4 +74,5 @@
       </a>
     {/each}
   </div>
+  {/if}
 </div>
