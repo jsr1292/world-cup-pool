@@ -75,19 +75,19 @@
 
     <form onsubmit={handleSubmit} style="display: flex; flex-direction: column; gap: 14px;">
       <div>
-        <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5; letter-spacing: 0.12em; text-transform: uppercase;">Usuario</label>
+        <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Usuario</label>
         <input bind:value={username} placeholder="usuario" required autocomplete="username" />
       </div>
 
       {#if mode === 'register'}
         <div>
-          <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5; letter-spacing: 0.12em; text-transform: uppercase;">Nombre</label>
+          <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Nombre</label>
           <input bind:value={displayName} placeholder="Tu nombre" required />
         </div>
       {/if}
 
       <div>
-        <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5; letter-spacing: 0.12em; text-transform: uppercase;">Contraseña</label>
+        <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Contraseña</label>
         <input type="password" bind:value={password} placeholder="••••••••" required autocomplete={mode === 'login' ? 'current-password' : 'new-password'} />
       </div>
 

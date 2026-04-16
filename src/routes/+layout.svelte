@@ -64,7 +64,7 @@
 
     {#if data?.user?.is_admin}
       <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
-        <div style="font-size: 8px; color: var(--text-dim); letter-spacing: 0.15em; text-transform: uppercase; padding: 0 12px 8px;">Administración</div>
+        <div style="font-size: 9px; color: var(--text-dim); letter-spacing: 0.15em; text-transform: uppercase; padding: 0 12px 8px;">Administración</div>
         <a href="/admin" class="nav-link" class:active={currentPath.startsWith('/admin')}>
           <svg class="nav-icon"><use href="/icon.svg#settings" /></svg>
           Ajustes
@@ -152,7 +152,7 @@
   }
 
   .nav-label {
-    font-size: 8px;
+    font-size: 9px;
     letter-spacing: 0.05em;
     text-transform: uppercase;
   }
