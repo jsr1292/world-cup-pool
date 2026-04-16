@@ -294,26 +294,25 @@
       </div>
     {/if}
   </div>  <!-- Payment uncheck confirmation modal -->
-  {#if confirmUncheck.show && confirmUncheck.member}
+  {#if confirmUncheck.show}
     <div style="position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);"
-      onclick={() => confirmUncheck = { show: false, member: null } }
-      onkeydown={(e) => { if (e.key === 'Escape') confirmUncheck = { show: false, member: null }; }}
       role="dialog"
       aria-modal="true"
     >
       <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px; max-width: 320px; width: 90%;"
         onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => { if (e.key === 'Escape') confirmUncheck = { show: false, entryId: null, displayName: '' }; }}
       >
         <div style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px;">⚠️ Confirmar cambio de pago</div>
         <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">
-          ¿Marcar como <strong style="color: var(--red);">no pagado</strong> a <strong style="color: var(--text);">{confirmUncheck.member.display_name}</strong>?
+          ¿Marcar como <strong style="color: var(--red);">no pagado</strong> a <strong style="color: var(--text);">{confirmUncheck.displayName}</strong>?
         </div>
         <div style="display: flex; gap: 10px; justify-content: flex-end;">
-          <button onclick={() => confirmUncheck = { show: false, member: null }}
+          <button onclick={() => confirmUncheck = { show: false, entryId: null, displayName: '' }}
             style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer;">
             Cancelar
           </button>
-          <button onclick={() => doTogglePaid(confirmUncheck.member.id, false)}
+          <button onclick={() => doTogglePaid(confirmUncheck.entryId, false)}
             style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--red); border-radius: 6px; background: rgba(255,77,106,0.15); color: var(--red); cursor: pointer; font-weight: 500;">
             Confirmar
           </button>

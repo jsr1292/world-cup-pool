@@ -112,19 +112,24 @@ export function markPaid(poolId: number, userId: number) {
 }
 
 export function getPoolMembers(poolId: number) {
+  // Return one row per entry, with payment status (pool_members.has_paid as fallback for legacy)
   return db.prepare(`
-    SELECT u.id, u.username, u.display_name, pm.has_paid, pm.joined_at
-    FROM pool_members pm
-    JOIN users u ON u.id = pm.user_id
-    WHERE pm.pool_id = ?
-    ORDER BY u.display_name
+    SELECT u.id as user_id, u.username, u.display_name,
+      pr.id as entry_id, pr.label as entry_label, pr.total_score,
+      COALESCE(pr.has_paid, pm.has_paid, 0) as has_paid,
+      pm.joined_at
+    FROM predictions pr
+    JOIN users u ON u.id = pr.user_id
+    JOIN pool_members pm ON pm.pool_id = pr.pool_id AND pm.user_id = pr.user_id
+    WHERE pr.pool_id = ?
+    ORDER BY u.display_name, pr.created_at
   `).all(poolId);
 }
 
 // Predictions
 export function createPrediction(poolId: number, userId: number, label = '') {
   try {
-    const stmt = db.prepare('INSERT INTO predictions (pool_id, user_id, label) VALUES (?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO predictions (pool_id, user_id, label, has_paid) VALUES (?, ?, ?, 0)');
     return stmt.run(poolId, userId, label);
   } catch (e: any) {
     if (e.code === 'SQLITE_CONSTRAINT') return null; // duplicate
