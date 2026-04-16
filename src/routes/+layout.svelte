@@ -91,12 +91,6 @@
         </button>
       </a>
     {/each}
-    <form method="POST" action="/api/auth/logout" style="display:contents">
-      <button type="submit">
-        <svg class="nav-icon-mobile"><use href="/icon.svg#settings" /></svg>
-        <span class="nav-label">Salir</span>
-      </button>
-    </form>
   </div>
   {/if}
 </div>
@@ -153,9 +147,7 @@
     right: 0;
     z-index: 50;
     padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
-    background: var(--bg-base);
-    backdrop-filter: blur(18px);
-    border-bottom: 1px solid var(--border);
+    background: var(--bg-nav);
   }
 
   .top-bar-inner {

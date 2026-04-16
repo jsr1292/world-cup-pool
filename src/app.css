@@ -16,6 +16,7 @@
   --green: #00e5a0;
   --red: #ff4d6a;
   --blue: #5b9cf5;
+  --bg-nav: rgba(15, 19, 35, 0.95);
 }
 
 :root[data-theme="light"] {
@@ -34,6 +35,7 @@
   --green: #059669;
   --red: #dc2626;
   --blue: #2563eb;
+  --bg-nav: rgba(230, 230, 225, 0.95);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -115,9 +117,7 @@ button {
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--bg-base);
-  backdrop-filter: blur(18px);
-  border-top: 1px solid var(--border);
+  background: var(--bg-nav);
   display: flex;
   justify-content: space-around;
   padding: 6px max(8px, env(safe-area-inset-left)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-right));
@@ -149,8 +149,7 @@ button {
   }
   .sidebar {
     width: 240px;
-    background: var(--bg-card-solid);
-    border-right: 1px solid var(--border);
+    background: var(--bg-nav);
     padding: 24px 16px;
     position: fixed;
     top: 0;
