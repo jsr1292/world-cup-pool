@@ -8,6 +8,19 @@
   let changing = $state(false);
   let changeResult = $state(null) as { ok: boolean; msg: string } | null;
 
+  let isDark = $state(typeof window !== 'undefined' && document.documentElement.getAttribute('data-theme') !== 'light');
+
+  function toggleTheme() {
+    isDark = !isDark;
+    const theme = isDark ? '' : 'light';
+    if (theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    localStorage.setItem('theme', theme);
+  }
+
   async function changePassword() {
     if (newPassword !== confirmPassword) {
       changeResult = { ok: false, msg: 'Las contraseñas no coinciden' };
@@ -60,6 +73,17 @@
         <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 3px;">Miembro desde</div>
         <div style="font-size: 13px; color: var(--text);">{data.user.created_at}</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Appearance -->
+  <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+    <div style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 16px;">🎨 Apariencia</div>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-size: 12px; color: var(--text);">Tema oscuro</span>
+      <button onclick={toggleTheme} style="width: 44px; height: 24px; border-radius: 12px; border: none; cursor: pointer; position: relative; transition: background 0.2s; background: {isDark ? 'var(--gold)' : 'var(--border)'};">
+        <span style="position: absolute; top: 2px; {isDark ? 'right: 2px;' : 'left: 2px;'} width: 20px; height: 20px; border-radius: 50%; background: white; transition: all 0.2s;"></span>
+      </button>
     </div>
   </div>
 

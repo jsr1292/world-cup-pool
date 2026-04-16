@@ -164,6 +164,42 @@
     </div>
   </div>
 
+  <!-- Prize Distribution -->
+  <div style="margin-bottom: 24px;">
+    <h2 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">💰 Reparto de Premios</h2>
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 14px;">
+      {@const totalPool = (pool.buy_in || 0) * data.stats.totalPaid}
+      {@const prizeSplits = [
+        { label: '1er puesto', pct: 0.6 },
+        { label: '2do puesto', pct: 0.25 },
+        { label: '3er puesto', pct: 0.15 },
+      ]}
+
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+        <span style="font-size: 11px; color: var(--text-muted);">Bote total:</span>
+        <span style="font-size: 18px; font-weight: 700; color: var(--gold);">{totalPool > 0 ? totalPool.toFixed(2) + '€' : '—'}</span>
+        <span style="font-size: 10px; color: var(--text-muted);">({data.stats.totalPaid} pagados × {pool.buy_in || 0}€)</span>
+      </div>
+
+      {#if totalPool > 0}
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          {#each prizeSplits as split}
+            {@const amount = totalPool * split.pct}
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: var(--bg-surface); border-radius: 4px;">
+              <span style="font-size: 11px; color: var(--text);">{split.label}</span>
+              <div>
+                <span style="font-size: 12px; font-weight: 600; color: var(--gold);">{amount.toFixed(2)}€</span>
+                <span style="font-size: 9px; color: var(--text-muted); margin-left: 4px;">({(split.pct * 100).toFixed(0)}%)</span>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p style="font-size: 10px; color: var(--text-muted);">Configura el buy-in y marca miembros como pagados para ver el reparto.</p>
+      {/if}
+    </div>
+  </div>
+
   <!-- Pool Settings -->
   <div style="margin-bottom: 24px;">
     <h2 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">Configuración</h2>

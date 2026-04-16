@@ -875,13 +875,16 @@
 
   @media (max-width: 600px) {
     .team-btn {
-      padding: 5px 6px;
+      padding: 8px 8px;
       font-size: 10px;
       gap: 3px;
+      min-height: 36px;
     }
 
-    .team-flag { font-size: 11px; }
+    .team-flag { font-size: 13px; }
     .team-name { font-size: 10px; }
+
+    .match-list { gap: 4px; }
 
     .bracket-title { font-size: 16px; }
     .col-header { font-size: 9px; padding: 4px 8px; }

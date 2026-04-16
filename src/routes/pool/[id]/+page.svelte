@@ -10,6 +10,7 @@
     { id: 'predictions', label: 'Pronósticos' },
     { id: 'bracket', label: 'Eliminatorias' },
     { id: 'members', label: 'Miembros' },
+    { id: 'summary', label: '📋 Resumen', link: true },
     { id: 'results', label: '🏆 Resultados', link: true },
     { id: 'scoring', label: 'Puntuación' },
   ];

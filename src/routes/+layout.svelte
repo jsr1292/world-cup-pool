@@ -146,7 +146,7 @@
     right: 0;
     z-index: 50;
     padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
-    background: rgba(7, 9, 15, 0.95);
+    background: var(--bg-base);
     backdrop-filter: blur(18px);
     border-bottom: 1px solid var(--border);
   }
