@@ -195,7 +195,7 @@
           {/each}
         </div>
       {:else}
-        <p style="font-size: 10px; color: var(--text-muted);">Configura el buy-in y marca miembros como pagados para ver el reparto.</p>
+        <p style="font-size: 10px; color: var(--text-muted);">Configura la cuota de entrada y marca miembros como pagados para ver el reparto.</p>
       {/if}
     </div>
   </div>

@@ -9,7 +9,7 @@
       ¡Hola{data.user?.display_name ? ', ' + data.user.display_name : ''}! 👋
     </h1>
     <p style="font-size: 11px; color: var(--text-muted);">
-      {data.daysUntil > 0 ? `<span style="color: var(--gold); font-weight: 600;">${data.daysUntil} días</span> para el mundial` : '¡El mundial ha comenzado!'}
+      {data.daysUntil} días para el mundial
     </p>
     <div style="display: flex; gap: 8px; margin-top: 12px;">
       <a href="/pools/create" class="btn-primary" style="font-size: 9px; padding: 8px 16px; text-decoration: none;">+ Nueva</a>
@@ -26,7 +26,7 @@
             ¡Hola{data.user?.display_name ? ', ' + data.user.display_name : ''}! 👋
           </h1>
           <p style="font-size: 12px; color: var(--text-muted);">
-            Mundial 2026 · {data.daysUntil > 0 ? `<span style="color: var(--gold); font-weight: 600;">${data.daysUntil} días</span> para el mundial` : '¡El mundial ha comenzado!'}
+            Mundial 2026 · {data.daysUntil} días para el mundial
           </p>
         </div>
         <div style="display: flex; gap: 8px;">
