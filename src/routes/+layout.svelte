@@ -34,7 +34,7 @@
         class="nav-link"
         class:active={isActive(item.path)}
       >
-        <svg class="nav-icon"><use href="/icon.svg#{item.icon}" /></use>
+        <svg class="nav-icon"><use href="/icon.svg#{item.icon}" /></svg>
         {item.label}
       </a>
     {/each}
@@ -43,7 +43,7 @@
       <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
         <div style="font-size: 8px; color: var(--text-dim); letter-spacing: 0.15em; text-transform: uppercase; padding: 0 12px 8px;">Admin</div>
         <a href="/admin" class="nav-link" class:active={currentPath.startsWith('/admin')}>
-          <svg class="nav-icon"><use href="/icon.svg#settings" /></use>
+          <svg class="nav-icon"><use href="/icon.svg#settings" /></svg>
           Ajustes
         </a>
       </div>
