@@ -43,7 +43,8 @@
   };
 
   function copyCode() {
-    navigator.clipboard.writeText(pool.invite_code).then(() => {
+    const url = `${window.location.origin}/join/${pool.invite_code}`;
+    navigator.clipboard.writeText(url).then(() => {
       copied = true;
       setTimeout(() => { copied = false; }, 2000);
     });
@@ -68,7 +69,7 @@
       {/if}
       <span>🔗 Código: <span style="color: var(--gold); font-weight: 600;">{pool.invite_code}</span></span>
       <button onclick={copyCode} style="background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 9px; color: {copied ? 'var(--green)' : 'var(--text-muted)'}; cursor: pointer; transition: all 0.2s;">
-        {copied ? '✓ Copiado' : 'Copiar'}
+        {copied ? '✓ Enlace copiado' : 'Compartir enlace'}
       </button>
     </div>
     {#if data.isAdmin}
