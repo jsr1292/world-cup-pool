@@ -61,6 +61,14 @@
       }
     }
     selections[group][position] = num;
+    // Auto-save after change
+    autoSave();
+  }
+
+  let autoSaveTimer = null;
+  function autoSave() {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(savePredictions, 500);
   }
 
   async function savePredictions() {
@@ -269,19 +277,24 @@
     {/each}
   </div>
 
-  <!-- Save button -->
+  <!-- Auto-save indicator -->
   {#if !data.isLocked}
     <div style="margin-top: 24px; display: flex; gap: 12px; align-items: center;">
-      <button
-        class="btn-primary"
-        disabled={saving}
-        onclick={savePredictions}
-      >
-        {saving ? 'Guardando...' : saved ? '✓ Guardado' : 'Guardar Pronósticos'}
-      </button>
-      {#if saved}
-        <span style="font-size: 10px; color: var(--green);">¡Pronósticos de grupos guardados!</span>
+      {#if saving}
+        <span style="font-size: 10px; color: var(--text-muted);">Guardando...</span>
+      {:else if saved}
+        <span style="font-size: 10px; color: var(--green);">✓ Guardado</span>
+      {:else}
+        <span style="font-size: 10px; color: var(--text-dim);">Cambios guardados automáticamente</span>
       {/if}
+    </div>
+  {/if}
+
+  <!-- Go to bracket -->
+  {#if !data.isLocked && data.selectedId}
+    <div style="margin-top: 20px; padding: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Grupos completados — ahora predice las eliminatorias</p>
+      <a href="/pool/{pool.id}/bracket" class="btn-primary" style="font-size: 11px; padding: 10px 24px; display: inline-block; text-decoration: none;">⚔️ Cuadro Eliminatorio →</a>
     </div>
   {/if}
 </div>

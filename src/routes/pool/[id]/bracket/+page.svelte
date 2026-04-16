@@ -166,6 +166,14 @@
     }
     recascade();
     bump();
+    // Auto-save
+    autoSaveBracket();
+  }
+
+  let autoSaveTimer = null;
+  function autoSaveBracket() {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(saveBracket, 800);
   }
 
   let saving = $state(false);
@@ -307,9 +315,13 @@
     {:else}
       <div class="save-area">
         <span class="pick-count">{totalPicks} picks</span>
-        <button class="btn-primary" disabled={saving || !data.selectedId} onclick={saveBracket}>
-          {saving ? 'Guardando...' : saved ? '✓ Guardado' : 'Guardar Cuadro'}
-        </button>
+        {#if saving}
+          <span style="font-size: 10px; color: var(--text-muted);">Guardando...</span>
+        {:else if saved}
+          <span style="font-size: 10px; color: var(--green);">✓ Guardado</span>
+        {:else}
+          <span style="font-size: 10px; color: var(--text-dim);">Auto-guardado</span>
+        {/if}
       </div>
     {/if}
   </div>
