@@ -91,26 +91,26 @@
     savingDeadline = false;
   }
 
-  async function togglePaid(userId, current) {
+  async function togglePaid(entryId, current, displayName) {
     // Confirmation dialog for unchecking paid status
     if (current) {
-      confirmUncheck = { show: true, member: _members.find(m => m.id === userId) };
+      confirmUncheck = { show: true, entryId, displayName };
       return;
     }
-    await doTogglePaid(userId, false);
+    await doTogglePaid(entryId, false);
   }
 
-  let confirmUncheck = $state({ show: false, member: null });
+  let confirmUncheck = $state({ show: false, entryId: null, displayName: '' });
 
-  async function doTogglePaid(userId, newValue) {
-    confirmUncheck = { show: false, member: null };
+  async function doTogglePaid(entryId, newValue) {
+    confirmUncheck = { show: false, entryId: null, displayName: '' };
     const res = await fetch('/api/admin/payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pool_id: pool.id, user_id: userId, has_paid: newValue }),
+      body: JSON.stringify({ pool_id: pool.id, entry_id: entryId, has_paid: newValue }),
     });
     if (res.ok) {
-      _members = _members.map(m => m.id === userId ? { ...m, has_paid: newValue ? 1 : 0 } : m);
+      _members = _members.map(m => m.entry_id === entryId ? { ...m, has_paid: newValue ? 1 : 0 } : m);
       version++;
     }
   }
@@ -228,7 +228,7 @@
           <span style="font-size: 12px;">{member.display_name}</span>
           {#if pool.buy_in > 0}
             <button
-              onclick={() => togglePaid(member.id, member.has_paid)}
+              onclick={() => togglePaid(member.entry_id, member.has_paid, member.display_name)}
               style="font-size: 9px; padding: 4px 10px; border-radius: 4px; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid {member.has_paid ? 'var(--green)' : 'var(--red)'}; background: {member.has_paid ? 'rgba(0,229,160,0.1)' : 'rgba(255,77,106,0.1)'}; color: {member.has_paid ? 'var(--green)' : 'var(--red)'}; cursor: pointer;"
             >
               {member.has_paid ? '✓ Pagado' : '✗ Pendiente'}
