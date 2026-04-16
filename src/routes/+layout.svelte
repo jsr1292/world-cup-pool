@@ -15,7 +15,6 @@
 
   const navItems = [
     { path: '/', label: 'Inicio', icon: 'home' },
-    { path: '/pools', label: 'Quinielas', icon: 'trophy' },
     { path: '/profile', label: 'Perfil', icon: 'user' },
   ];
 </script>
