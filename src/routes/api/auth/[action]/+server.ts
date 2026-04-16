@@ -22,6 +22,8 @@ export const POST: RequestHandler = async ({ request, cookies, url }) => {
       return json({ error: 'Todos los campos son obligatorios' }, { status: 400 });
     }
     if (username.length < 3) return json({ error: 'El usuario debe tener al menos 3 caracteres' }, { status: 400 });
+    if (username.length > 20) return json({ error: 'El usuario debe tener máximo 20 caracteres' }, { status: 400 });
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) return json({ error: 'El usuario solo puede contener letras, números y _' }, { status: 400 });
     if (password.length < 4) return json({ error: 'La contraseña debe tener al menos 4 caracteres' }, { status: 400 });
 
     try {

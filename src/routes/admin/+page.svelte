@@ -1,5 +1,5 @@
 <div>
-  <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold); margin-bottom: 4px;">Admin</h1>
+  <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold); margin-bottom: 4px;">Administración</h1>
   <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 24px;">Gestión del torneo</p>
 
   <div style="text-align: center; padding: 48px 20px; color: var(--text-muted);">

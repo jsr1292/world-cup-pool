@@ -142,13 +142,13 @@
 </script>
 
 <svelte:head>
-  <title>Admin · {pool.name}</title>
+  <title>Administración · {pool.name}</title>
 </svelte:head>
 
 <div>
   <a href="/pool/{pool.id}" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 16px;">← Volver al pool</a>
 
-  <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold); margin-bottom: 4px;">⚙️ Admin</h1>
+  <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold); margin-bottom: 4px;">⚙️ Administración</h1>
   <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 20px;">{pool.name}</p>
 
   <!-- Stats -->

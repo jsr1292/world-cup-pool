@@ -76,7 +76,7 @@
     </div>
     {#if data.isAdmin}
       <div style="margin-top: 8px;">
-        <a href="/pool/{pool.id}/admin" class="btn-ghost" style="font-size: 9px; padding: 6px 14px;">⚙️ Admin</a>
+        <a href="/pool/{pool.id}/admin" class="btn-ghost" style="font-size: 9px; padding: 6px 14px;">⚙️ Administración</a>
       </div>
     {/if}
   </div>
@@ -99,7 +99,7 @@
   {#if tab === 'leaderboard'}
     {#if data.leaderboard.length === 0}
       <div style="text-align: center; padding: 32px; color: var(--text-muted); font-size: 12px;">
-        Sin pronósticos aún. ¡Sé el primero!
+        Sin pronósticos aún. <a href="/pool/{pool.id}/predict" style="color: var(--gold);">¡Predice ahora!</a>
       </div>
     {:else}
       <div style="display: flex; flex-direction: column; gap: 8px;">

@@ -15,6 +15,7 @@
 
   const navItems = [
     { path: '/', label: 'Inicio', icon: 'home' },
+    { path: '/leaderboard', label: 'Clasificación', icon: 'trophy' },
     { path: '/profile', label: 'Perfil', icon: 'user' },
   ];
 </script>
@@ -56,7 +57,7 @@
 
     {#if data?.user?.is_admin}
       <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
-        <div style="font-size: 8px; color: var(--text-dim); letter-spacing: 0.15em; text-transform: uppercase; padding: 0 12px 8px;">Admin</div>
+        <div style="font-size: 8px; color: var(--text-dim); letter-spacing: 0.15em; text-transform: uppercase; padding: 0 12px 8px;">Administración</div>
         <a href="/admin" class="nav-link" class:active={currentPath.startsWith('/admin')}>
           <svg class="nav-icon"><use href="/icon.svg#settings" /></svg>
           Ajustes
