@@ -87,37 +87,54 @@
     {/if}
   {/if}
 
-  <!-- Predictions Tab -->
+  <!-- Pronósticos Tab -->
   {#if tab === 'predictions'}
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-      <h3 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Mis Pronósticos</h3>
-      <a href="/pool/{pool.id}/predict" class="btn-primary" style="font-size: 9px; padding: 6px 14px;">+ Nuevo</a>
-    </div>
     {#if data.predictions.length === 0}
-      <div style="text-align: center; padding: 32px; color: var(--text-muted); font-size: 12px;">
-        Sin pronósticos aún. ¡Empieza a predecir!
+      <div style="text-align: center; padding: 40px 20px;">
+        <div style="font-size: 40px; margin-bottom: 12px;">⚽</div>
+        <h3 style="font-size: 16px; color: var(--gold); margin-bottom: 8px;">¡Empieza a predecir!</h3>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 20px;">Rellena los resultados de cada grupo y luego el cuadro eliminatorio.</p>
+        <div style="display: flex; flex-direction: column; gap: 8px; align-items: center;">
+          <a href="/pool/{pool.id}/predict" class="btn-primary" style="font-size: 11px; padding: 10px 24px;">📋 Paso 1: Pronosticar Grupos</a>
+        </div>
       </div>
     {:else}
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h3 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Mis Pronósticos</h3>
+        <a href="/pool/{pool.id}/predict" class="btn-ghost" style="font-size: 9px; padding: 6px 14px;">Editar grupos</a>
+      </div>
       {#each data.predictions as pred}
         <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 6px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="font-size: 12px;">{pred.label || 'Apuesta principal'}</span>
             <span style="font-size: 12px; color: var(--gold); font-weight: 600;">{pred.total_score} pts</span>
           </div>
+          <div style="margin-top: 8px;">
+            <a href="/pool/{pool.id}/bracket" style="font-size: 10px; color: var(--gold);">Ver cuadro eliminatorio →</a>
+          </div>
         </div>
       {/each}
     {/if}
   {/if}
 
-  <!-- Bracket Tab -->
+  <!-- Eliminatorias Tab -->
   {#if tab === 'bracket'}
     <div style="text-align: center; padding: 24px;">
       <div style="font-size: 32px; margin-bottom: 8px;">🏆</div>
-      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Primero rellena los pronósticos de grupos, luego el cuadro eliminatorio.</p>
-      <div style="display: flex; gap: 8px; justify-content: center;">
-        <a href="/pool/{pool.id}/predict" class="btn-primary" style="font-size: 9px; padding: 8px 16px;">Fase de Grupos</a>
-        <a href="/pool/{pool.id}/bracket" class="btn-ghost" style="font-size: 9px; padding: 8px 16px;">Cuadro Eliminatorio</a>
-      </div>
+      <h3 style="font-size: 14px; color: var(--gold); margin-bottom: 8px;">Cuadro Eliminatorio</h3>
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">Paso 1: Rellena los grupos. Paso 2: Elige los ganadores de cada eliminatoria.</p>
+      
+      {#if data.predictions.length === 0}
+        <div style="background: rgba(255,77,106,0.08); border: 1px solid var(--red); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+          <div style="font-size: 12px; color: var(--red); margin-bottom: 8px;">⚠️ Primero necesitas crear tus pronósticos</div>
+          <a href="/pool/{pool.id}/predict" class="btn-primary" style="font-size: 10px; padding: 8px 20px;">Pronosticar Grupos →</a>
+        </div>
+      {:else}
+        <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+          <a href="/pool/{pool.id}/predict" class="btn-ghost" style="font-size: 10px; padding: 8px 16px;">📋 Fase de Grupos</a>
+          <a href="/pool/{pool.id}/bracket" class="btn-primary" style="font-size: 10px; padding: 8px 20px;">🏆 Cuadro Eliminatorio →</a>
+        </div>
+      {/if}
     </div>
   {/if}
 

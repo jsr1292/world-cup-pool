@@ -1,21 +1,21 @@
 <script>
   import '../app.css';
+  import { page } from '$app/stores';
   let { children, data } = $props();
-  let currentPath = $state('');
 
-  // Get current path from browser
-  if (typeof window !== 'undefined') {
-    currentPath = window.location.pathname;
-    $effect(() => {
-      currentPath = window.location.pathname;
-    });
+  let currentPath = $state('');
+  $effect(() => {
+    currentPath = $page.url.pathname;
+  });
+
+  function isActive(path) {
+    if (path === '/') return currentPath === '/';
+    return currentPath.startsWith(path);
   }
 
   const navItems = [
-    { path: '/', label: 'Inicio', icon: '🏠' },
-    { path: '/pools', label: 'Quinielas', icon: '⚽' },
-    { path: '/bracket', label: 'Cuadro', icon: '🏆' },
-    { path: '/profile', label: 'Perfil', icon: '👤' },
+    { path: '/pools', label: 'Inicio', icon: 'home' },
+    { path: '/profile', label: 'Perfil', icon: 'user' },
   ];
 </script>
 
@@ -24,16 +24,17 @@
   <!-- Desktop Sidebar -->
   <nav class="sidebar">
     <div style="padding: 0 8px 20px; border-bottom: 1px solid var(--border); margin-bottom: 16px;">
-      <div style="font-family: 'Libre Baskerville', serif; font-size: 16px; color: var(--gold); margin-bottom: 4px;">⚽ Mundial</div>
+      <div style="font-family: 'Libre Baskerville', serif; font-size: 16px; color: var(--gold); margin-bottom: 4px;">Mundial</div>
       <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase;">Quiniela 2026</div>
     </div>
 
     {#each navItems as item}
       <a
         href={item.path}
-        style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; margin-bottom: 2px; font-size: 12px; color: {currentPath === item.path ? 'var(--gold)' : 'var(--text-muted)'}; background: {currentPath === item.path ? 'rgba(201,168,76,0.08)' : 'transparent'};"
+        class="nav-link"
+        class:active={isActive(item.path)}
       >
-        <span>{item.icon}</span>
+        <svg class="nav-icon"><use href="/icon.svg#{item.icon}" /></use>
         {item.label}
       </a>
     {/each}
@@ -41,8 +42,9 @@
     {#if data?.user?.is_admin}
       <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
         <div style="font-size: 8px; color: var(--text-dim); letter-spacing: 0.15em; text-transform: uppercase; padding: 0 12px 8px;">Admin</div>
-        <a href="/admin" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; font-size: 12px; color: var(--text-muted);">
-          <span>⚙️</span> Ajustes
+        <a href="/admin" class="nav-link" class:active={currentPath.startsWith('/admin')}>
+          <svg class="nav-icon"><use href="/icon.svg#settings" /></use>
+          Ajustes
         </a>
       </div>
     {/if}
@@ -67,12 +69,48 @@
   <div class="bottom-nav">
     {#each navItems as item}
       <a href={item.path}>
-        <button class:active={currentPath === item.path}>
-          <span style="font-size: 18px;">{item.icon}</span>
-          <span>{item.label}</span>
+        <button class:active={isActive(item.path)}>
+          <svg class="nav-icon-mobile"><use href="/icon.svg#{item.icon}" /></svg>
         </button>
       </a>
     {/each}
   </div>
   {/if}
 </div>
+
+<style>
+  .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-bottom: 2px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+  .nav-link:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+  .nav-link.active { color: var(--gold); background: rgba(201,168,76,0.08); }
+
+  .nav-icon {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .nav-icon-mobile {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+</style>
