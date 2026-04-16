@@ -198,7 +198,7 @@
         body: JSON.stringify({ prediction_id: data.selectedId, picks }),
       });
       if (res.ok) { saved = true; setTimeout(() => { saved = false; }, 2500); }
-      else { saveError = 'Save failed'; setTimeout(() => { saveError = null; }, 3000); }
+      else { saveError = 'Error al guardar'; setTimeout(() => { saveError = null; }, 3000); }
     } catch (e) { console.error(e); }
     finally { saving = false; }
   }

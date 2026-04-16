@@ -6,15 +6,15 @@ const VALID_GROUPS = new Set(['A','B','C','D','E','F','G','H','I','J','K','L']);
 
 // GET /api/predictions/group?prediction_id=X
 export const GET: RequestHandler = async ({ url, locals }) => {
-  if (!locals.user) return json({ error: 'Unauthorized' }, { status: 401 });
+  if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
   const predictionId = Number(url.searchParams.get('prediction_id'));
-  if (!predictionId) return json({ error: 'Missing prediction_id' }, { status: 400 });
+  if (!predictionId) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
   // Verify ownership
   const pred = db.prepare('SELECT user_id FROM predictions WHERE id = ?').get(predictionId) as any;
   if (!pred || pred.user_id !== locals.user.id) {
-    return json({ error: 'Not your prediction' }, { status: 403 });
+    return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
   const rows = db.prepare(`
@@ -37,7 +37,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 // POST /api/predictions/group
 export const POST: RequestHandler = async ({ request, locals }) => {
-  if (!locals.user) return json({ error: 'Unauthorized' }, { status: 401 });
+  if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
   const body = await request.json();
   const { prediction_id, groups } = body as {
@@ -46,19 +46,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   };
 
   if (!prediction_id || !groups) {
-    return json({ error: 'Missing prediction_id or groups' }, { status: 400 });
+    return json({ error: 'Falta prediction_id o grupos' }, { status: 400 });
   }
 
   // Verify ownership
   const pred = db.prepare('SELECT user_id, pool_id FROM predictions WHERE id = ?').get(prediction_id) as any;
   if (!pred || pred.user_id !== locals.user.id) {
-    return json({ error: 'Not your prediction' }, { status: 403 });
+    return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
   // Check deadline
   const pool = db.prepare('SELECT deadline_group FROM pools WHERE id = ?').get(pred.pool_id) as any;
   if (pool?.deadline_group && new Date(pool.deadline_group) <= new Date()) {
-    return json({ error: 'Deadline has passed' }, { status: 403 });
+    return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
   }
 
   // Validate group names
@@ -109,6 +109,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ ok: true });
   } catch (e) {
     console.error(e);
-    return json({ error: 'Save failed' }, { status: 500 });
+    return json({ error: 'Error al guardar' }, { status: 500 });
   }
 };

@@ -6,7 +6,7 @@ import path from 'path';
 const DB_PATH = path.join(process.cwd(), 'data', 'pool.db');
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-  if (!locals.user) return json({ error: 'Login required' }, { status: 401 });
+  if (!locals.user) return json({ error: 'Inicia sesión' }, { status: 401 });
 
   const { current_password, new_password } = await request.json();
   if (!current_password || !new_password) {

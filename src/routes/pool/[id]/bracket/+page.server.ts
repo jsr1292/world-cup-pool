@@ -7,7 +7,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 
   const poolId = Number(params.id);
   const pool = getPoolById(poolId) as any;
-  if (!pool) throw error(404, 'Pool not found');
+  if (!pool) throw error(404, 'Quiniela no encontrada');
 
   // Get ALL user predictions for this pool
   const predictions = getUserPredictions(poolId, locals.user.id) as any[];

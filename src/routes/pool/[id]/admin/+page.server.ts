@@ -4,14 +4,14 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-  if (!locals.user) throw error(401, 'Unauthorized');
+  if (!locals.user) throw error(401, 'No autorizado');
 
   const poolId = Number(params.id);
   const pool = getPoolById(poolId) as any;
-  if (!pool) throw error(404, 'Pool not found');
+  if (!pool) throw error(404, 'Quiniela no encontrada');
 
   if (pool.created_by !== locals.user.id) {
-    throw error(403, 'Only the pool creator can access admin');
+    throw error(403, 'Solo el creador puede acceder al admin');
   }
 
   const members = getPoolMembers(poolId);

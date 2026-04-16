@@ -6,17 +6,17 @@ import type { RequestHandler } from './$types.js';
 // Body: { pool_id, user_id?, entry_id?, has_paid }
 // If entry_id provided: toggle that entry only. Otherwise: toggle all entries for user.
 export const POST: RequestHandler = async ({ request, locals }) => {
-  if (!locals.user) return json({ error: 'Unauthorized' }, { status: 401 });
+  if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
   const { pool_id, user_id, entry_id, has_paid } = await request.json() as {
     pool_id: number; user_id?: number; entry_id?: number; has_paid: boolean;
   };
 
-  if (!pool_id) return json({ error: 'Missing pool_id' }, { status: 400 });
+  if (!pool_id) return json({ error: 'Falta pool_id' }, { status: 400 });
 
   const pool = db.prepare('SELECT created_by FROM pools WHERE id = ?').get(pool_id) as any;
   if (!pool || pool.created_by !== locals.user.id) {
-    return json({ error: 'Forbidden' }, { status: 403 });
+    return json({ error: 'Prohibido' }, { status: 403 });
   }
 
   const val = has_paid ? 1 : 0;

@@ -135,7 +135,7 @@
 </script>
 
 <svelte:head>
-  <title>Admin - {pool.name}</title>
+  <title>Admin · {pool.name}</title>
 </svelte:head>
 
 <div>

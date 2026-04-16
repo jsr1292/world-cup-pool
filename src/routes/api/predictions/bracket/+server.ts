@@ -6,15 +6,15 @@ const VALID_PHASES = new Set(['r32', 'r16', 'qf', 'sf', 'final', '3rd']);
 
 // GET /api/predictions/bracket?prediction_id=X
 export const GET: RequestHandler = async ({ url, locals }) => {
-  if (!locals.user) return json({ error: 'Unauthorized' }, { status: 401 });
+  if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
   const predictionId = Number(url.searchParams.get('prediction_id'));
-  if (!predictionId) return json({ error: 'Missing prediction_id' }, { status: 400 });
+  if (!predictionId) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
   // Verify ownership
   const pred = db.prepare('SELECT user_id FROM predictions WHERE id = ?').get(predictionId) as any;
   if (!pred || pred.user_id !== locals.user.id) {
-    return json({ error: 'Not your prediction' }, { status: 403 });
+    return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
   const rows = db.prepare(`
@@ -35,7 +35,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 // POST /api/predictions/bracket
 // Body: { prediction_id, picks: { r32: { 1: teamId, ... }, r16: {...}, ... } }
 export const POST: RequestHandler = async ({ request, locals }) => {
-  if (!locals.user) return json({ error: 'Unauthorized' }, { status: 401 });
+  if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
   const body = await request.json();
   const { prediction_id, picks } = body as {
@@ -44,13 +44,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   };
 
   if (!prediction_id || !picks) {
-    return json({ error: 'Missing prediction_id or picks' }, { status: 400 });
+    return json({ error: 'Falta prediction_id o selecciones' }, { status: 400 });
   }
 
   // Verify ownership
   const pred = db.prepare('SELECT user_id, pool_id FROM predictions WHERE id = ?').get(prediction_id) as any;
   if (!pred || pred.user_id !== locals.user.id) {
-    return json({ error: 'Not your prediction' }, { status: 403 });
+    return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
   // Check deadline
@@ -117,6 +117,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ ok: true });
   } catch (e) {
     console.error(e);
-    return json({ error: 'Save failed' }, { status: 500 });
+    return json({ error: 'Error al guardar' }, { status: 500 });
   }
 };

@@ -66,7 +66,7 @@
     <div style="display: flex; gap: 12px; margin-top: 8px; font-size: 11px; color: var(--text-muted);">
       <span>👥 {data.members.length} miembros</span>
       {#if pool.buy_in > 0}
-        <span>💰 {pool.buy_in}€ buy-in</span>
+        <span>💰 {pool.buy_in}€ entrada</span>
       {/if}
       <span>🔗 Código: <span style="color: var(--gold); font-weight: 600;">{pool.invite_code}</span></span>
       <button onclick={copyCode} style="background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 9px; color: {copied ? 'var(--green)' : 'var(--text-muted)'}; cursor: pointer; transition: all 0.2s;">

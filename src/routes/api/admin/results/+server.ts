@@ -6,25 +6,25 @@ import { calculateAllScores } from '$lib/server/scoring.js';
 // POST /api/admin/results
 // Body: { match_id, home_score, away_score }
 export const POST: RequestHandler = async ({ request, locals }) => {
-  if (!locals.user) return json({ error: 'Unauthorized' }, { status: 401 });
+  if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
   const { pool_id, match_id, home_score, away_score } = await request.json() as {
     pool_id: number; match_id: number; home_score: number; away_score: number;
   };
 
   if (match_id == null || home_score == null || away_score == null) {
-    return json({ error: 'Missing fields' }, { status: 400 });
+    return json({ error: 'Faltan campos' }, { status: 400 });
   }
 
   // Verify user owns THIS pool
   const pool = db.prepare('SELECT created_by FROM pools WHERE id = ?').get(pool_id) as any;
   if (!pool || pool.created_by !== locals.user.id) {
-    return json({ error: 'Forbidden' }, { status: 403 });
+    return json({ error: 'Prohibido' }, { status: 403 });
   }
 
   // Get match
   const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(match_id) as any;
-  if (!match) return json({ error: 'Match not found' }, { status: 404 });
+  if (!match) return json({ error: 'Partido no encontrado' }, { status: 404 });
   
   // Update match result
   db.prepare(

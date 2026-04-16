@@ -5,7 +5,7 @@ import type { PageServerLoad } from './$types.js';
 export const load: PageServerLoad = async ({ params, locals }) => {
   const poolId = Number(params.id);
   const pool = getPoolById(poolId);
-  if (!pool) throw new Error('Pool not found');
+  if (!pool) throw new Error('Quiniela no encontrada');
 
   // Get all matches with team names
   const matches = db.prepare(`

@@ -7,7 +7,7 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
 
   const poolId = Number(params.id);
   const pool = getPoolById(poolId) as any;
-  if (!pool) throw error(404, 'Pool not found');
+  if (!pool) throw error(404, 'Quiniela no encontrada');
 
   const teams = getAllTeams() as any[];
 
