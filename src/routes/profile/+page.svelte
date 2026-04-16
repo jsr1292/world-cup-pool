@@ -5,7 +5,7 @@
   let newPassword = $state('');
   let confirmPassword = $state('');
   let changing = $state(false);
-  let changeResult = $state<{ ok: boolean; msg: string } | null>(null);
+  let changeResult = $state(null) as { ok: boolean; msg: string } | null;
 
   async function changePassword() {
     if (newPassword !== confirmPassword) {
