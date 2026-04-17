@@ -1,15 +1,12 @@
 <script>
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { dndzone } from 'svelte-dnd-action';
-  import { flip } from 'svelte/animate';
 
   let { data } = $props();
 
   const GROUP_NAMES = ['A','B','C','D','E','F','G','H','I','J','K','L'];
   const pool = data.pool;
   const allowMultiple = pool.allow_multiple_predictions === 1;
-  const FLIP_MS = 200;
 
   // Deadline countdown
   let countdown = $state('');
@@ -31,7 +28,6 @@
   });
 
   // selections[group] = ordered array of teamIds [pos1, pos2, pos3, pos4]
-  // null means unassigned
   let selections = $state({});
   $effect(() => {
     const sel = {};
@@ -47,99 +43,94 @@
     selections = sel;
   });
 
-  // Stable DnD items per group — computed once per selection change,
-  // stored in a Map so object references stay valid across the template.
-  // Each item's id is based on teamId (stable, never changes).
-  let dndItemsMap = $state(new Map());
-  let prevSelections = new Map(); // tracks previous selections to detect changes
-
-  $effect(() => {
-    const map = new Map();
-    for (const group of GROUP_NAMES) {
-      const arr = selections[group] || [];
-      const prevArr = prevSelections.get(group) || [];
-
-      // Reuse existing item objects when possible so Svelte's keyed each
-      // doesn't see them as different. Only create new objects when the
-      // set of teamIds in the array actually changes.
-      const existing = dndItemsMap.get(group) || [];
-      const existingById = new Map(existing.map(item => [item.teamId, item]));
-
-      let nullCount = 0;
-      const items = arr.map((teamId, idx) => {
-        if (teamId != null) {
-          // Reuse existing item if available, otherwise create new
-          if (existingById.has(teamId)) {
-            const item = existingById.get(teamId);
-            existingById.delete(teamId);
-            return { ...item, slot: idx }; // update slot only
-          }
-          return { id: String(teamId), teamId, slot: idx };
-        } else {
-          // For null slots: reuse existing null items in order, then create new
-          const nulls = existing.filter(it => it.teamId === null);
-          const existingNull = nulls[idx];
-          if (existingNull) return { ...existingNull, slot: idx };
-          return { id: `null-${group}-${nullCount++}`, teamId: null, slot: idx };
-        }
-      });
-
-      map.set(group, items);
-    }
-    // Track what we just built for next comparison
-    prevSelections = new Map(GROUP_NAMES.map(g => [g, selections[g] || []]));
-    dndItemsMap = map;
-  });
-
-  function dndItemsFor(group) {
-    return dndItemsMap.get(group) || [];
-  }
-
   // ─── Mobile: tap-to-rank ───────────────────────────────────────────────
 
-  // Which position is a team in? (0-based index, null if unassigned)
   function posOf(group, teamId) {
     if (!teamId) return null;
     return (selections[group] || []).findIndex(t => Number(t) === Number(teamId));
   }
 
-  // Toggle: tap position → assign team to that slot
   function toggleSlot(group, slotIndex, teamId) {
-    const arr = selections[group] || [];
+    const arr = [...(selections[group] || [])];
     const current = arr[slotIndex];
 
     if (Number(current) === Number(teamId)) {
-      // Already there → deselect
       arr[slotIndex] = null;
     } else {
-      // Remove team from wherever it currently is
       const existingIdx = posOf(group, teamId);
       if (existingIdx !== null) {
-        arr[existingIdx] = current; // swap
+        arr[existingIdx] = current;
       } else {
         arr[slotIndex] = teamId;
       }
     }
-    // Trigger reactivity
-    selections[group] = [...arr];
+    selections[group] = arr;
     autoSave();
   }
 
-  // ─── Desktop: drag-to-reorder ─────────────────────────────────────────
+  // ─── Desktop: native HTML5 drag-to-reorder ────────────────────────────
 
-  function handleDndConsider(group, e) {
-    // During drag: do NOT update dndItemsMap.
-    // dndzone uses placeholder items during drag. Updating dndItemsMap would
-    // create new item IDs and break the keyed each block.
-    // The drag visual feedback is handled entirely by dndzone internally.
-    // We only sync to our state on finalize.
+  let draggingGroup = $state(null);   // group being dragged from
+  let draggingSlot = $state(null);   // slot index being dragged
+  let dragOverSlot = $state(null);   // slot index hovered over
+
+  function handleDragStart(e, group, slotIndex) {
+    if (data.isLocked) return;
+    draggingGroup = group;
+    draggingSlot = slotIndex;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `${group}:${slotIndex}`);
   }
 
-  function handleDndFinalize(group, e) {
-    // dndzone has finalized — extract teamIds and save
-    const teamIds = e.detail.items.map(item => item.teamId);
-    selections[group] = teamIds;
+  function handleDragOver(e, slotIndex) {
+    if (data.isLocked) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    dragOverSlot = slotIndex;
+  }
+
+  function handleDragLeave() {
+    dragOverSlot = null;
+  }
+
+  function handleDrop(e, group, slotIndex) {
+    if (data.isLocked) return;
+    e.preventDefault();
+    const data2 = e.dataTransfer.getData('text/plain');
+    const [srcGroup, srcSlotStr] = data2.split(':');
+    const srcSlot = parseInt(srcSlotStr);
+    const srcGroup2 = srcGroup;
+
+    if (srcGroup2 !== group || srcSlot === slotIndex) {
+      draggingGroup = null;
+      draggingSlot = null;
+      dragOverSlot = null;
+      return;
+    }
+
+    // Reorder: move team at srcSlot to slotIndex, shift others
+    const arr = [...(selections[group] || [])];
+    const movingTeamId = arr[srcSlot];
+    if (movingTeamId === null) {
+      draggingGroup = null; draggingSlot = null; dragOverSlot = null;
+      return;
+    }
+    // Remove from source
+    arr.splice(srcSlot, 1);
+    // Insert at target
+    arr.splice(slotIndex, 0, movingTeamId);
+    selections[group] = arr;
     autoSave();
+
+    draggingGroup = null;
+    draggingSlot = null;
+    dragOverSlot = null;
+  }
+
+  function handleDragEnd() {
+    draggingGroup = null;
+    draggingSlot = null;
+    dragOverSlot = null;
   }
 
   // ─── Save ─────────────────────────────────────────────────────────────
@@ -195,8 +186,7 @@
     creating = true; createMsg = '';
     try {
       const res = await fetch('/api/predictions/entry', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pool_id: pool.id, label: newEntryLabel.trim() }),
       });
       const d = await res.json();
@@ -229,18 +219,21 @@
     return map[name] || name;
   }
 
-  // Medal colors
   const MEDAL = { 0: '#c9a84c', 1: '#a0a0a0', 2: '#b87333' };
   const POS_LABEL = ['1st', '2nd', '3rd', '4th'];
 
-  // Desktop: determine slot (1-4) for a team in the dndItems array
-  function slotOf(items, teamId) {
-    return items.findIndex(item => Number(item.teamId) === Number(teamId));
+  function teamAt(group, slot) {
+    const teamId = selections[group]?.[slot];
+    if (!teamId) return null;
+    return (data.teamsByGroup[group] || []).find(t => Number(t.id) === Number(teamId));
   }
 
-  // Desktop drag: show grip icon for assigned teams
-  function isAssigned(teamId) {
-    return teamId !== null;
+  function isDragging(group, slot) {
+    return draggingGroup === group && draggingSlot === slot;
+  }
+
+  function isDropTarget(group, slot) {
+    return dragOverSlot === slot && !(draggingGroup === group && draggingSlot === slot);
   }
 </script>
 
@@ -253,10 +246,7 @@
     <h1 style="font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--gold);">Pronósticos de Fase de Grupos</h1>
     <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
       Ordéna los equipos de cada grupo del 1º al 4º puesto.
-      <!-- Desktop hint -->
-      <span class="desktop-hint" style="color: var(--gold); margin-left: 6px;">
-        ← Arrastra para reordenar
-      </span>
+      <span class="desktop-hint" style="color: var(--gold); margin-left: 6px;">← Arrastra para reordenar</span>
     </p>
 
     {#if countdown && !data.isLocked}
@@ -321,15 +311,13 @@
   <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
     {#each GROUP_NAMES as group}
       {@const groupTeams = data.teamsByGroup[group] || []}
-      {@const orderedIds = selections[group] || []}
 
-      <!-- ── Desktop: drag-to-reorder ─────────────────────────────── -->
+      <!-- ── Desktop: native drag-to-reorder ──────────────────────── -->
       <div class="desktop-view group-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
         <!-- Group header -->
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
           <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold);">{group}</div>
           <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>
-          <!-- Slot labels -->
           <div style="margin-left: auto; display: flex; gap: 3px;">
             {#each [0,1,2,3] as si}
               <div style="width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; background: {si <= 2 ? MEDAL[si] + '22' : 'rgba(255,255,255,0.05)'}; color: {si <= 2 ? MEDAL[si] : 'var(--text-dim)'}; border: 1px solid {si <= 2 ? MEDAL[si] + '44' : 'var(--border)'};">{si + 1}</div>
@@ -337,44 +325,11 @@
           </div>
         </div>
 
-        <!-- DnD zone: ordered slots → teams -->
-        {#if !data.isLocked}
-          <div use:dndzone={{ items: dndItemsFor(group), flipDurationMs: FLIP_MS, dropTargetStyle: {} }}
-            onconsider={(e) => handleDndConsider(group, e)}
-            onfinalize={(e) => handleDndFinalize(group, e)}
-            style="display: flex; flex-direction: column; gap: 4px; min-height: 40px;"
-          >
-            {#each dndItemsFor(group) as item (item.id)}
-              {@const team = groupTeams.find(t => Number(t.id) === Number(item.teamId))}
-              {@const slot = slotOf(dndItemsFor(group), item.teamId)}
-              <div animate:flip={{ duration: FLIP_MS }}
-                style="
-                  display: flex; align-items: center; gap: 8px;
-                  padding: 7px 8px;
-                  border-radius: 6px;
-                  background: {slot !== null && slot < 3 ? (MEDAL[slot] + '15') : 'rgba(255,255,255,0.03)'};
-                  border: 1px solid {slot !== null && slot < 3 ? (MEDAL[slot] + '33') : 'transparent'};
-                  cursor: grab;
-                "
-              >
-                <!-- Slot number badge -->
-                <div style="width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; background: {slot !== null && slot < 3 ? MEDAL[slot] : 'rgba(255,255,255,0.1)'}; color: {slot !== null && slot === 0 ? '#3d2a00' : slot !== null && slot < 3 ? '#fff' : 'var(--text-dim)'}; flex-shrink: 0;">{slot !== null ? slot + 1 : '?'}</div>
-                <!-- Grip handle -->
-                <div style="color: var(--text-dim); font-size: 14px; flex-shrink: 0; cursor: grab; line-height: 1;">☰</div>
-                <!-- Team name -->
-                {#if team}
-                  <span style="font-size: 11px; font-weight: 500; color: var(--text);">{flagEmoji(team.flag_code)} {shortName(team.name)}</span>
-                {:else}
-                  <span style="font-size: 11px; color: var(--text-dim); font-style: italic;">Vacío</span>
-                {/if}
-              </div>
-            {/each}
-          </div>
-        {:else}
-          <!-- Locked: show static ordered list -->
+        <!-- Slot rows — each slot is a drop target -->
+        {#if data.isLocked}
           <div style="display: flex; flex-direction: column; gap: 4px;">
-            {#each dndItemsFor(group) as item, slot}
-              {@const team = groupTeams.find(t => Number(t.id) === Number(item.teamId))}
+            {#each [0,1,2,3] as slot}
+              {@const team = teamAt(group, slot)}
               <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px; background: {slot < 3 ? MEDAL[slot] + '15' : 'rgba(255,255,255,0.03)'}; border: 1px solid {slot < 3 ? MEDAL[slot] + '33' : 'transparent'};">
                 <div style="width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; background: {slot < 3 ? MEDAL[slot] : 'rgba(255,255,255,0.1)'}; color: {slot === 0 ? '#3d2a00' : slot < 3 ? '#fff' : 'var(--text-dim)'}; flex-shrink: 0;">{slot + 1}</div>
                 {#if team}
@@ -385,6 +340,37 @@
               </div>
             {/each}
           </div>
+        {:else}
+          <!-- Draggable slot rows -->
+          {#each [0,1,2,3] as slot}
+            {@const team = teamAt(group, slot)}
+            {@const isDraggingThis = isDragging(group, slot)}
+            {@const isDropTargetThis = isDropTarget(group, slot)}
+            <div
+              style="
+                display: flex; align-items: center; gap: 8px;
+                padding: 7px 8px; border-radius: 6px;
+                background: {isDraggingThis ? 'rgba(201,168,76,0.03)' : slot < 3 && team ? (MEDAL[slot] + '15') : 'rgba(255,255,255,0.03)'};
+                border: 1.5px solid {isDropTargetThis ? 'var(--gold)' : isDraggingThis ? 'rgba(201,168,76,0.4)' : slot < 3 && team ? (MEDAL[slot] + '33') : 'transparent'};
+                opacity: {isDraggingThis ? '0.4' : '1'};
+                transition: border-color 0.1s, background 0.1s, opacity 0.1s;
+              "
+              draggable={team !== null}
+              ondragstart={(e) => handleDragStart(e, group, slot)}
+              ondragover={(e) => handleDragOver(e, slot)}
+              ondragleave={handleDragLeave}
+              ondrop={(e) => handleDrop(e, group, slot)}
+              ondragend={handleDragEnd}
+            >
+              <div style="width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; background: {slot < 3 && team ? MEDAL[slot] : 'rgba(255,255,255,0.1)'}; color: {slot === 0 && team ? '#3d2a00' : slot < 3 && team ? '#fff' : 'var(--text-dim)'}; flex-shrink: 0;">{slot + 1}</div>
+              <div style="color: var(--text-dim); font-size: 14px; flex-shrink: 0; cursor: {team ? 'grab' : 'default'}; line-height: 1;">☰</div>
+              {#if team}
+                <span style="font-size: 11px; font-weight: 500; color: var(--text);">{flagEmoji(team.flag_code)} {shortName(team.name)}</span>
+              {:else}
+                <span style="font-size: 11px; color: var(--text-dim); font-style: italic;">Vacío — arrastra aquí</span>
+              {/if}
+            </div>
+          {/each}
         {/if}
       </div>
 
@@ -396,14 +382,14 @@
           <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>
           <div style="margin-left: auto; display: flex; gap: 3px;">
             {#each [0,1,2,3] as si}
-              <div style="width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; background: {si <= 2 ? MEDAL[si] + '22' : 'rgba(255,255,255,0.05)'}; color: {si <= 2 ? MEDAL[si] : 'var(--text-dim)'}; border: 1px solid {si <= 2 ? MEDAL[si] + '44' : 'var(--border)'};" title={POS_LABEL[si]}>{si + 1}</div>
+              <div style="width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; background: {si <= 2 ? MEDAL[si] + '22' : 'rgba(255,255,255,0.05)'}; color: {si <= 2 ? MEDAL[si] : 'var(--text-dim)'}; border: 1px solid {si <= 2 ? MEDAL[si] + '44' : 'var(--border)'};">{si + 1}</div>
             {/each}
           </div>
         </div>
 
-        <!-- All teams in this group -->
+        <!-- All teams in group, sorted: assigned first, then unassigned -->
         <div style="display: flex; flex-direction: column; gap: 4px;">
-          {#each groupTeams as team}
+          {#each [...groupTeams].sort((a, b) => { const pa = posOf(group, a.id); const pb = posOf(group, b.id); if (pa !== null && pb !== null) return pa - pb; if (pa !== null) return -1; if (pb !== null) return 1; return 0; }) as team (team.id)}
             {@const mySlot = posOf(group, team.id)}
             {@const isSelected = mySlot !== null}
             <div style="display: flex; align-items: center; gap: 5px; padding: 5px 6px; border-radius: 6px; background: {isSelected ? 'rgba(201,168,76,0.06)' : 'transparent'}; border: 1px solid {isSelected ? 'rgba(201,168,76,0.2)' : 'transparent'}; transition: all 0.15s;">
@@ -414,19 +400,11 @@
                     disabled={data.isLocked}
                     onclick={() => toggleSlot(group, si, team.id)}
                     title={POS_LABEL[si]}
-                    style="
-                      width: 24px; height: 24px; border-radius: 5px;
-                      display: flex; align-items: center; justify-content: center;
-                      font-size: 10px; font-weight: 700;
-                      border: 1.5px solid {mySlot === si ? MEDAL[si] : 'var(--border)'};
-                      background: {mySlot === si ? MEDAL[si] : 'transparent'};
-                      color: {mySlot === si ? (si === 0 ? '#3d2a00' : '#fff') : MEDAL[si] || 'var(--text-dim)'};
-                      cursor: pointer; transition: all 0.1s; padding: 0;
-                    "
+                    style="width: 24px; height: 24px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; border: 1.5px solid {mySlot === si ? MEDAL[si] : 'var(--border)'}; background: {mySlot === si ? MEDAL[si] : 'transparent'}; color: {mySlot === si ? (si === 0 ? '#3d2a00' : '#fff') : MEDAL[si] || 'var(--text-dim)'}; cursor: pointer; transition: all 0.1s; padding: 0;"
                   >{si + 1}</button>
                 {/each}
               </div>
-              <!-- Team info + current position badge -->
+              <!-- Team info + position badge -->
               <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;">
                 {#if isSelected}
                   <div style="width: 16px; height: 16px; border-radius: 50%; background: {MEDAL[mySlot]}; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; color: {mySlot === 0 ? '#3d2a00' : '#fff'}; flex-shrink: 0;">{mySlot + 1}</div>
@@ -466,7 +444,6 @@
 </div>
 
 <style>
-  /* Responsive: show desktop view on large screens, mobile on small */
   .desktop-view { display: none; }
   .mobile-view { display: flex; flex-direction: column; }
 
@@ -478,10 +455,5 @@
 
   @media (hover: none) and (pointer: coarse) {
     .desktop-hint { display: none; }
-  }
-
-  /* Override group-card min-height on desktop for dnd zone */
-  @media (hover: hover) and (pointer: fine) {
-    :global(.group-card) { min-height: 200px; }
   }
 </style>
