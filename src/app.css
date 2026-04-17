@@ -312,3 +312,43 @@ button {
   background: rgba(201,168,76,0.1);
   color: var(--gold);
 }
+
+/* Pool tabs */
+.pool-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.pool-tabs::-webkit-scrollbar { display: none; }
+.pool-tab {
+  flex: none;
+  white-space: nowrap;
+  padding: 10px 14px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: none;
+  display: block;
+  text-align: center;
+  line-height: 1.4;
+  border-right: 1px solid var(--border);
+}
+.pool-tab:last-child { border-right: none; }
+.pool-tab:hover { color: var(--text); }
+.pool-tab.active {
+  background: rgba(201,168,76,0.1);
+  color: var(--gold);
+  font-weight: 500;
+}
+@media (min-width: 768px) {
+  .pool-tab { flex: 1; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+}

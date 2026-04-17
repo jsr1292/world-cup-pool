@@ -88,14 +88,15 @@
   </div>
 
   <!-- Tabs -->
-  <div style="display: flex; gap: 0; margin-bottom: 20px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+  <div class="pool-tabs">
     {#each tabs as t, i}
       {#if t.link}
-        <a href="/pool/{pool.id}/{t.id}" style="flex: 1; padding: 10px 8px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; text-align: center; display: block; line-height: 1.4; background: transparent; color: var(--text-muted); {i > 0 ? 'border-left: 1px solid var(--border);' : ''}">{t.label}</a>
+        <a href="/pool/{pool.id}/{t.id}" class="pool-tab" class:active={false}>{t.label}</a>
       {:else}
         <button
           onclick={() => tab = t.id}
-          style="flex: 1; padding: 10px 8px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; border: none; background: {tab === t.id ? 'rgba(201,168,76,0.1)' : 'transparent'}; color: {tab === t.id ? 'var(--gold)' : 'var(--text-muted)'}; {i > 0 ? 'border-left: 1px solid var(--border);' : ''}"
+          class="pool-tab"
+          class:active={tab === t.id}
         >{t.label}</button>
       {/if}
     {/each}
