@@ -49,19 +49,45 @@
 
   // Stable DnD items per group — computed once per selection change,
   // stored in a Map so object references stay valid across the template.
-  // Key: `${group}-${teamId ?? 'null'}` gives stable unique id for nulls too.
+  // Each item's id is based on teamId (stable, never changes).
   let dndItemsMap = $state(new Map());
+  let prevSelections = new Map(); // tracks previous selections to detect changes
+
   $effect(() => {
     const map = new Map();
     for (const group of GROUP_NAMES) {
       const arr = selections[group] || [];
-      // Stable null counter per group
+      const prevArr = prevSelections.get(group) || [];
+
+      // Reuse existing item objects when possible so Svelte's keyed each
+      // doesn't see them as different. Only create new objects when the
+      // set of teamIds in the array actually changes.
+      const existing = dndItemsMap.get(group) || [];
+      const existingById = new Map(existing.map(item => [item.teamId, item]));
+
       let nullCount = 0;
-      map.set(group, arr.map((teamId, idx) => {
-        const id = teamId != null ? String(teamId) : `null-${group}-${nullCount++}`;
-        return { id, teamId, slot: idx };
-      }));
+      const items = arr.map((teamId, idx) => {
+        if (teamId != null) {
+          // Reuse existing item if available, otherwise create new
+          if (existingById.has(teamId)) {
+            const item = existingById.get(teamId);
+            existingById.delete(teamId);
+            return { ...item, slot: idx }; // update slot only
+          }
+          return { id: String(teamId), teamId, slot: idx };
+        } else {
+          // For null slots: reuse existing null items in order, then create new
+          const nulls = existing.filter(it => it.teamId === null);
+          const existingNull = nulls[idx];
+          if (existingNull) return { ...existingNull, slot: idx };
+          return { id: `null-${group}-${nullCount++}`, teamId: null, slot: idx };
+        }
+      });
+
+      map.set(group, items);
     }
+    // Track what we just built for next comparison
+    prevSelections = new Map(GROUP_NAMES.map(g => [g, selections[g] || []]));
     dndItemsMap = map;
   });
 
@@ -102,15 +128,17 @@
   // ─── Desktop: drag-to-reorder ─────────────────────────────────────────
 
   function handleDndConsider(group, e) {
-    // During drag: update the Map with the in-progress order
-    dndItemsMap.set(group, e.detail.items);
-    dndItemsMap = new Map(dndItemsMap);
-    // Also update selections for mobile (and save data)
-    selections[group] = e.detail.items.map(item => item.teamId);
+    // During drag: do NOT update dndItemsMap.
+    // dndzone uses placeholder items during drag. Updating dndItemsMap would
+    // create new item IDs and break the keyed each block.
+    // The drag visual feedback is handled entirely by dndzone internally.
+    // We only sync to our state on finalize.
   }
 
   function handleDndFinalize(group, e) {
-    selections[group] = e.detail.items.map(item => item.teamId);
+    // dndzone has finalized — extract teamIds and save
+    const teamIds = e.detail.items.map(item => item.teamId);
+    selections[group] = teamIds;
     autoSave();
   }
 
