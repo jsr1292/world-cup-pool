@@ -70,9 +70,10 @@
 
   // ─── Desktop: native HTML5 drag-to-reorder ────────────────────────────
 
-  let draggingGroup = $state(null);   // group being dragged from
-  let draggingSlot = $state(null);   // slot index being dragged
-  let dragOverSlot = $state(null);   // slot index hovered over
+  let draggingGroup = $state(null);
+  let draggingSlot = $state(null);
+  let dragOverGroup = $state(null);   // group currently hovered (for highlight)
+  let dragOverSlot = $state(null);    // slot index hovered over
 
   function handleDragStart(e, group, slotIndex) {
     if (data.isLocked) return;
@@ -82,14 +83,16 @@
     e.dataTransfer.setData('text/plain', `${group}:${slotIndex}`);
   }
 
-  function handleDragOver(e, slotIndex) {
+  function handleDragOver(e, group, slotIndex) {
     if (data.isLocked) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    dragOverGroup = group;
     dragOverSlot = slotIndex;
   }
 
   function handleDragLeave() {
+    dragOverGroup = null;
     dragOverSlot = null;
   }
 
@@ -112,7 +115,7 @@
     const arr = [...(selections[group] || [])];
     const movingTeamId = arr[srcSlot];
     if (movingTeamId === null) {
-      draggingGroup = null; draggingSlot = null; dragOverSlot = null;
+      draggingGroup = null; draggingSlot = null; dragOverGroup = null; dragOverSlot = null;
       return;
     }
     // Remove from source
@@ -130,6 +133,7 @@
   function handleDragEnd() {
     draggingGroup = null;
     draggingSlot = null;
+    dragOverGroup = null;
     dragOverSlot = null;
   }
 
@@ -233,7 +237,7 @@
   }
 
   function isDropTarget(group, slot) {
-    return dragOverSlot === slot && !(draggingGroup === group && draggingSlot === slot);
+    return dragOverGroup === group && dragOverSlot === slot && !(draggingGroup === group && draggingSlot === slot);
   }
 </script>
 
@@ -357,7 +361,7 @@
               "
               draggable={team !== null}
               ondragstart={(e) => handleDragStart(e, group, slot)}
-              ondragover={(e) => handleDragOver(e, slot)}
+              ondragover={(e) => handleDragOver(e, group, slot)}
               ondragleave={handleDragLeave}
               ondrop={(e) => handleDrop(e, group, slot)}
               ondragend={handleDragEnd}
