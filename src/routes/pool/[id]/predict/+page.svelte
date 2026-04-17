@@ -5,8 +5,6 @@
   let { data } = $props();
 
   const GROUP_NAMES = ['A','B','C','D','E','F','G','H','I','J','K','L'];
-  const POSITION_LABELS = ['1º', '2º', '3º', '4º'];
-
   const pool = data.pool;
   const allowMultiple = pool.allow_multiple_predictions === 1;
 
@@ -29,41 +27,66 @@
     return () => { cancelled = true; clearInterval(iv); };
   });
 
-  // Selections state
+  // selections[group][position] = teamId
+  // position 1-4, teamId is the database id
   let selections = $state({});
   $effect(() => {
     const sel = {};
     for (const group of GROUP_NAMES) {
       const existing = data.existingGroupPreds?.[group] || {};
       sel[group] = {
-        pos1: existing.pos1 ?? null,
-        pos2: existing.pos2 ?? null,
-        pos3: existing.pos3 ?? null,
-        pos4: existing.pos4 ?? null,
+        1: existing.pos1 ?? null,
+        2: existing.pos2 ?? null,
+        3: existing.pos3 ?? null,
+        4: existing.pos4 ?? null,
       };
     }
     selections = sel;
   });
+
+  // Which team is currently in a given position?
+  function teamAt(group, position) {
+    return selections[group]?.[position] ?? null;
+  }
+
+  // Which position is a given team in? (null if not assigned)
+  function positionOf(group, teamId) {
+    if (!teamId) return null;
+    const map = selections[group] || {};
+    for (const [pos, tid] of Object.entries(map)) {
+      if (Number(tid) === Number(teamId)) return Number(pos);
+    }
+    return null;
+  }
+
+  // Toggle: tap position button assigns team to that position
+  // If team is already in another position, swap them
+  function togglePosition(group, position, teamId) {
+    const current = selections[group]?.[position];
+
+    if (Number(current) === Number(teamId)) {
+      // Deselect: already there, clear it
+      selections[group][position] = null;
+    } else {
+      // Check if this team is already somewhere else — swap
+      const existingPos = positionOf(group, teamId);
+      if (existingPos !== null) {
+        // Swap: kick the team out of its old position, put in new one
+        selections[group][existingPos] = current;
+        selections[group][position] = teamId;
+      } else {
+        // Check if target position has a different team — replace it
+        selections[group][position] = teamId;
+      }
+    }
+    autoSave();
+  }
 
   let saving = $state(false);
   let saved = $state(false);
   let newEntryLabel = $state('');
   let creating = $state(false);
   let createMsg = $state('');
-
-  function selectTeam(group, position, teamId) {
-    const num = Number(teamId) || null;
-    if (num !== null) {
-      for (const pos of ['pos1', 'pos2', 'pos3', 'pos4']) {
-        if (selections[group][pos] === num && pos !== position) {
-          selections[group][pos] = null;
-        }
-      }
-    }
-    selections[group][position] = num;
-    // Auto-save after change
-    autoSave();
-  }
 
   let autoSaveTimer = null;
   function autoSave() {
@@ -75,12 +98,22 @@
     saving = true;
     saved = false;
     try {
+      // Convert position→teamId back to pos1/pos2/pos3/pos4
+      const groups = {};
+      for (const group of GROUP_NAMES) {
+        groups[group] = {
+          pos1: selections[group]?.[1] ?? null,
+          pos2: selections[group]?.[2] ?? null,
+          pos3: selections[group]?.[3] ?? null,
+          pos4: selections[group]?.[4] ?? null,
+        };
+      }
       const res = await fetch('/api/predictions/group', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prediction_id: data.selectedId,
-          groups: selections,
+          groups,
         }),
       });
       if (res.ok) {
@@ -115,7 +148,6 @@
       if (res.ok) {
         newEntryLabel = '';
         createMsg = '';
-        // Navigate to the new entry
         await goto(`/pool/${pool.id}/predict?entry=${encodeURIComponent(d.label)}`, { invalidateAll: true });
       } else {
         createMsg = d.error || 'Error';
@@ -135,19 +167,17 @@
 
   function shortName(name) {
     const map = {
-      'United States': 'USA',
-      'South Korea': 'S. Korea',
-      'South Africa': 'S. Africa',
-      'New Zealand': 'N. Zealand',
-      'Cape Verde': 'Cape Verde',
-      'Czech Republic': 'Czechia',
-      'Saudi Arabia': 'S. Arabia',
-      'Bosnia and Herzegovina': 'Bosnia',
-      'DR Congo': 'DR Congo',
-      'North Macedonia': 'N. Macedonia',
+      'United States': 'USA', 'South Korea': 'S. Korea', 'South Africa': 'S. Africa',
+      'New Zealand': 'N. Zealand', 'Czech Republic': 'Czechia',
+      'Saudi Arabia': 'S. Arabia', 'Bosnia and Herzegovina': 'Bosnia',
+      'DR Congo': 'DR Congo', 'North Macedonia': 'N. Macedonia',
     };
     return map[name] || name;
   }
+
+  // Medal colors for positions 1-3
+  const MEDAL = { 1: '#c9a84c', 2: '#a0a0a0', 3: '#b87333' };
+  const POS_LABEL = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' };
 </script>
 
 <div>
@@ -158,10 +188,9 @@
   <div style="margin-bottom: 20px;">
     <h1 style="font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--gold);">Pronósticos de Fase de Grupos</h1>
     <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
-      Predice la clasificación final de cada grupo. Selecciona del 1º al 4º puesto.
+      Pulsa el número junto a cada equipo para asignar su posición (1º a 4º) en el grupo.
     </p>
 
-    <!-- Deadline warning -->
     {#if countdown && !data.isLocked}
       <div style="margin-top: 8px; padding: 8px 12px; background: rgba(201,168,76,0.1); border: 1px solid var(--gold); border-radius: 6px; font-size: 10px; color: var(--gold);">
         ⏰ Cierre en: {countdown}
@@ -179,7 +208,6 @@
     <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
       <label style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Entrada:</label>
 
-      <!-- Dropdown for switching entries -->
       {#if data.entries.length > 1}
         <select
           value={data.selectedLabel}
@@ -196,7 +224,6 @@
         </span>
       {/if}
 
-      <!-- Create new entry button -->
       {#if allowMultiple}
         <button
           onclick={() => { newEntryLabel = ''; createMsg = ''; }}
@@ -236,9 +263,21 @@
   {/if}
 
   <!-- Group prediction cards -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
     {#each GROUP_NAMES as group}
       {@const groupTeams = data.teamsByGroup[group] || []}
+
+      <!-- Teams list (prediction = order they appear when position assigned) -->
+      <!-- Sort: teams with a position first, then unassigned -->
+      {@const sortedTeams = [...groupTeams].sort((a, b) => {
+        const pa = positionOf(group, a.id);
+        const pb = positionOf(group, b.id);
+        if (pa !== null && pb !== null) return pa - pb;
+        if (pa !== null) return -1;
+        if (pb !== null) return 1;
+        return 0;
+      })}
+
       <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
         <!-- Group header -->
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
@@ -246,30 +285,73 @@
             {group}
           </div>
           <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>
+          <!-- Position legend -->
+          <div style="margin-left: auto; display: flex; gap: 3px;">
+            {#each [1,2,3,4] as pos}
+              <div style="
+                width: 18px; height: 18px; border-radius: 4px;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 9px; font-weight: 700;
+                background: {pos <= 3 ? MEDAL[pos] + '22' : 'rgba(255,255,255,0.05)'};
+                color: {pos <= 3 ? MEDAL[pos] : 'var(--text-dim)'};
+                border: 1px solid {pos <= 3 ? MEDAL[pos] + '44' : 'var(--border)'};
+              ">{pos}</div>
+            {/each}
+          </div>
         </div>
 
-        <!-- Position selectors -->
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          {#each POSITION_LABELS as label, pi}
-            {@const posKey = `pos${pi + 1}`}
-            {@const selectedTeamId = selections[group]?.[posKey]}
-            {@const selectedTeam = groupTeams.find(t => t.id === selectedTeamId)}
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <div style="width: 22px; font-size: 10px; font-weight: 600; color: {pi === 0 ? 'var(--gold)' : pi === 1 ? '#c0c0c0' : pi === 2 ? '#cd7f32' : 'var(--text-dim)'}; text-align: center;">
-                {pi + 1}
-              </div>
-              <select
-                disabled={data.isLocked}
-                onchange={(e) => selectTeam(group, posKey, e.target.value)}
-                style="flex: 1; padding: 6px 8px; font-size: 11px; text-align: left; background: var(--bg-surface); {selectedTeam ? 'color: var(--text); border-color: rgba(201,168,76,0.3);' : 'color: var(--text-muted);'}"
-              >
-                <option value="">Selecciona {label}</option>
-                {#each groupTeams as team}
-                  <option value={team.id} selected={selectedTeamId === team.id}>
-                    {flagEmoji(team.flag_code)} {shortName(team.name)}
-                  </option>
+        <!-- Team rows -->
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          {#each sortedTeams as team (team.id)}
+            {@const myPos = positionOf(group, team.id)}
+            <div style="
+              display: flex; align-items: center; gap: 6px;
+              padding: 5px 6px;
+              border-radius: 6px;
+              background: {myPos ? 'rgba(201,168,76,0.06)' : 'transparent'};
+              border: 1px solid {myPos ? 'rgba(201,168,76,0.2)' : 'transparent'};
+              transition: all 0.15s ease;
+            ">
+              <!-- Position buttons -->
+              <div style="display: flex; gap: 3px; flex-shrink: 0;">
+                {#each [1,2,3,4] as pos}
+                  <button
+                    disabled={data.isLocked}
+                    onclick={() => togglePosition(group, pos, team.id)}
+                    title={POS_LABEL[pos]}
+                    style="
+                      width: 22px; height: 22px; border-radius: 5px;
+                      display: flex; align-items: center; justify-content: center;
+                      font-size: 10px; font-weight: 700;
+                      border: 1.5px solid {myPos === pos ? MEDAL[pos] : 'var(--border)'};
+                      background: {myPos === pos ? MEDAL[pos] : 'transparent'};
+                      color: {myPos === pos ? (pos === 1 ? '#3d2a00' : '#fff') : MEDAL[pos] || 'var(--text-dim)'};
+                      cursor: pointer;
+                      transition: all 0.1s ease;
+                      padding: 0;
+                    "
+                  >{pos}</button>
                 {/each}
-              </select>
+              </div>
+
+              <!-- Team info -->
+              <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;">
+                {#if myPos}
+                  <div style="
+                    width: 16px; height: 16px; border-radius: 50%;
+                    background: {MEDAL[myPos]};
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 8px; font-weight: 800;
+                    color: {myPos === 1 ? '#3d2a00' : '#fff'};
+                    flex-shrink: 0;
+                  ">{myPos}</div>
+                {:else}
+                  <div style="width: 16px; height: 16px; flex-shrink: 0;"></div>
+                {/if}
+                <span style="font-size: 11px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  {flagEmoji(team.flag_code)} {shortName(team.name)}
+                </span>
+              </div>
             </div>
           {/each}
         </div>
