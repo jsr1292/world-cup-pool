@@ -47,6 +47,28 @@
     selections = sel;
   });
 
+  // Stable DnD items per group — computed once per selection change,
+  // stored in a Map so object references stay valid across the template.
+  // Key: `${group}-${teamId ?? 'null'}` gives stable unique id for nulls too.
+  let dndItemsMap = $state(new Map());
+  $effect(() => {
+    const map = new Map();
+    for (const group of GROUP_NAMES) {
+      const arr = selections[group] || [];
+      // Stable null counter per group
+      let nullCount = 0;
+      map.set(group, arr.map((teamId, idx) => {
+        const id = teamId != null ? String(teamId) : `null-${group}-${nullCount++}`;
+        return { id, teamId, slot: idx };
+      }));
+    }
+    dndItemsMap = map;
+  });
+
+  function dndItemsFor(group) {
+    return dndItemsMap.get(group) || [];
+  }
+
   // ─── Mobile: tap-to-rank ───────────────────────────────────────────────
 
   // Which position is a team in? (0-based index, null if unassigned)
@@ -79,16 +101,11 @@
 
   // ─── Desktop: drag-to-reorder ─────────────────────────────────────────
 
-  // DnD items from current selection array
-  function dndItemsFor(group) {
-    return (selections[group] || []).map((teamId, idx) => ({
-      id: teamId ?? `empty-${idx}`,
-      teamId,
-      slot: idx, // 0=1st place, 1=2nd...
-    }));
-  }
-
   function handleDndConsider(group, e) {
+    // During drag: update the Map with the in-progress order
+    dndItemsMap.set(group, e.detail.items);
+    dndItemsMap = new Map(dndItemsMap);
+    // Also update selections for mobile (and save data)
     selections[group] = e.detail.items.map(item => item.teamId);
   }
 
