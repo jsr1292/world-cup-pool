@@ -97,7 +97,13 @@
     draggingGroup = group;
     draggingSlot = slotIndex;
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', `${group}:${slotIndex}`);
+    e.dataTransfer.setData('text/plain', `slot:${group}:${slotIndex}`);
+  }
+
+  function handleDragStartUnassigned(e, group, teamId) {
+    if (data.isLocked) return;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `team:${group}:${teamId}`);
   }
 
   function handleDragOver(e, group, slotIndex) {
@@ -116,31 +122,40 @@
   function handleDrop(e, group, slotIndex) {
     if (data.isLocked) return;
     e.preventDefault();
-    const data2 = e.dataTransfer.getData('text/plain');
-    const [srcGroup, srcSlotStr] = data2.split(':');
-    const srcSlot = parseInt(srcSlotStr);
-    const srcGroup2 = srcGroup;
+    const raw = e.dataTransfer.getData('text/plain');
+    const parts = raw.split(':');
+    const type = parts[0]; // 'slot' or 'team'
 
-    if (srcGroup2 !== group || srcSlot === slotIndex) {
-      draggingGroup = null;
-      draggingSlot = null;
-      dragOverSlot = null;
-      return;
-    }
+    const arr = [...(selections[group] || [null, null, null, null])];
 
-    // Reorder: move team at srcSlot to slotIndex, shift others
-    const arr = [...(selections[group] || [])];
-    const movingTeamId = arr[srcSlot];
-    if (movingTeamId === null) {
-      draggingGroup = null; draggingSlot = null; dragOverGroup = null; dragOverSlot = null;
-      return;
+    if (type === 'team') {
+      // Dragging from unassigned pool
+      const srcGroup = parts[1];
+      const teamId = Number(parts[2]);
+      if (srcGroup !== group) return;
+      const target = arr[slotIndex] === null ? slotIndex : arr.findIndex(s => s === null);
+      if (target === -1) return;
+      arr[target] = teamId;
+      selections[group] = arr;
+      autoSave();
+    } else {
+      // Dragging from another slot
+      const srcGroup = parts[1];
+      const srcSlot = parseInt(parts[2]);
+      if (srcGroup !== group || srcSlot === slotIndex) {
+        draggingGroup = null; draggingSlot = null; dragOverGroup = null; dragOverSlot = null;
+        return;
+      }
+      const movingTeamId = arr[srcSlot];
+      if (movingTeamId === null) {
+        draggingGroup = null; draggingSlot = null; dragOverGroup = null; dragOverSlot = null;
+        return;
+      }
+      arr.splice(srcSlot, 1);
+      arr.splice(slotIndex, 0, movingTeamId);
+      selections[group] = arr;
+      autoSave();
     }
-    // Remove from source
-    arr.splice(srcSlot, 1);
-    // Insert at target
-    arr.splice(slotIndex, 0, movingTeamId);
-    selections[group] = arr;
-    autoSave();
 
     draggingGroup = null;
     draggingSlot = null;
@@ -246,6 +261,11 @@
     const teamId = selections[group]?.[slot];
     if (!teamId) return null;
     return (data.teamsByGroup[group] || []).find(t => Number(t.id) === Number(teamId));
+  }
+
+  function unassignedTeams(group) {
+    const assigned = new Set((selections[group] || []).filter(Boolean).map(Number));
+    return (data.teamsByGroup[group] || []).filter(t => !assigned.has(Number(t.id)));
   }
 
   function isDragging(group, slot) {
@@ -401,6 +421,25 @@
               {/if}
             </div>
           {/each}
+
+          <!-- Unassigned teams pool -->
+          {#if unassignedTeams(group).length > 0}
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border);">
+              <div style="font-size: 8px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px;">Sin asignar</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                {#each unassignedTeams(group) as team}
+                  <div
+                    draggable={true}
+                    ondragstart={(e) => handleDragStartUnassigned(e, group, team.id)}
+                    style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: rgba(255,255,255,0.03); cursor: grab; font-size: 11px; color: var(--text);"
+                  >
+                    <span style="font-size: 14px;">{flagEmoji(team.flag_code)}</span>
+                    {shortName(team.name)}
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
         {/if}
       </div>
 
