@@ -52,28 +52,36 @@
     selections = sel;
   });
 
-  // ─── Mobile: tap-to-rank ───────────────────────────────────────────────
+  // ─── Mobile: sequential tap-to-rank ───────────────────────────────
 
-  function posOf(group, teamId) {
-    if (!teamId) return null;
-    return (selections[group] || []).findIndex(t => Number(t) === Number(teamId));
+  const POS_LABEL = ['1º', '2º', '3º', '4º'];
+  const POS_FULL = ['1º puesto', '2º puesto', '3º puesto', '4º puesto'];
+
+  function nextSlot(group) {
+    const arr = selections[group] || [];
+    return arr.findIndex(s => !s);
   }
 
-  function toggleSlot(group, slotIndex, teamId) {
-    const arr = [...(selections[group] || [])];
-    const current = arr[slotIndex];
+  function tapTeam(group, teamId) {
+    const arr = [...(selections[group] || [null, null, null, null])];
+    const currentPos = arr.findIndex(t => Number(t) === Number(teamId));
 
-    if (Number(current) === Number(teamId)) {
-      arr[slotIndex] = null;
+    if (currentPos >= 0) {
+      // Unrank this team
+      arr[currentPos] = null;
     } else {
-      const existingIdx = posOf(group, teamId);
-      if (existingIdx >= 0) {
-        arr[existingIdx] = current;
-      } else {
-        arr[slotIndex] = teamId;
+      // Assign to next available slot
+      const slot = arr.findIndex(s => !s);
+      if (slot >= 0) {
+        arr[slot] = teamId;
       }
     }
     selections[group] = arr;
+    autoSave();
+  }
+
+  function resetGroup(group) {
+    selections[group] = [null, null, null, null];
     autoSave();
   }
 
@@ -233,7 +241,6 @@
   }
 
   const MEDAL = { 0: '#c9a84c', 1: '#a0a0a0', 2: '#b87333' };
-  const POS_LABEL = ['1st', '2nd', '3rd', '4th'];
 
   function teamAt(group, slot) {
     const teamId = selections[group]?.[slot];
@@ -397,39 +404,56 @@
         {/if}
       </div>
 
-      <!-- ── Mobile: tap-to-rank ─────────────────────────────────── -->
-      <div class="mobile-view group-card" style="background: var(--bg-card); border: 1px solid {groupDone ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 8px; padding: 14px; {groupDone ? 'box-shadow: 0 0 12px rgba(201,168,76,0.08);' : ''}">
+      <!-- ── Mobile: sequential tap-to-rank ──────────────────────── -->
+      <div class="mobile-view group-card" style="background: var(--bg-card); border: 1px solid {groupDone ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 12px; padding: 16px; {groupDone ? 'box-shadow: 0 0 12px rgba(201,168,76,0.08);' : ''}">
         <!-- Group header -->
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
-          <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold);">{group}</div>
-          {#if groupDone}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span><span style="color: var(--green); font-size: 11px;"> ✓</span>{:else}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>{/if}
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="width: 32px; height: 32px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: var(--gold);">{group}</div>
+            <span style="font-size: 12px; font-weight: 600; color: var(--text); letter-spacing: 0.04em;">Grupo {group}</span>
+          </div>
           {#if groupDone}
-            <span style="margin-left: auto; font-size: 9px; color: var(--green); background: rgba(0,229,160,0.1); padding: 2px 8px; border-radius: 10px;">✓ Completo</span>
+            <span style="font-size: 9px; color: var(--green); background: rgba(0,229,160,0.1); padding: 3px 10px; border-radius: 10px; font-weight: 500;">✓ Completo</span>
+          {:else}
+            <button
+              disabled={data.isLocked}
+              onclick={() => resetGroup(group)}
+              style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; font-size: 9px; color: var(--text-dim); cursor: pointer; {selections[group]?.some(s => s) ? '' : 'opacity: 0.3; pointer-events: none;'}"
+            >Reset</button>
           {/if}
         </div>
 
-        <!-- All teams in group, sorted: assigned first, then unassigned -->
-        <div style="display: flex; flex-direction: column; gap: 4px;">
-          {#each [...groupTeams].sort((a, b) => { const pa = posOf(group, a.id); const pb = posOf(group, b.id); if (pa !== null && pb !== null) return pa - pb; if (pa !== null) return -1; if (pb !== null) return 1; return 0; }) as team (team.id)}
-            {@const mySlot = posOf(group, team.id)}
-            {@const isSelected = mySlot !== null}
-            <div style="display: flex; align-items: center; gap: 5px; padding: 5px 6px; border-radius: 6px; background: {isSelected ? 'rgba(201,168,76,0.06)' : 'transparent'}; border: 1px solid {isSelected ? 'rgba(201,168,76,0.2)' : 'transparent'}; transition: all 0.15s;">
-              <!-- Tap buttons 1-4 -->
-              <div style="display: flex; gap: 2px; flex-shrink: 0;">
-                {#each [0,1,2,3] as si}
-                  <button
-                    disabled={data.isLocked}
-                    onclick={() => toggleSlot(group, si, team.id)}
-                    title={POS_LABEL[si]}
-                    style="width: 28px; height: 28px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; border: 1.5px solid {mySlot === si ? MEDAL[si] : 'var(--border)'}; background: {mySlot === si ? MEDAL[si] : 'transparent'}; color: {mySlot === si ? (si === 0 ? '#3d2a00' : '#fff') : MEDAL[si] || 'var(--text-dim)'}; cursor: pointer; transition: all 0.1s; padding: 0; touch-action: manipulation;"
-                  >{si + 1}</button>
-                {/each}
-              </div>
-              <!-- Team info + position badge -->
-              <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;">
-                <span style="font-size: 11px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-size: 16px; margin-right: 4px;">{flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
-              </div>
-            </div>
+        <!-- Instruction -->
+        {#if !groupDone && !data.isLocked}
+          {@const ns = nextSlot(group)}
+          <div style="font-size: 10px; color: var(--gold); margin-bottom: 10px; padding: 6px 10px; background: rgba(201,168,76,0.08); border-radius: 6px; text-align: center;">
+            Toca el equipo que quedar&aacute; <strong>{POS_FULL[ns] || ''}</strong>
+          </div>
+        {/if}
+
+        <!-- Team list -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          {#each groupTeams as team (team.id)}
+            {@const rank = selections[group]?.findIndex(t => Number(t) === Number(team.id))}
+            {@const isRanked = rank >= 0}
+            {@const isNext = !groupDone && !isRanked}
+            <button
+              disabled={data.isLocked || (!isRanked && groupDone)}
+              onclick={() => tapTeam(group, team.id)}
+              style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1.5px solid {isRanked ? MEDAL[rank] + '88' : isNext ? 'rgba(255,255,255,0.08)' : 'transparent'}; background: {isRanked ? MEDAL[rank] + '15' : isNext ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.01)'}; cursor: pointer; transition: all 0.2s; width: 100%; text-align: left; {isRanked ? 'opacity: 1;' : isNext ? 'opacity: 0.9;' : 'opacity: 0.35;'}"
+            >
+              <!-- Rank badge -->
+              {#if isRanked}
+                <div style="width: 26px; height: 26px; border-radius: 50%; background: {MEDAL[rank]}; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: {rank === 0 ? '#3d2a00' : '#fff'}; flex-shrink: 0;">{rank + 1}</div>
+              {:else}
+                <div style="width: 26px; height: 26px; border-radius: 50%; border: 1.5px dashed {isNext ? 'var(--border)' : 'transparent'}; flex-shrink: 0;"></div>
+              {/if}
+              <!-- Team info -->
+              <span style="font-size: 13px; font-weight: {isRanked ? '600' : '400'}; color: var(--text); flex: 1;"><span style="font-size: 20px; margin-right: 6px;">{flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
+              {#if isRanked}
+                <span style="font-size: 14px; color: var(--text-dim); opacity: 0.5;">×</span>
+              {/if}
+            </button>
           {/each}
         </div>
       </div>
@@ -471,16 +495,5 @@
 
   @media (hover: none) and (pointer: coarse) {
     .desktop-hint { display: none; }
-    /* Bigger touch targets for tap-to-rank buttons */
-    button[title="1st"],
-    button[title="2nd"],
-    button[title="3rd"],
-    button[title="4th"] {
-      width: 36px !important;
-      height: 36px !important;
-      font-size: 13px !important;
-      margin: 2px;
-      touch-action: manipulation;
-    }
   }
 </style>
