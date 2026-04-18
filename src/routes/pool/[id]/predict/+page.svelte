@@ -8,6 +8,15 @@
   const pool = data.pool;
   const allowMultiple = pool.allow_multiple_predictions === 1;
 
+  // Progress tracking
+  const groupsCompleted = $derived.by(() => {
+    return GROUP_NAMES.filter(g => {
+      const gp = data.existingGroupPreds?.[g];
+      return gp?.pos1 && gp?.pos2 && gp?.pos3 && gp?.pos4;
+    }).length;
+  });
+  const progressPct = $derived(Math.round((groupsCompleted / 12) * 100));
+
   // Deadline countdown
   let countdown = $state('');
   $effect(() => {
@@ -253,6 +262,16 @@
       <span class="desktop-hint" style="color: var(--gold); margin-left: 6px;">← Arrastra para reordenar</span>
     </p>
 
+    <!-- Progress bar -->
+    <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
+      <div style="flex: 1; max-width: 280px; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden;">
+        <div style="width: {progressPct}%; height: 100%; background: linear-gradient(90deg, var(--gold), #e8c96a); border-radius: 3px; transition: width 0.4s ease;"></div>
+      </div>
+      <span style="font-size: 10px; color: {groupsCompleted === 12 ? 'var(--green)' : 'var(--text-dim)'}; font-weight: 500; white-space: nowrap;">
+        {groupsCompleted === 12 ? '✅' : ''} {groupsCompleted}/12 grupos
+      </span>
+    </div>
+
     {#if countdown && !data.isLocked}
       <div style="margin-top: 8px; padding: 8px 12px; background: rgba(201,168,76,0.1); border: 1px solid var(--gold); border-radius: 6px; font-size: 10px; color: var(--gold);">
         ⏰ Cierre en: {countdown}
@@ -315,13 +334,15 @@
   <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
     {#each GROUP_NAMES as group}
       {@const groupTeams = data.teamsByGroup[group] || []}
+      {@const gp = data.existingGroupPreds?.[group]}
+      {@const groupDone = !!(gp?.pos1 && gp?.pos2 && gp?.pos3 && gp?.pos4)}
 
       <!-- ── Desktop: native drag-to-reorder ──────────────────────── -->
-      <div class="desktop-view group-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+      <div class="desktop-view group-card" style="background: var(--bg-card); border: 1px solid {groupDone ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 8px; padding: 14px; {groupDone ? 'box-shadow: 0 0 12px rgba(201,168,76,0.08);' : ''}">
         <!-- Group header -->
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
           <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold);">{group}</div>
-          <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>
+          {#if groupDone}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span><span style="color: var(--green); font-size: 11px;"> ✓</span>{:else}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>{/if}
           <div style="margin-left: auto; display: flex; gap: 3px;">
             {#each [0,1,2,3] as si}
               <div style="width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; background: {si <= 2 ? MEDAL[si] + '22' : 'rgba(255,255,255,0.05)'}; color: {si <= 2 ? MEDAL[si] : 'var(--text-dim)'}; border: 1px solid {si <= 2 ? MEDAL[si] + '44' : 'var(--border)'};">{si + 1}</div>
@@ -334,12 +355,12 @@
           <div style="display: flex; flex-direction: column; gap: 4px;">
             {#each [0,1,2,3] as slot}
               {@const team = teamAt(group, slot)}
-              <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px; background: {slot < 3 ? MEDAL[slot] + '15' : 'rgba(255,255,255,0.03)'}; border: 1px solid {slot < 3 ? MEDAL[slot] + '33' : 'transparent'};">
+              <div style="display: flex; align-items: center; gap: 8px; padding: 10px 8px; border-radius: 6px; background: {slot < 3 ? MEDAL[slot] + '15' : 'rgba(255,255,255,0.03)'}; border: 1px solid {slot < 3 ? MEDAL[slot] + '33' : 'transparent'};">
                 <div style="width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; background: {slot < 3 ? MEDAL[slot] : 'rgba(255,255,255,0.1)'}; color: {slot === 0 ? '#3d2a00' : slot < 3 ? '#fff' : 'var(--text-dim)'}; flex-shrink: 0;">{slot + 1}</div>
                 {#if team}
-                  <span style="font-size: 11px; font-weight: 500; color: var(--text);">{flagEmoji(team.flag_code)} {shortName(team.name)}</span>
+                  <span style="font-size: 11px; font-weight: 500; color: var(--text);"><span style="font-size: 16px; margin-right: 4px;">{flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
                 {:else}
-                  <span style="font-size: 11px; color: var(--text-dim); font-style: italic;">Vacío</span>
+                  <span style="font-size: 11px; color: var(--text-dim); border: 1px dashed var(--border); padding: 2px 8px; border-radius: 4px;">—</span>
                 {/if}
               </div>
             {/each}
@@ -369,9 +390,9 @@
               <div style="width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; background: {slot < 3 && team ? MEDAL[slot] : 'rgba(255,255,255,0.1)'}; color: {slot === 0 && team ? '#3d2a00' : slot < 3 && team ? '#fff' : 'var(--text-dim)'}; flex-shrink: 0;">{slot + 1}</div>
               <div style="color: var(--text-dim); font-size: 14px; flex-shrink: 0; cursor: {team ? 'grab' : 'default'}; line-height: 1;">☰</div>
               {#if team}
-                <span style="font-size: 11px; font-weight: 500; color: var(--text);">{flagEmoji(team.flag_code)} {shortName(team.name)}</span>
+                <span style="font-size: 11px; font-weight: 500; color: var(--text);"><span style="font-size: 16px; margin-right: 4px;">{flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
               {:else}
-                <span style="font-size: 11px; color: var(--text-dim); font-style: italic;">Vacío — arrastra aquí</span>
+                <span style="font-size: 11px; color: var(--text-dim); border: 1px dashed var(--border); padding: 2px 8px; border-radius: 4px;">—</span>
               {/if}
             </div>
           {/each}
@@ -379,11 +400,11 @@
       </div>
 
       <!-- ── Mobile: tap-to-rank ─────────────────────────────────── -->
-      <div class="mobile-view group-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+      <div class="mobile-view group-card" style="background: var(--bg-card); border: 1px solid {groupDone ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 8px; padding: 14px; {groupDone ? 'box-shadow: 0 0 12px rgba(201,168,76,0.08);' : ''}">
         <!-- Group header -->
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
           <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold);">{group}</div>
-          <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>
+          {#if groupDone}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span><span style="color: var(--green); font-size: 11px;"> ✓</span>{:else}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>{/if}
           <div style="margin-left: auto; display: flex; gap: 3px;">
             {#each [0,1,2,3] as si}
               <div style="width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; background: {si <= 2 ? MEDAL[si] + '22' : 'rgba(255,255,255,0.05)'}; color: {si <= 2 ? MEDAL[si] : 'var(--text-dim)'}; border: 1px solid {si <= 2 ? MEDAL[si] + '44' : 'var(--border)'};">{si + 1}</div>
@@ -415,7 +436,7 @@
                 {:else}
                   <div style="width: 16px; height: 16px; flex-shrink: 0;"></div>
                 {/if}
-                <span style="font-size: 11px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{flagEmoji(team.flag_code)} {shortName(team.name)}</span>
+                <span style="font-size: 11px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-size: 16px; margin-right: 4px;">{flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
               </div>
             </div>
           {/each}

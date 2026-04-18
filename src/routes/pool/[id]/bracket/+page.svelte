@@ -761,6 +761,10 @@
     padding: 5px 10px;
     width: 100%;
     max-width: 140px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(8px);
   }
 
   /* Match lists with proper spacing between rounds */
@@ -770,6 +774,18 @@
     width: 100%;
     max-width: 140px;
   }
+
+  /* Connector lines between rounds */
+  .bracket-col:not(:first-child)::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 8px;
+    height: 1px;
+    background: rgba(255,255,255,0.08);
+  }
+  .bracket-col { position: relative; }
 
   .r32-list { gap: 4px; }
   .r16-list { gap: 10px; }
