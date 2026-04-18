@@ -44,9 +44,21 @@
 
   function getGroupTeam(group, pos) {
     const gp = data.groupPredictions?.[group];
-    if (!gp) return null;
-    return [gp.pos1, gp.pos2, gp.pos3, gp.pos4][pos - 1] ?? null;
+    if (gp) {
+      const id = [gp.pos1, gp.pos2, gp.pos3, gp.pos4][pos - 1];
+      if (id) return id;
+    }
+    // Fallback: use default team order from teamsByGroup
+    const gTeams = data.teamsByGroup?.[group];
+    if (gTeams && gTeams.length >= pos) return gTeams[pos - 1].id;
+    return null;
   }
+
+  // Count how many groups have explicit predictions
+  const groupsPredicted = $derived.by(() => {
+    const groups = 'ABCDEFGHIJKL'.split('');
+    return groups.filter(g => data.groupPredictions?.[g]?.pos1).length;
+  });
 
   // Initialize state from server data
   function initState() {
@@ -340,6 +352,14 @@
     </div>
   {/if}
 
+  <!-- Warning: incomplete groups -->
+  {#if groupsPredicted < 12}
+    <div class="incomplete-banner">
+      <span>⚠️ Grupos incompletos ({groupsPredicted}/12) — usando orden por defecto para los no rellenados.</span>
+      <a href="/pool/{data.pool.id}/predict" style="color: var(--gold); text-decoration: underline; font-size: 10px;">Rellenar grupos →</a>
+    </div>
+  {/if}
+
   <!-- Bracket Grid -->
   <div class="bracket-scroll">
     <div class="bracket-grid">
@@ -601,6 +621,20 @@
     display: flex;
     gap: 12px;
     align-items: center;
+  }
+
+  .incomplete-banner {
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: rgba(255, 152, 0, 0.08);
+    border: 1px solid rgba(255, 152, 0, 0.3);
+    border-radius: 6px;
+    font-size: 11px;
+    color: #ffb020;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
   }
 
   .pick-count {
