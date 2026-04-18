@@ -2,14 +2,39 @@
   let { data } = $props();
   let tab = $state('leaderboard');
   let copied = $state(false);
+  let summaryEntry = $state(data.predictions.length > 0 ? data.predictions[0].id : null);
 
   const pool = data.pool;
+
+  const phaseOrder = ['r32', 'r16', 'qf', 'sf', '3rd', 'final'];
+
+  function flag(code: string) {
+    if (!code) return '';
+    return code.toUpperCase().replace(/./g, c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65));
+  }
+  function teamName(id: number) { return data.teams[id]?.name || 'TBD'; }
+  function teamFlag(id: number) { return flag(data.teams[id]?.flag_code || ''); }
+
+  function getGroupPreds() {
+    if (!summaryEntry) return [];
+    return data.groupPreds[summaryEntry] || [];
+  }
+  function getBracketPreds() {
+    if (!summaryEntry) return {};
+    const raw = data.bracketPreds[summaryEntry] || [];
+    const grouped: Record<string, any[]> = {};
+    for (const b of raw) {
+      if (!grouped[b.phase]) grouped[b.phase] = [];
+      grouped[b.phase].push(b);
+    }
+    return grouped;
+  }
 
   const tabs = [
     { id: 'leaderboard', label: 'Clasificación' },
     { id: 'predictions', label: 'Pronósticos' },
     { id: 'members', label: 'Miembros' },
-    { id: 'summary', label: '📋 Resumen', link: true },
+    { id: 'summary', label: '📋 Resumen' },
     { id: 'results', label: '🏆 Resultados', link: true },
     { id: 'scoring', label: 'Puntuación' },
   ];
@@ -214,5 +239,81 @@
       {/each}
     </div>
     <p style="font-size: 10px; color: var(--text-dim); margin-top: 12px; text-align: center;">Puntuación configurada por el creador de la quiniela.</p>
+  {/if}
+
+   {#if tab === 'summary'}
+    <div style="max-width: 500px; margin: 0 auto;">
+      {#if data.predictions.length === 0}
+        <div style="text-align: center; padding: 40px 20px;">
+          <div style="font-size: 40px; margin-bottom: 12px;">📋</div>
+          <p style="font-size: 11px; color: var(--text-muted);">No tienes predicciones aún. <a href="/pool/{pool.id}/predict" style="color: var(--gold);">Predecir ahora</a></p>
+        </div>
+      {:else}
+        <!-- Entry selector -->
+        {#if data.predictions.length > 1}
+          <div style="margin-bottom: 16px;">
+            <select bind:value={summaryEntry} style="font-size: 11px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; color: var(--text);">
+              {#each data.predictions as pred}
+                <option value={pred.id}>{pred.label || 'Entrada ' + pred.id}</option>
+              {/each}
+            </select>
+          </div>
+        {/if}
+
+        <!-- Group predictions -->
+        <div style="margin-bottom: 24px;">
+          <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">🏆 Fase de Grupos</h2>
+          {#each getGroupPreds() as gp}
+            <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px;">
+              <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">Grupo {gp.group_name}</div>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                {#each [gp.position_1, gp.position_2, gp.position_3, gp.position_4] as tid, idx}
+                  {#if tid}
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; {idx < 2 ? 'color: var(--text); font-weight: 500;' : 'color: var(--text-muted);'}">
+                      <span style="width: 14px; font-size: 9px; color: var(--text-muted);">{idx + 1}.</span>
+                      <span>{teamFlag(tid)}</span>
+                      <span>{teamName(tid)}</span>
+                    </div>
+                  {:else}
+                    <div style="font-size: 11px; color: var(--text-muted); opacity: 0.5;">{idx + 1}. —</div>
+                  {/if}
+                {/each}
+              </div>
+            </div>
+          {/each}
+          {#if getGroupPreds().length === 0}
+            <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No has predicho grupos aún.</p>
+          {/if}
+        </div>
+
+        <!-- Bracket predictions -->
+        <div style="margin-bottom: 24px;">
+          <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">⚔️ Eliminatorias</h2>
+          {#each phaseOrder as phase}
+            {@const bracketPreds = getBracketPreds()}
+            {@const picks = bracketPreds[phase]}
+            {#if picks && picks.length > 0}
+              <div style="margin-bottom: 12px;">
+                <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">{phaseLabels[phase] || phase}</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                  {#each picks as pick}
+                    <span style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 11px;">
+                      {teamFlag(pick.team_id)} {teamName(pick.team_id)}
+                    </span>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+          {/each}
+          {#if Object.keys(getBracketPreds()).length === 0}
+            <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No has predicho eliminatorias aún.</p>
+          {/if}
+        </div>
+
+        <div style="text-align: center; padding: 16px; border-top: 1px solid var(--border);">
+          <p style="font-size: 9px; color: var(--text-muted);">📸 Haz captura para compartir</p>
+        </div>
+      {/if}
+    </div>
   {/if}
 </div>

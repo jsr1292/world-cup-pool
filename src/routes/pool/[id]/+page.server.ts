@@ -12,6 +12,26 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   const scoring = getScoringConfig(poolId);
   const predictions = locals.user ? getUserPredictions(poolId, locals.user.id) : [];
 
+  // Summary data
+  const allTeams = db.prepare('SELECT id, name, flag_code, group_name FROM teams').all() as any[];
+  const teams: Record<number, any> = {};
+  for (const t of allTeams) teams[t.id] = t;
+
+  const groupPreds: Record<number, any[]> = {};
+  const bracketPreds: Record<number, any[]> = {};
+  for (const entry of predictions) {
+    groupPreds[entry.id] = db.prepare(`
+      SELECT group_name, position_1, position_2, position_3, position_4
+      FROM group_predictions WHERE prediction_id = ?
+      ORDER BY group_name
+    `).all(entry.id) as any[];
+    bracketPreds[entry.id] = db.prepare(`
+      SELECT phase, slot as match_index, team_id
+      FROM bracket_predictions WHERE prediction_id = ?
+      ORDER BY phase, slot
+    `).all(entry.id) as any[];
+  }
+
   // Enrich leaderboard with per-phase correct pick counts
   const enrichedLeaderboard = leaderboard.map((entry: any) => {
     const predId = entry.id;
@@ -48,5 +68,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     pool, members, leaderboard: enrichedLeaderboard, scoring, predictions,
     isAdmin: locals.user ? (pool as any).created_by === locals.user.id : false,
     userId: locals.user?.id ?? null,
+    teams,
+    groupPreds,
+    bracketPreds,
   };
 };
