@@ -89,18 +89,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   const saveAll = db.transaction(() => {
     for (const [groupName, positions] of Object.entries(groups)) {
-      // Only save if at least one position is filled (preserve existing data for empty groups)
+      // Always save — even if all null, it means user cleared the group
+      // Delete row if all null to keep DB clean, otherwise upsert
       const hasData = positions.pos1 != null || positions.pos2 != null || positions.pos3 != null || positions.pos4 != null;
-      if (!hasData) continue;
 
-      upsert.run({
-        prediction_id,
-        group_name: groupName,
-        pos1: positions.pos1 ?? null,
-        pos2: positions.pos2 ?? null,
-        pos3: positions.pos3 ?? null,
-        pos4: positions.pos4 ?? null,
-      });
+      if (!hasData) {
+        // User cleared this group — delete from DB
+        db.prepare('DELETE FROM group_predictions WHERE prediction_id = ? AND group_name = ?').run(prediction_id, groupName);
+      } else {
+        upsert.run({
+          prediction_id,
+          group_name: groupName,
+          pos1: positions.pos1 ?? null,
+          pos2: positions.pos2 ?? null,
+          pos3: positions.pos3 ?? null,
+          pos4: positions.pos4 ?? null,
+        });
+      }
     }
   });
 
