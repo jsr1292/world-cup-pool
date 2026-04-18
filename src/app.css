@@ -124,14 +124,11 @@ button {
   -webkit-backdrop-filter: blur(20px);
   display: flex;
   justify-content: space-around;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  align-items: center;
+  padding: 6px 0;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom, 20px));
+  border-top: 1px solid rgba(255,255,255,0.06);
   z-index: 50;
-}
-
-.bottom-nav::before {
-  content: '';
-  display: block;
-  padding-top: 4px;
 }
 
 .bottom-nav button {
