@@ -472,7 +472,14 @@
 
         <!-- Team list -->
         <div style="display: flex; flex-direction: column; gap: 6px;">
-          {#each groupTeams as team (team.id)}
+          {#each [...groupTeams].sort((a, b) => {
+            const ra = selections[group]?.findIndex(t => Number(t) === Number(a.id));
+            const rb = selections[group]?.findIndex(t => Number(t) === Number(b.id));
+            if (ra >= 0 && rb >= 0) return ra - rb;
+            if (ra >= 0) return -1;
+            if (rb >= 0) return 1;
+            return 0;
+          }) as team (team.id)}
             {@const rank = selections[group]?.findIndex(t => Number(t) === Number(team.id))}
             {@const isRanked = rank >= 0}
             {@const isNext = !groupDone && !isRanked}
