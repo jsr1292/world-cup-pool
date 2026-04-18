@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0e1a"/>
+      <stop offset="100%" stop-color="#0d1120"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8c96a"/>
+      <stop offset="40%" stop-color="#c9a84c"/>
+      <stop offset="60%" stop-color="#f0d98c"/>
+      <stop offset="100%" stop-color="#b8943f"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- Subtle border -->
+  <rect width="512" height="512" rx="96" fill="none" stroke="rgba(201,168,76,0.2)" stroke-width="2"/>
+  <!-- Trophy -->
+  <g transform="translate(256,200)" fill="none" stroke="url(#gold)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M-50,-60 h100 v50 a50,50 0 0 1-100,0 z"/>
+    <path d="M-50,-45 h-20 a25,25 0 0 1 0,-40 h20"/>
+    <path d="M50,-45 h20 a25,25 0 0 0 0,-40 h-20"/>
+    <line x1="-30" y1="50" x2="-50" y2="100"/>
+    <line x1="30" y1="50" x2="50" y2="100"/>
+    <line x1="-50" y1="100" x2="50" y2="100"/>
+    <line x1="-10" y1="50" x2="-10" y2="30"/>
+    <line x1="10" y1="50" x2="10" y2="30"/>
+  </g>
+  <!-- Text -->
+  <text x="256" y="380" text-anchor="middle" font-family="system-ui, sans-serif" font-size="72" font-weight="800" fill="url(#gold)">2026</text>
+  <text x="256" y="440" text-anchor="middle" font-family="system-ui, sans-serif" font-size="32" font-weight="600" fill="#99aabb" letter-spacing="6">QUINIELA</text>
+</svg>

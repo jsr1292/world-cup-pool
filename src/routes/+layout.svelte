@@ -1,7 +1,13 @@
 <script>
+  import { browser } from '$app/environment';
   import '../app.css';
   import { page } from '$app/stores';
   let { children, data } = $props();
+
+  // Register service worker for PWA
+  if (browser && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
 
   let currentPath = $state('');
   $effect(() => {

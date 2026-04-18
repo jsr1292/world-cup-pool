@@ -1,16 +1,40 @@
 {
-  "name": "Mundial 2026",
-  "short_name": "Mundial",
-  "description": "Quiniela del Mundial 2026",
+  "name": "Mundial 2026 · Quiniela",
+  "short_name": "Mundial 2026",
+  "description": "Quiniela del Mundial 2026 — Predice los resultados y compite con tus amigos",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#07090f",
   "theme_color": "#07090f",
+  "categories": ["sports", "entertainment"],
+  "lang": "es",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "/icon-512.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Mis Quinielas",
+      "url": "/",
+      "description": "Ver mis quinielas"
+    },
+    {
+      "name": "Clasificación",
+      "url": "/leaderboard",
+      "description": "Ver clasificación global"
     }
   ]
 }
