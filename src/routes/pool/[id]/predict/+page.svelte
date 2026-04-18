@@ -58,7 +58,7 @@
       arr[slotIndex] = null;
     } else {
       const existingIdx = posOf(group, teamId);
-      if (existingIdx !== null) {
+      if (existingIdx >= 0) {
         arr[existingIdx] = current;
       } else {
         arr[slotIndex] = teamId;

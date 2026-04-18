@@ -142,6 +142,14 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now'))
   );
 
+  -- Tiebreaker: predicted final score
+  CREATE TABLE IF NOT EXISTS tiebreaker (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prediction_id INTEGER NOT NULL UNIQUE REFERENCES predictions(id) ON DELETE CASCADE,
+    home_score INTEGER,
+    away_score INTEGER
+  );
+
   -- Indexes
   CREATE INDEX IF NOT EXISTS idx_pool_members_user ON pool_members(user_id);
   CREATE INDEX IF NOT EXISTS idx_predictions_pool ON predictions(pool_id);

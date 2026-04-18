@@ -188,6 +188,50 @@
     autoSaveTimer = setTimeout(saveBracket, 800);
   }
 
+  // ─── Tiebreaker ──────────────────────────────────────────────────
+  let tieHome = $state(null);
+  let tieAway = $state(null);
+  let tieSaving = $state(false);
+  let tieSaved = $state(false);
+
+  async function loadTiebreaker() {
+    if (!data.selectedId) return;
+    try {
+      const r = await fetch(`/api/predictions/tiebreaker?prediction_id=${data.selectedId}`);
+      if (r.ok) {
+        const d = await r.json();
+        tieHome = d.home_score;
+        tieAway = d.away_score;
+      }
+    } catch {}
+  }
+
+  let tieTimer = null;
+  function onTieInput() {
+    if (tieTimer) clearTimeout(tieTimer);
+    tieTimer = setTimeout(saveTiebreaker, 800);
+  }
+
+  async function saveTiebreaker() {
+    if (!data.selectedId) return;
+    const h = tieHome !== null && tieHome !== '' ? Number(tieHome) : null;
+    const a = tieAway !== null && tieAway !== '' ? Number(tieAway) : null;
+    if (h === null || a === null || isNaN(h) || isNaN(a)) return;
+    tieSaving = true; tieSaved = false;
+    try {
+      const r = await fetch('/api/predictions/tiebreaker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prediction_id: data.selectedId, home_score: h, away_score: a }),
+      });
+      if (r.ok) { tieSaved = true; setTimeout(() => tieSaved = false, 2000); }
+    } catch {}
+    tieSaving = false;
+  }
+
+  // Load tiebreaker on mount
+  $effect(() => { loadTiebreaker(); });
+
   let saving = $state(false);
   let saved = $state(false);
   let saveError = $state(null);
@@ -568,6 +612,47 @@
     <span class="legend-item"><span class="legend-match">A1 vs B2</span> Enfrentamiento de grupo</span>
     <span class="legend-item"><span class="legend-tbd">TBD</span> Clasificados de 3er puesto</span>
   </div>
+
+  <!-- Tiebreaker: predicted final score -->
+  <div class="tiebreaker-card">
+    <div class="tiebreaker-title">🏆 Desempate: Resultado de la Final</div>
+    <div class="tiebreaker-subtitle">Si hay empate a puntos, gana quien más se acerque al resultado final.</div>
+    <div class="tiebreaker-inputs">
+      <div class="tiebreaker-team">
+        <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Local</span>
+        <input
+          type="number"
+          min="0"
+          max="30"
+          bind:value={tieHome}
+          oninput={onTieInput}
+          placeholder="-"
+          disabled={data.isLocked}
+          class="tiebreaker-input"
+        />
+      </div>
+      <span class="tiebreaker-dash">—</span>
+      <div class="tiebreaker-team">
+        <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Visitante</span>
+        <input
+          type="number"
+          min="0"
+          max="30"
+          bind:value={tieAway}
+          oninput={onTieInput}
+          placeholder="-"
+          disabled={data.isLocked}
+          class="tiebreaker-input"
+        />
+      </div>
+    </div>
+    <div style="margin-top: 6px; font-size: 10px;">
+      {#if tieSaving}<span style="color: var(--text-muted);">Guardando...</span>
+      {:else if tieSaved}<span style="color: var(--green);">✓ Guardado</span>
+      {:else if tieHome !== null && tieAway !== null}<span style="color: var(--text-dim);">Auto-guardado</span>
+      {:else}<span style="color: var(--text-dim);">Opcional</span>{/if}
+    </div>
+  </div>
 </div>
 
 <style>
@@ -854,6 +939,67 @@
     flex-wrap: wrap;
     font-size: 10px;
     color: var(--text-dim);
+  }
+
+  .tiebreaker-card {
+    margin-top: 24px;
+    padding: 16px 20px;
+    background: var(--bg-card);
+    border: 1px solid rgba(201, 168, 76, 0.2);
+    border-radius: 8px;
+  }
+
+  .tiebreaker-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+
+  .tiebreaker-subtitle {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+
+  .tiebreaker-inputs {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .tiebreaker-team {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .tiebreaker-input {
+    width: 60px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+  }
+
+  .tiebreaker-input:focus {
+    border-color: var(--gold);
+    outline: none;
+  }
+
+  .tiebreaker-input::placeholder {
+    color: var(--text-dim);
+  }
+
+  .tiebreaker-dash {
+    font-size: 20px;
+    color: var(--text-muted);
+    margin-top: 16px;
   }
 
   .legend-item {
