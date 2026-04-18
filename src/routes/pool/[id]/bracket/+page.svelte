@@ -239,6 +239,47 @@
   let creating = $state(false);
   let createMsg = $state('');
 
+  // Team path highlighting
+  let hoveredTeam = $state(null); // team ID being hovered
+
+  function getTeamPath(teamId) {
+    // Trace a team's path through the bracket
+    const path = new Set(); // set of 'round:matchIndex:teamIndex' keys
+    if (!teamId) return path;
+
+    // Find where this team appears in each round
+    for (const round of ['r32', 'r16', 'qf', 'sf']) {
+      const matches = _teams[round] || [];
+      for (let mi = 0; mi < matches.length; mi++) {
+        for (let ti = 0; ti < 2; ti++) {
+          if (Number(matches[mi][ti]) === Number(teamId)) {
+            path.add(`${round}:${mi}:${ti}`);
+            // Also highlight the match card
+            path.add(`${round}:${mi}`);
+          }
+        }
+      }
+    }
+    // Final
+    if (_teams.final?.[0]) {
+      for (let ti = 0; ti < 2; ti++) {
+        if (Number(_teams.final[0][ti]) === Number(teamId)) {
+          path.add(`final:0:${ti}`);
+          path.add(`final:0`);
+        }
+      }
+    }
+    return path;
+  }
+
+  const teamPath = $derived(getTeamPath(hoveredTeam));
+
+  function isInPath(round, mi, ti = null) {
+    if (!hoveredTeam) return false;
+    if (ti !== null) return teamPath.has(`${round}:${mi}:${ti}`);
+    return teamPath.has(`${round}:${mi}`);
+  }
+
   async function saveBracket() {
     if (!data.selectedId) return;
     saving = true; saved = false;
@@ -406,37 +447,221 @@
 
   <!-- Bracket Grid -->
   <div class="bracket-scroll">
-    <div class="bracket-grid">
+    <!-- Desktop: split bracket layout -->
+    <div class="bracket-grid desktop-bracket">
+      <!-- LEFT WING -->
+      <div class="bracket-wing">
+        <div class="bracket-col">
+          <div class="col-header">Dieciseisavos</div>
+          <div class="match-list r32-list">
+            {#each (teams.r32 || []).slice(0, 8) as match, mi}
+              {@const m = R32_MAP[mi]}
+              {@const isPlaceholder = m.t1g === '?'}
+              <div class="match-card" class:placeholder={isPlaceholder} class:path-highlight={isInPath('r32', mi)}>
+                {#each [0, 1] as ti}
+                  {@const tid = match[ti]}
+                  {@const t = teamMap[tid]}
+                  {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
+                  {@const canClick = !data.isLocked && !isPlaceholder && tid !== null}
+                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r32', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else if isPlaceholder}<span class="team-tbd">TBD</span>{:else}<span class="team-empty">—</span>{/if}
+                  </button>
+                {/each}
+                <div class="match-label">{r32Label(mi)}</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+        <div class="bracket-col">
+          <div class="col-header">Octavos</div>
+          <div class="match-list r16-list">
+            {#each (teams.r16 || []).slice(0, 4) as match, mi}
+              <div class="match-card" class:path-highlight={isInPath('r16', mi)}>
+                {#each [0, 1] as ti}
+                  {@const tid = match[ti]}
+                  {@const t = teamMap[tid]}
+                  {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
+                  {@const canClick = !data.isLocked && tid !== null}
+                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                  </button>
+                {/each}
+                <div class="match-label">R16-{mi + 1}</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+        <div class="bracket-col">
+          <div class="col-header">Cuartos</div>
+          <div class="match-list qf-list">
+            {#each (teams.qf || []).slice(0, 2) as match, mi}
+              <div class="match-card" class:path-highlight={isInPath('qf', mi)}>
+                {#each [0, 1] as ti}
+                  {@const tid = match[ti]}
+                  {@const t = teamMap[tid]}
+                  {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
+                  {@const canClick = !data.isLocked && tid !== null}
+                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                  </button>
+                {/each}
+                <div class="match-label">QF-{mi + 1}</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+        <div class="bracket-col">
+          <div class="col-header">Semifinal</div>
+          <div class="match-list sf-list">
+            {#each (teams.sf || []).slice(0, 1) as match, mi}
+              <div class="match-card" class:path-highlight={isInPath('sf', mi)}>
+                {#each [0, 1] as ti}
+                  {@const tid = match[ti]}
+                  {@const t = teamMap[tid]}
+                  {@const isPicked = explicitPicks.sf?.[mi]?.[ti]}
+                  {@const canClick = !data.isLocked && tid !== null}
+                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.sf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('sf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('sf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                  </button>
+                {/each}
+                <div class="match-label">SF-1</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      </div>
 
-      <!-- R32 -->
+      <!-- CENTER: Final + 3rd place -->
+      <div class="bracket-center">
+        <div class="match-card match-final" class:path-highlight={isInPath('final', 0)}>
+          <div class="col-header" style="margin-bottom: 8px;">🏆 Final</div>
+          {#each [0, 1] as ti}
+            {@const tid = teams.final?.[0]?.[ti]}
+            {@const t = teamMap[tid]}
+            {@const isPicked = explicitPicks.final?.[0]?.[ti]}
+            {@const canClick = !data.isLocked && tid !== null}
+            <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.final?.[0]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('final', 0, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('final', 0, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+              {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+            </button>
+          {/each}
+        </div>
+        <div class="match-card match-3rd" class:path-highlight={isInPath('3rd', 0)}>
+          <div class="match-label-3rd">3er puesto</div>
+          {#each [0, 1] as ti}
+            {@const tid = teams['3rd']?.[0]?.[ti]}
+            {@const t = teamMap[tid]}
+            {@const isPicked = explicitPicks['3rd']?.[0]?.[ti]}
+            {@const canClick = !data.isLocked && tid !== null}
+            <button class="team-btn" class:picked={isPicked} class:path-highlight={isInPath('3rd', 0, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('3rd', 0, ti, tid)}>
+              {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <!-- RIGHT WING (reversed: SF, QF, R16, R32) -->
+      <div class="bracket-wing">
+        <div class="bracket-col">
+          <div class="col-header">Semifinal</div>
+          <div class="match-list sf-list">
+            {#each (teams.sf || []).slice(1, 2) as match, idx}
+              {@const mi = idx + 1}
+              <div class="match-card" class:path-highlight={isInPath('sf', mi)}>
+                {#each [0, 1] as ti}
+                  {@const tid = match[ti]}
+                  {@const t = teamMap[tid]}
+                  {@const isPicked = explicitPicks.sf?.[mi]?.[ti]}
+                  {@const canClick = !data.isLocked && tid !== null}
+                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.sf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('sf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('sf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                  </button>
+                {/each}
+                <div class="match-label">SF-2</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+        <div class="bracket-col">
+          <div class="col-header">Cuartos</div>
+          <div class="match-list qf-list">
+            {#each (teams.qf || []).slice(2, 4) as match, idx}
+              {@const mi = idx + 2}
+              <div class="match-card" class:path-highlight={isInPath('qf', mi)}>
+                {#each [0, 1] as ti}
+                  {@const tid = match[ti]}
+                  {@const t = teamMap[tid]}
+                  {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
+                  {@const canClick = !data.isLocked && tid !== null}
+                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                  </button>
+                {/each}
+                <div class="match-label">QF-{mi + 1}</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+        <div class="bracket-col">
+          <div class="col-header">Octavos</div>
+          <div class="match-list r16-list">
+            {#each (teams.r16 || []).slice(4, 8) as match, idx}
+              {@const mi = idx + 4}
+              <div class="match-card" class:path-highlight={isInPath('r16', mi)}>
+                {#each [0, 1] as ti}
+                  {@const tid = match[ti]}
+                  {@const t = teamMap[tid]}
+                  {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
+                  {@const canClick = !data.isLocked && tid !== null}
+                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                  </button>
+                {/each}
+                <div class="match-label">R16-{mi + 1}</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+        <div class="bracket-col">
+          <div class="col-header">Dieciseisavos</div>
+          <div class="match-list r32-list">
+            {#each (teams.r32 || []).slice(8, 16) as match, idx}
+              {@const mi = idx + 8}
+              {@const m = R32_MAP[mi]}
+              {@const isPlaceholder = m.t1g === '?'}
+              <div class="match-card" class:placeholder={isPlaceholder} class:path-highlight={isInPath('r32', mi)}>
+                {#each [0, 1] as ti}
+                  {@const tid = match[ti]}
+                  {@const t = teamMap[tid]}
+                  {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
+                  {@const canClick = !data.isLocked && !isPlaceholder && tid !== null}
+                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r32', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else if isPlaceholder}<span class="team-tbd">TBD</span>{:else}<span class="team-empty">—</span>{/if}
+                  </button>
+                {/each}
+                <div class="match-label">{r32Label(mi)}</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile: linear layout (original) -->
+    <div class="bracket-grid mobile-bracket">
       <div class="bracket-col">
         <div class="col-header">Dieciseisavos</div>
         <div class="match-list r32-list">
           {#each (teams.r32 || []) as match, mi}
             {@const m = R32_MAP[mi]}
             {@const isPlaceholder = m.t1g === '?'}
-            <div class="match-card" class:placeholder={isPlaceholder}>
+            <div class="match-card" class:placeholder={isPlaceholder} class:path-highlight={isInPath('r32', mi)}>
               {#each [0, 1] as ti}
                 {@const tid = match[ti]}
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
                 {@const canClick = !data.isLocked && !isPlaceholder && tid !== null}
-                <button
-                  class="team-btn"
-                  class:picked={isPicked}
-                  class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null}
-                  disabled={!canClick}
-                  onclick={() => canClick && pickTeam('r32', mi, ti, tid)}
-                >
-                  {#if t}
-                    <span class="team-flag">{flagEmoji(t.flag_code)}</span>
-                    <span class="team-name">{shortName(t.name)}</span>
-                    {#if isPicked}<span class="pick-star">★</span>{/if}
-                  {:else if isPlaceholder}
-                    <span class="team-tbd">TBD</span>
-                  {:else}
-                    <span class="team-empty">—</span>
-                  {/if}
+                <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r32', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else if isPlaceholder}<span class="team-tbd">TBD</span>{:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
               <div class="match-label">{r32Label(mi)}</div>
@@ -444,32 +669,18 @@
           {/each}
         </div>
       </div>
-
-      <!-- R16 -->
       <div class="bracket-col">
         <div class="col-header">Octavos</div>
         <div class="match-list r16-list">
           {#each (teams.r16 || []) as match, mi}
-            <div class="match-card">
+            <div class="match-card" class:path-highlight={isInPath('r16', mi)}>
               {#each [0, 1] as ti}
                 {@const tid = match[ti]}
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
                 {@const canClick = !data.isLocked && tid !== null}
-                <button
-                  class="team-btn"
-                  class:picked={isPicked}
-                  class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null}
-                  disabled={!canClick}
-                  onclick={() => canClick && pickTeam('r16', mi, ti, tid)}
-                >
-                  {#if t}
-                    <span class="team-flag">{flagEmoji(t.flag_code)}</span>
-                    <span class="team-name">{shortName(t.name)}</span>
-                    {#if isPicked}<span class="pick-star">★</span>{/if}
-                  {:else}
-                    <span class="team-empty">—</span>
-                  {/if}
+                <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
               <div class="match-label">R16-{mi + 1}</div>
@@ -477,32 +688,18 @@
           {/each}
         </div>
       </div>
-
-      <!-- QF -->
       <div class="bracket-col">
         <div class="col-header">Cuartos</div>
         <div class="match-list qf-list">
           {#each (teams.qf || []) as match, mi}
-            <div class="match-card">
+            <div class="match-card" class:path-highlight={isInPath('qf', mi)}>
               {#each [0, 1] as ti}
                 {@const tid = match[ti]}
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
                 {@const canClick = !data.isLocked && tid !== null}
-                <button
-                  class="team-btn"
-                  class:picked={isPicked}
-                  class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null}
-                  disabled={!canClick}
-                  onclick={() => canClick && pickTeam('qf', mi, ti, tid)}
-                >
-                  {#if t}
-                    <span class="team-flag">{flagEmoji(t.flag_code)}</span>
-                    <span class="team-name">{shortName(t.name)}</span>
-                    {#if isPicked}<span class="pick-star">★</span>{/if}
-                  {:else}
-                    <span class="team-empty">—</span>
-                  {/if}
+                <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
               <div class="match-label">QF-{mi + 1}</div>
@@ -510,32 +707,18 @@
           {/each}
         </div>
       </div>
-
-      <!-- SF -->
       <div class="bracket-col">
         <div class="col-header">Semifinales</div>
         <div class="match-list sf-list">
           {#each (teams.sf || []) as match, mi}
-            <div class="match-card">
+            <div class="match-card" class:path-highlight={isInPath('sf', mi)}>
               {#each [0, 1] as ti}
                 {@const tid = match[ti]}
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.sf?.[mi]?.[ti]}
                 {@const canClick = !data.isLocked && tid !== null}
-                <button
-                  class="team-btn"
-                  class:picked={isPicked}
-                  class:eliminated={explicitPicks.sf?.[mi]?.[1 - ti] && !isPicked && tid !== null}
-                  disabled={!canClick}
-                  onclick={() => canClick && pickTeam('sf', mi, ti, tid)}
-                >
-                  {#if t}
-                    <span class="team-flag">{flagEmoji(t.flag_code)}</span>
-                    <span class="team-name">{shortName(t.name)}</span>
-                    {#if isPicked}<span class="pick-star">★</span>{/if}
-                  {:else}
-                    <span class="team-empty">—</span>
-                  {/if}
+                <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.sf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('sf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('sf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
               <div class="match-label">SF-{mi + 1}</div>
@@ -543,69 +726,38 @@
           {/each}
         </div>
       </div>
-
-      <!-- Final + 3rd -->
       <div class="bracket-col">
         <div class="col-header">Final</div>
         <div class="match-list final-list">
-          <!-- Final match -->
-          <div class="match-card match-final">
+          <div class="match-card match-final" class:path-highlight={isInPath('final', 0)}>
             {#each [0, 1] as ti}
               {@const tid = teams.final?.[0]?.[ti]}
               {@const t = teamMap[tid]}
               {@const isPicked = explicitPicks.final?.[0]?.[ti]}
               {@const canClick = !data.isLocked && tid !== null}
-              <button
-                class="team-btn"
-                class:picked={isPicked}
-                class:eliminated={explicitPicks.final?.[0]?.[1 - ti] && !isPicked && tid !== null}
-                disabled={!canClick}
-                onclick={() => canClick && pickTeam('final', 0, ti, tid)}
-              >
-                {#if t}
-                  <span class="team-flag">{flagEmoji(t.flag_code)}</span>
-                  <span class="team-name">{shortName(t.name)}</span>
-                  {#if isPicked}<span class="pick-star">★</span>{/if}
-                {:else}
-                  <span class="team-empty">—</span>
-                {/if}
+              <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.final?.[0]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('final', 0, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('final', 0, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
               </button>
             {/each}
             <div class="match-label match-label-final">🏆 FINAL</div>
           </div>
-
-          <!-- 3rd place -->
-          <div class="match-card match-3rd">
+          <div class="match-card match-3rd" class:path-highlight={isInPath('3rd', 0)}>
             <div class="match-label-3rd">3er puesto</div>
             {#each [0, 1] as ti}
               {@const tid = teams['3rd']?.[0]?.[ti]}
               {@const t = teamMap[tid]}
               {@const isPicked = explicitPicks['3rd']?.[0]?.[ti]}
               {@const canClick = !data.isLocked && tid !== null}
-              <button
-                class="team-btn"
-                class:picked={isPicked}
-                class:eliminated={explicitPicks['3rd']?.[0]?.[1 - ti] && !isPicked && tid !== null}
-                disabled={!canClick}
-                onclick={() => canClick && pickTeam('3rd', 0, ti, tid)}
-              >
-                {#if t}
-                  <span class="team-flag">{flagEmoji(t.flag_code)}</span>
-                  <span class="team-name">{shortName(t.name)}</span>
-                  {#if isPicked}<span class="pick-star">★</span>{/if}
-                {:else}
-                  <span class="team-empty">—</span>
-                {/if}
+              <button class="team-btn" class:picked={isPicked} class:path-highlight={isInPath('3rd', 0, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('3rd', 0, ti, tid)}>
+                {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
               </button>
             {/each}
             <div class="match-label">3ER</div>
           </div>
         </div>
       </div>
-
     </div>
   </div>
-
   <!-- Legend -->
   <div class="bracket-legend">
     <span class="legend-item"><span class="pick-star">★</span> Tu elección</span>
@@ -738,6 +890,54 @@
     gap: 6px;
     align-items: flex-start;
     min-width: 900px;
+  }
+
+  /* Desktop: split bracket */
+  .mobile-bracket { display: none; }
+  .desktop-bracket {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    min-width: 1100px;
+  }
+  .bracket-wing {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+  }
+  .bracket-wing .bracket-col {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .bracket-center {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 150px;
+    justify-content: center;
+    padding: 0 8px;
+    border-left: 1px solid rgba(201,168,76,0.15);
+    border-right: 1px solid rgba(201,168,76,0.15);
+  }
+  .bracket-center .match-final {
+    border: 1.5px solid rgba(201,168,76,0.3);
+    box-shadow: 0 0 20px rgba(201,168,76,0.08);
+  }
+
+  /* Team path highlighting */
+  .match-card.path-highlight {
+    border-color: rgba(201, 168, 76, 0.4) !important;
+    box-shadow: 0 0 12px rgba(201, 168, 76, 0.15);
+    transition: all 0.15s ease;
+  }
+  .team-btn.path-highlight {
+    background: rgba(201, 168, 76, 0.12) !important;
+    border-color: rgba(201, 168, 76, 0.3) !important;
+  }
+
+  @media (max-width: 768px) {
+    .desktop-bracket { display: none !important; }
+    .mobile-bracket { display: flex !important; }
   }
 
   .bracket-col {
