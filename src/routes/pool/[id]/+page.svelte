@@ -105,15 +105,18 @@
   <!-- Clasificación -->
   {#if tab === 'leaderboard'}
     {#if data.leaderboard.length === 0}
-      <div style="text-align: center; padding: 32px; color: var(--text-muted); font-size: 12px;">
-        Sin pronósticos aún. <a href="/pool/{pool.id}/predict" style="color: var(--gold);">¡Predice ahora!</a>
+      <div style="text-align: center; padding: 40px 20px;">
+        <div style="font-size: 40px; margin-bottom: 12px;">📊</div>
+        <h3 style="font-size: 16px; color: var(--gold); margin-bottom: 8px;">Sin pronósticos aún</h3>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">Sé el primero en predecir los resultados del Mundial.</p>
+        <a href="/pool/{pool.id}/predict" class="btn-primary" style="display: inline-block; font-size: 11px; padding: 10px 24px;">¡Predice ahora!</a>
       </div>
     {:else}
       <div style="display: flex; flex-direction: column; gap: 8px;">
         {#each data.leaderboard as entry, i}
-          <div class="leaderboard-row" style="display: flex; align-items: center; gap: 12px; background: {entry.user_id === data.userId ? 'rgba(201,168,76,0.08)' : 'var(--bg-card)'}; border: 1px solid {entry.user_id === data.userId ? 'var(--gold)' : 'var(--border)'}; border-radius: 8px; padding: 14px 16px; {entry.user_id === data.userId ? 'box-shadow: 0 0 12px rgba(201,168,76,0.15);' : ''}">
-            <div style="width: 28px; text-align: center; font-weight: 700; font-size: 16px; color: {i === 0 ? 'var(--gold)' : i === 1 ? '#c0c0c0' : i === 2 ? '#cd7f32' : 'var(--text-dim)'};">
-              {#if i === 0}🏆{:else}{i + 1}{/if}
+          <div class="leaderboard-row" style="display: flex; align-items: center; gap: 12px; background: {entry.user_id === data.userId ? 'rgba(201,168,76,0.08)' : 'var(--bg-card)'}; border: 1px solid {entry.user_id === data.userId ? 'var(--gold)' : i === 0 ? 'rgba(201,168,76,0.2)' : 'var(--border)'}; border-radius: 8px; padding: 12px 16px; {entry.user_id === data.userId ? 'box-shadow: 0 0 12px rgba(201,168,76,0.15);' : i === 0 ? 'box-shadow: 0 0 16px rgba(201,168,76,0.1);' : ''}">
+            <div style="width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; {i === 0 ? 'background: linear-gradient(135deg, #c9a84c, #e8c96a); color: #1a1a2e;' : i === 1 ? 'background: linear-gradient(135deg, #a0a0a0, #c0c0c0); color: #1a1a2e;' : i === 2 ? 'background: linear-gradient(135deg, #b87333, #cd7f32); color: #1a1a2e;' : 'background: rgba(255,255,255,0.06); color: var(--text-dim);'} flex-shrink: 0;">
+              {entry.display_name?.[0]?.toUpperCase() || '?'}
             </div>
             <div style="flex: 1; min-width: 0;">
               <div style="font-size: 13px; font-weight: 600; {entry.user_id === data.userId ? 'color: var(--gold);' : ''}">{entry.display_name}{entry.label ? ` (${entry.label})` : ''}</div>
@@ -127,8 +130,8 @@
               </div>
             </div>
             <div style="text-align: right;">
-              <div style="font-size: 16px; font-weight: 700; color: var(--gold);">{entry.total_score}</div>
-              <div style="font-size: 9px; color: var(--text-muted);">puntos</div>
+              <div style="font-size: 18px; font-weight: 700; color: var(--gold);">{entry.total_score}</div>
+              <div style="font-size: 9px; color: var(--text-muted);">pts</div>
             </div>
           </div>
         {/each}

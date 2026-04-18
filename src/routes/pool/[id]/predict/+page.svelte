@@ -343,11 +343,9 @@
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
           <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold);">{group}</div>
           {#if groupDone}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span><span style="color: var(--green); font-size: 11px;"> ✓</span>{:else}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>{/if}
-          <div style="margin-left: auto; display: flex; gap: 3px;">
-            {#each [0,1,2,3] as si}
-              <div style="width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; background: {si <= 2 ? MEDAL[si] + '22' : 'rgba(255,255,255,0.05)'}; color: {si <= 2 ? MEDAL[si] : 'var(--text-dim)'}; border: 1px solid {si <= 2 ? MEDAL[si] + '44' : 'var(--border)'};">{si + 1}</div>
-            {/each}
-          </div>
+          {#if groupDone}
+            <span style="margin-left: auto; font-size: 9px; color: var(--green); background: rgba(0,229,160,0.1); padding: 2px 8px; border-radius: 10px;">✓ Completo</span>
+          {/if}
         </div>
 
         <!-- Slot rows — each slot is a drop target -->
@@ -405,11 +403,9 @@
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
           <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold);">{group}</div>
           {#if groupDone}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span><span style="color: var(--green); font-size: 11px;"> ✓</span>{:else}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>{/if}
-          <div style="margin-left: auto; display: flex; gap: 3px;">
-            {#each [0,1,2,3] as si}
-              <div style="width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; background: {si <= 2 ? MEDAL[si] + '22' : 'rgba(255,255,255,0.05)'}; color: {si <= 2 ? MEDAL[si] : 'var(--text-dim)'}; border: 1px solid {si <= 2 ? MEDAL[si] + '44' : 'var(--border)'};">{si + 1}</div>
-            {/each}
-          </div>
+          {#if groupDone}
+            <span style="margin-left: auto; font-size: 9px; color: var(--green); background: rgba(0,229,160,0.1); padding: 2px 8px; border-radius: 10px;">✓ Completo</span>
+          {/if}
         </div>
 
         <!-- All teams in group, sorted: assigned first, then unassigned -->
@@ -431,11 +427,6 @@
               </div>
               <!-- Team info + position badge -->
               <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;">
-                {#if isSelected}
-                  <div style="width: 16px; height: 16px; border-radius: 50%; background: {MEDAL[mySlot]}; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; color: {mySlot === 0 ? '#3d2a00' : '#fff'}; flex-shrink: 0;">{mySlot + 1}</div>
-                {:else}
-                  <div style="width: 16px; height: 16px; flex-shrink: 0;"></div>
-                {/if}
                 <span style="font-size: 11px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-size: 16px; margin-right: 4px;">{flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
               </div>
             </div>

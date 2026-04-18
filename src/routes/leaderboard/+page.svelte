@@ -23,22 +23,19 @@
       <div style="display: grid; grid-template-columns: 40px 1fr 60px 60px; padding: 10px 16px; font-size: 8px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; border-bottom: 1px solid var(--border);">
         <div>#</div>
         <div>Usuario</div>
-        <div style="text-align: right;">Puntos</div>
+        <div style="text-align: right;">Pts</div>
         <div style="text-align: right;">Aciertos</div>
       </div>
       {#each leaderboard as entry}
-        <div style="display: grid; grid-template-columns: 40px 1fr 60px 60px; padding: 12px 16px; font-size: 12px; border-bottom: 1px solid var(--border); align-items: center;" class:gold={entry.rank === 1} class:silver={entry.rank === 2} class:bronze={entry.rank === 3}>
-          <div style="font-size: 14px;">
-            {#if entry.rank === 1}🥇
-            {:else if entry.rank === 2}🥈
-            {:else if entry.rank === 3}🥉
-            {:else}{entry.rank}{/if}
+        <div style="display: grid; grid-template-columns: 40px 1fr 70px 60px; padding: 12px 16px; font-size: 12px; border-bottom: 1px solid var(--border); align-items: center;" class:gold={entry.rank === 1} class:silver={entry.rank === 2} class:bronze={entry.rank === 3}>
+          <div style="width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; {entry.rank === 1 ? 'background: linear-gradient(135deg, #c9a84c, #e8c96a); color: #1a1a2e;' : entry.rank === 2 ? 'background: linear-gradient(135deg, #a0a0a0, #c0c0c0); color: #1a1a2e;' : entry.rank === 3 ? 'background: linear-gradient(135deg, #b87333, #cd7f32); color: #1a1a2e;' : 'background: rgba(255,255,255,0.06); color: var(--text-dim);'}">
+            {entry.display_name?.[0]?.toUpperCase() || '?'}
           </div>
           <div>
             <div style="font-weight: 600; color: var(--text);">{entry.display_name}</div>
             <div style="font-size: 9px; color: var(--text-muted);">@{entry.username} · {entry.pools_count} quiniela{entry.pools_count !== 1 ? 's' : ''}</div>
           </div>
-          <div style="text-align: right; font-weight: 700; color: var(--gold);">{entry.total_score}</div>
+          <div style="text-align: right; font-weight: 700; color: var(--gold); font-size: 14px;">{entry.total_score}</div>
           <div style="text-align: right; color: var(--text-muted); font-size: 11px;">{entry.total_correct}</div>
         </div>
       {/each}
