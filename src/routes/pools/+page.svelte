@@ -9,7 +9,9 @@
     </h1>
     <div style="display: flex; gap: 8px;">
       <a href="/join" class="btn-ghost" style="font-size: 9px; padding: 6px 14px;">Unirse</a>
-      <a href="/pools/create" class="btn-primary" style="font-size: 9px; padding: 6px 14px;">+ Crear</a>
+      {#if data.canCreate}
+        <a href="/pools/create" class="btn-primary" style="font-size: 9px; padding: 6px 14px;">+ Crear</a>
+      {/if}
     </div>
   </div>
 
@@ -18,7 +20,9 @@
       <div style="font-size: 40px; margin-bottom: 12px;">🏆</div>
       <p style="font-size: 13px; margin-bottom: 16px;">Aún no estás en ninguna quiniela</p>
       <div style="display: flex; gap: 8px; justify-content: center;">
-        <a href="/pools/create" class="btn-primary" style="font-size: 9px; padding: 8px 16px;">Crear quiniela</a>
+        {#if data.canCreate}
+          <a href="/pools/create" class="btn-primary" style="font-size: 9px; padding: 8px 16px;">Crear quiniela</a>
+        {/if}
         <a href="/join" class="btn-ghost" style="font-size: 9px; padding: 8px 16px;">Unirse</a>
       </div>
     </div>

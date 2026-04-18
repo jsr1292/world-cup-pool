@@ -146,8 +146,17 @@
         <div style="font-size: 40px; margin-bottom: 12px;">⚽</div>
         <h3 style="font-size: 16px; color: var(--gold); margin-bottom: 8px;">¡Empieza a predecir!</h3>
         <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 20px;">Rellena los resultados de cada grupo y luego el cuadro eliminatorio.</p>
-        <div style="display: flex; flex-direction: column; gap: 8px; align-items: center;">
-          <a href="/pool/{pool.id}/predict" class="btn-primary" style="font-size: 11px; padding: 10px 24px;">📋 Empezar a predecir</a>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 320px;">
+          <a href="/pool/{pool.id}/predict" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 20px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none;">
+            <span style="font-size: 24px;">📋</span>
+            <span style="font-size: 12px; font-weight: 600; color: var(--text);">Fase de Grupos</span>
+            <span style="font-size: 9px; color: var(--text-muted);">Predice 1º 2º 3º 4º</span>
+          </a>
+          <a href="/pool/{pool.id}/bracket" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 20px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none;">
+            <span style="font-size: 24px;">⚔️</span>
+            <span style="font-size: 12px; font-weight: 600; color: var(--text);">Eliminatorias</span>
+            <span style="font-size: 9px; color: var(--text-muted);">Cuadro completo</span>
+          </a>
         </div>
       </div>
     {:else}
@@ -155,14 +164,22 @@
         <h3 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Mis Pronósticos</h3>
       </div>
       {#each data.predictions as pred}
-        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 6px;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 12px;">{pred.label || 'Apuesta principal'}</span>
-            <span style="font-size: 12px; color: var(--gold); font-weight: 600;">{pred.total_score} pts</span>
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span style="font-size: 13px; font-weight: 600;">{pred.label || 'Apuesta principal'}</span>
+            <span style="font-size: 13px; color: var(--gold); font-weight: 700;">{pred.total_score} pts</span>
           </div>
-          <div style="margin-top: 8px; display: flex; gap: 8px;">
-            <a href="/pool/{pool.id}/predict" style="font-size: 10px; color: var(--gold);">📋 Grupos</a>
-            <a href="/pool/{pool.id}/bracket" style="font-size: 10px; color: var(--gold);">⚔️ Eliminatorias</a>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <a href="/pool/{pool.id}/predict" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none; transition: all 0.15s;">
+              <span style="font-size: 24px;">📋</span>
+              <span style="font-size: 12px; font-weight: 600; color: var(--text);">Fase de Grupos</span>
+              <span style="font-size: 9px; color: var(--text-muted);">Predice 1º 2º 3º 4º</span>
+            </a>
+            <a href="/pool/{pool.id}/bracket" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none; transition: all 0.15s;">
+              <span style="font-size: 24px;">⚔️</span>
+              <span style="font-size: 12px; font-weight: 600; color: var(--text);">Eliminatorias</span>
+              <span style="font-size: 9px; color: var(--text-muted);">Cuadro completo</span>
+            </a>
           </div>
         </div>
       {/each}

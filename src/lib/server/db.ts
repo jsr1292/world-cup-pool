@@ -156,4 +156,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_match_predictions_pred ON match_predictions(prediction_id);
   CREATE INDEX IF NOT EXISTS idx_group_predictions_pred ON group_predictions(prediction_id);
   CREATE INDEX IF NOT EXISTS idx_matches_phase ON matches(phase);
+
+  -- Site-wide settings
+  CREATE TABLE IF NOT EXISTS site_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  INSERT OR IGNORE INTO site_settings (key, value) VALUES ('can_create_pools', 'admin');
+
+  -- Users allowed to create pools (when mode is 'admin')
+  CREATE TABLE IF NOT EXISTS pool_creators (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE
+  );
 `);

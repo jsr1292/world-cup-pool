@@ -8,6 +8,12 @@
   let saving = $state(false);
   let message = $state('');
   let recalcMsg = $state('');
+  let memberSearch = $state('');
+
+  const filteredMembers = $derived(
+    memberSearch.length < 1 ? members
+      : members.filter(m => m.display_name.toLowerCase().includes(memberSearch.toLowerCase()))
+  );
 
   const pool = data.pool;
 
@@ -298,8 +304,14 @@
   <!-- Members & Payment -->
   <div style="margin-bottom: 24px;">
     <h2 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">Miembros</h2>
+    <input
+      type="text"
+      placeholder="🔍 Buscar miembro..."
+      bind:value={memberSearch}
+      style="width: 100%; padding: 8px 12px; font-size: 11px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); margin-bottom: 8px;"
+    />
     <div style="display: flex; flex-direction: column; gap: 4px;">
-      {#each members as member}
+      {#each filteredMembers as member}
         <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px;">
           <span style="font-size: 12px;">{member.display_name}</span>
           {#if pool.buy_in > 0}
