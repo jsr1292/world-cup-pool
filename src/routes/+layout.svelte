@@ -164,7 +164,7 @@
     left: 0;
     right: 0;
     z-index: 50;
-    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
+    padding: max(6px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
     background: var(--bg-nav);
   }
 
@@ -172,26 +172,26 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 44px;
+    height: 36px;
   }
 
   .top-bar-brand {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     font-family: 'Libre Baskerville', serif;
-    font-size: 14px;
+    font-size: 13px;
     color: var(--gold);
   }
 
   .top-bar-avatar {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: rgba(201, 168, 76, 0.2);
     border: 1px solid rgba(201, 168, 76, 0.4);
     color: var(--gold);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     display: flex;
     align-items: center;

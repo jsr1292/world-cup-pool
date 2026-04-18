@@ -122,7 +122,7 @@ button {
   background: var(--bg-nav);
   display: flex;
   justify-content: space-around;
-  padding: 6px max(8px, env(safe-area-inset-left)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-right));
+  padding: 2px max(8px, env(safe-area-inset-left)) max(2px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-right));
   z-index: 50;
 }
 
@@ -130,15 +130,15 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   background: none;
   border: none;
   color: var(--text-dim);
-  font-size: 9px;
-  letter-spacing: 0.08em;
+  font-size: 8px;
+  letter-spacing: 0.06em;
   min-width: 44px;
-  min-height: 44px;
-  padding: 4px 8px;
+  min-height: 40px;
+  padding: 3px 8px;
 }
 
 .bottom-nav button.active { color: var(--gold); }
@@ -229,8 +229,8 @@ button {
   .sidebar { display: none; }
   .main-content {
     padding: 12px;
-    padding-top: calc(12px + 56px + env(safe-area-inset-top, 0px));
-    padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+    padding-top: calc(8px + 42px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
   }
   .pool-grid { grid-template-columns: 1fr !important; }
   .stats-grid { grid-template-columns: repeat(3, 1fr) !important; }
