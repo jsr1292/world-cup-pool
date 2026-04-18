@@ -1067,18 +1067,40 @@
 
   @media (max-width: 600px) {
     .team-btn {
-      padding: 8px 8px;
-      font-size: 10px;
-      gap: 3px;
-      min-height: 36px;
+      padding: 10px 10px;
+      font-size: 11px;
+      gap: 4px;
+      min-height: 44px;
     }
 
-    .team-flag { font-size: 13px; }
-    .team-name { font-size: 10px; }
+    .team-flag { font-size: 15px; }
+    .team-name { font-size: 11px; }
 
-    .match-list { gap: 4px; }
+    .match-list { gap: 6px; }
+    .match-card { min-width: 110px; }
 
     .bracket-title { font-size: 16px; }
     .col-header { font-size: 9px; padding: 4px 8px; }
+
+    .bracket-scroll {
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 24px;
+    }
+
+    .bracket-grid {
+      min-width: 950px;
+      gap: 4px;
+    }
+
+    .match-final .team-btn {
+      min-height: 48px;
+      font-size: 13px;
+    }
+
+    .tiebreaker-input {
+      width: 64px;
+      font-size: 20px;
+      padding: 10px;
+    }
   }
 </style>

@@ -404,7 +404,7 @@
                     disabled={data.isLocked}
                     onclick={() => toggleSlot(group, si, team.id)}
                     title={POS_LABEL[si]}
-                    style="width: 24px; height: 24px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; border: 1.5px solid {mySlot === si ? MEDAL[si] : 'var(--border)'}; background: {mySlot === si ? MEDAL[si] : 'transparent'}; color: {mySlot === si ? (si === 0 ? '#3d2a00' : '#fff') : MEDAL[si] || 'var(--text-dim)'}; cursor: pointer; transition: all 0.1s; padding: 0;"
+                    style="width: 28px; height: 28px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; border: 1.5px solid {mySlot === si ? MEDAL[si] : 'var(--border)'}; background: {mySlot === si ? MEDAL[si] : 'transparent'}; color: {mySlot === si ? (si === 0 ? '#3d2a00' : '#fff') : MEDAL[si] || 'var(--text-dim)'}; cursor: pointer; transition: all 0.1s; padding: 0; touch-action: manipulation;"
                   >{si + 1}</button>
                 {/each}
               </div>
@@ -459,5 +459,16 @@
 
   @media (hover: none) and (pointer: coarse) {
     .desktop-hint { display: none; }
+    /* Bigger touch targets for tap-to-rank buttons */
+    button[title="1st"],
+    button[title="2nd"],
+    button[title="3rd"],
+    button[title="4th"] {
+      width: 36px !important;
+      height: 36px !important;
+      font-size: 13px !important;
+      margin: 2px;
+      touch-action: manipulation;
+    }
   }
 </style>
