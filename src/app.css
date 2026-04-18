@@ -120,9 +120,11 @@ button {
   left: 0;
   right: 0;
   background: var(--bg-nav);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   display: flex;
   justify-content: space-around;
-  padding: 2px max(8px, env(safe-area-inset-left)) max(2px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-right));
+  padding: 2px max(8px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-right));
   z-index: 50;
 }
 
