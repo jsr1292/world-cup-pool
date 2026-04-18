@@ -26,7 +26,7 @@
     <header class="top-bar">
       <div class="top-bar-inner">
         <div class="top-bar-brand">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--gold);"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="url(#gold-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e8c96a"/><stop offset="50%" stop-color="#c9a84c"/><stop offset="100%" stop-color="#f0d98c"/></linearGradient></defs><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
           <span>Mundial 2026</span>
         </div>
         <a href="/profile" class="top-bar-avatar" title="Perfil">
@@ -166,6 +166,10 @@
     z-index: 50;
     padding: max(6px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
     background: var(--bg-nav);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(201, 168, 76, 0.12);
+    box-shadow: 0 1px 12px rgba(0, 0, 0, 0.3);
   }
 
   .top-bar-inner {
@@ -178,31 +182,43 @@
   .top-bar-brand {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-family: 'Libre Baskerville', serif;
-    font-size: 13px;
-    color: var(--gold);
+    gap: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: linear-gradient(135deg, #e8c96a 0%, #c9a84c 40%, #f0d98c 60%, #b8943f 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .top-bar-brand svg {
+    filter: drop-shadow(0 0 4px rgba(201, 168, 76, 0.4));
   }
 
   .top-bar-avatar {
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: rgba(201, 168, 76, 0.2);
-    border: 1px solid rgba(201, 168, 76, 0.4);
+    background: rgba(13, 17, 32, 0.8);
+    border: 2px solid transparent;
+    background-image: linear-gradient(rgba(13, 17, 32, 0.8), rgba(13, 17, 32, 0.8)), linear-gradient(135deg, #e8c96a, #c9a84c, #b8943f);
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
     color: var(--gold);
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
     text-decoration: none;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: all 0.2s;
   }
 
   .top-bar-avatar:hover {
-    background: rgba(201, 168, 76, 0.3);
+    box-shadow: 0 0 8px rgba(201, 168, 76, 0.3);
   }
 
   /* Desktop: hide top bar, show sidebar */
