@@ -7,6 +7,7 @@
   let members = $derived.by(() => { void version; return [..._members]; });
   let saving = $state(false);
   let message = $state('');
+  let recalcMsg = $state('');
 
   const pool = data.pool;
 
@@ -271,6 +272,27 @@
         <span style="font-size: 11px; color: var(--green);">{message}</span>
       {/if}
     </div>
+
+    <!-- Recalculate Scores -->
+    <div style="margin-top: 12px; display: flex; align-items: center; gap: 10px;">
+      <button class="btn-ghost" onclick={async () => {
+        recalcMsg = 'Calculando...';
+        try {
+          const res = await fetch('/api/admin/recalculate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pool_id: pool.id }),
+          });
+          if (res.ok) { recalcMsg = '✓ Puntuaciones recalculadas'; setTimeout(() => recalcMsg = '', 3000); }
+          else { recalcMsg = '✗ Error'; }
+        } catch { recalcMsg = '✗ Error'; }
+      }} style="font-size: 9px; padding: 8px 16px;">
+        🔄 Recalcular puntuaciones
+      </button>
+      {#if recalcMsg}
+        <span style="font-size: 11px; color: {recalcMsg.startsWith('✓') ? 'var(--green)' : 'var(--text-muted)'};">{recalcMsg}</span>
+      {/if}
+    </div>
   </div>
 
   <!-- Members & Payment -->
@@ -296,6 +318,17 @@
   <!-- Match Results -->
   <div>
     <h2 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">Resultados de partidos</h2>
+    <div style="margin-bottom: 10px; display: flex; gap: 8px; align-items: center;">
+      <button class="btn-ghost" onclick={async () => {
+        try {
+          const res = await fetch('/api/admin/fifa-sync', { method: 'POST' });
+          const data = await res.json();
+          if (res.ok) alert(`Sincronizado: ${data.updated ?? 0} partidos actualizados`);
+          else alert('Error: ' + (data.error ?? 'desconocido'));
+        } catch { alert('Error de conexión'); }
+      }} style="font-size: 9px; padding: 8px 16px;">📡 Sincronizar con FIFA</button>
+      <span style="font-size: 9px; color: var(--text-dim);">Actualiza resultados automáticamente desde FIFA</span>
+    </div>
     {#if data.matches.length === 0}
       <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px;">
         No hay partidos de grupo configurados aún.
