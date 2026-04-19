@@ -71,18 +71,18 @@
     <h2 style="font-size: 12px; color: var(--text); font-weight: 600; margin-bottom: 12px;">¿Quién puede crear quinielas?</h2>
 
     <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
-      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 12px; border-radius: 6px; border: 1px solid {mode === 'admin' ? 'var(--gold)' : 'var(--border)'}; background: {mode === 'admin' ? 'rgba(232,201,106,0.06)' : 'transparent'};">
-        <input type="radio" name="mode" bind:group={mode} value="admin" style="accent-color: var(--gold);" />
-        <div>
-          <div style="font-size: 12px; color: var(--text);">Solo administradores y usuarios autorizados</div>
-          <div style="font-size: 9px; color: var(--text-muted);">Tú decides quién puede crear</div>
+      <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; padding: 10px 12px; border-radius: 6px; border: 1px solid {mode === 'admin' ? 'var(--gold)' : 'var(--border)'}; background: {mode === 'admin' ? 'rgba(232,201,106,0.06)' : 'transparent'};">
+        <input type="radio" name="mode" bind:group={mode} value="admin" style="accent-color: var(--gold); margin-top: 2px;" />
+        <div style="min-width: 0;">
+          <div style="font-size: 12px; color: var(--text); line-height: 1.4;">Solo administradores y usuarios autorizados</div>
+          <div style="font-size: 9px; color: var(--text-muted); margin-top: 2px;">Tú decides quién puede crear</div>
         </div>
       </label>
-      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 12px; border-radius: 6px; border: 1px solid {mode === 'anyone' ? 'var(--gold)' : 'var(--border)'}; background: {mode === 'anyone' ? 'rgba(232,201,106,0.06)' : 'transparent'};">
-        <input type="radio" name="mode" bind:group={mode} value="anyone" style="accent-color: var(--gold);" />
-        <div>
-          <div style="font-size: 12px; color: var(--text);">Cualquiera puede crear</div>
-          <div style="font-size: 9px; color: var(--text-muted);">Todos los usuarios registrados</div>
+      <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; padding: 10px 12px; border-radius: 6px; border: 1px solid {mode === 'anyone' ? 'var(--gold)' : 'var(--border)'}; background: {mode === 'anyone' ? 'rgba(232,201,106,0.06)' : 'transparent'};">
+        <input type="radio" name="mode" bind:group={mode} value="anyone" style="accent-color: var(--gold); margin-top: 2px;" />
+        <div style="min-width: 0;">
+          <div style="font-size: 12px; color: var(--text); line-height: 1.4;">Cualquiera puede crear</div>
+          <div style="font-size: 9px; color: var(--text-muted); margin-top: 2px;">Todos los usuarios registrados</div>
         </div>
       </label>
     </div>
