@@ -22,6 +22,7 @@
   const navItems = [
     { path: '/', label: 'Inicio', icon: 'home' },
     { path: '/leaderboard', label: 'Clasificación', icon: 'trophy' },
+    ...(data?.user?.is_admin ? [{ path: '/admin', label: 'Admin', icon: 'settings' }] : []),
     { path: '/profile', label: 'Perfil', icon: 'user' },
   ];
 </script>

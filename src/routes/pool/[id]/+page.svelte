@@ -174,8 +174,7 @@
           {copied ? '✓ Copiado' : 'Compartir enlace'}
         </button>
         {#if data.isAdmin}
-          <a href="/pool/{pool.id}/admin" class="btn-ghost" style="font-size: 9px; padding: 6px 14px; text-decoration: none;">⚙️ Pool</a>
-          <a href="/admin" class="btn-ghost" style="font-size: 9px; padding: 6px 14px; text-decoration: none;">🔧 Global</a>
+          <a href="/pool/{pool.id}/admin" class="btn-ghost" style="font-size: 9px; padding: 6px 14px; text-decoration: none;">⚙️ Admin</a>
         {/if}
       </div>
     </div>
