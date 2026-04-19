@@ -72,5 +72,74 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     groupPreds,
     bracketPreds,
     deadlinePassed: !!(pool as any).deadline_group && new Date((pool as any).deadline_group) <= new Date(),
+
+    // Results data
+    resultsPhases: (() => {
+      const matches = db.prepare(`
+        SELECT m.*, ht.name as home_name, ht.flag_code as home_flag,
+          at.name as away_name, at.flag_code as away_flag
+        FROM matches m
+        LEFT JOIN teams ht ON ht.id = m.home_team_id
+        LEFT JOIN teams at ON at.id = m.away_team_id
+        ORDER BY m.sort_order, m.kickoff
+      `).all() as any[];
+      const phases: Record<string, any[]> = {};
+      for (const m of matches) {
+        const phase = m.phase || 'other';
+        if (!phases[phase]) phases[phase] = [];
+        phases[phase].push(m);
+      }
+      return phases;
+    })(),
+    resultsTeamCache: (() => {
+      const ts = db.prepare('SELECT id, name, flag_code FROM teams').all() as any[];
+      const cache: Record<number, any> = {};
+      for (const t of ts) cache[t.id] = t;
+      return cache;
+    })(),
+    resultsGroupStandings: (() => {
+      const groupMatches = db.prepare(`
+        SELECT m.*, ht.name as home_name, ht.flag_code as home_flag,
+          at.name as away_name, at.flag_code as away_flag
+        FROM matches m
+        LEFT JOIN teams ht ON ht.id = m.home_team_id
+        LEFT JOIN teams at ON at.id = m.away_team_id
+        WHERE m.phase = 'group'
+      `).all() as any[];
+      const standings: Record<string, Record<number, { pts: number; gf: number; ga: number }>> = {};
+      const cache: Record<number, any> = {};
+      for (const m of groupMatches) {
+        if (m.home_team_id) cache[m.home_team_id] = { name: m.home_name, flag_code: m.home_flag };
+        if (m.away_team_id) cache[m.away_team_id] = { name: m.away_name, flag_code: m.away_flag };
+      }
+      for (const m of groupMatches) {
+        if (m.status !== 'finished' || m.home_score == null || !m.group_name) continue;
+        if (!standings[m.group_name]) standings[m.group_name] = {};
+        const gs = standings[m.group_name];
+        if (!gs[m.home_team_id]) gs[m.home_team_id] = { pts: 0, gf: 0, ga: 0 };
+        if (!gs[m.away_team_id]) gs[m.away_team_id] = { pts: 0, gf: 0, ga: 0 };
+        const h = gs[m.home_team_id], a = gs[m.away_team_id];
+        h.gf += m.home_score; h.ga += m.away_score;
+        a.gf += m.away_score; a.ga += m.home_score;
+        if (m.home_score > m.away_score) h.pts += 3;
+        else if (m.home_score < m.away_score) a.pts += 3;
+        else { h.pts += 1; a.pts += 1; }
+      }
+      const result: Record<string, any[]> = {};
+      for (const [group, teams] of Object.entries(standings)) {
+        result[group] = Object.entries(teams)
+          .map(([id, s]) => ({ id: Number(id), ...s, gd: s.gf - s.ga, ...cache[Number(id)] }))
+          .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+      }
+      return result;
+    })(),
+    userGroupPredsFull: predictions.length > 0 ? db.prepare(`
+      SELECT group_name, position_1, position_2, position_3, position_4, points_earned
+      FROM group_predictions WHERE prediction_id = ?
+    `).all(predictions[0].id) as any[] : [],
+    userBracketPredsFull: predictions.length > 0 ? db.prepare(`
+      SELECT phase, slot as match_index, team_id, points_earned
+      FROM bracket_predictions WHERE prediction_id = ?
+    `).all(predictions[0].id) as any[] : [],
   };
 };

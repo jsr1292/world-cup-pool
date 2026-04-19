@@ -30,12 +30,43 @@
     return grouped;
   }
 
+  // Results helpers
+  const resultsPhaseLabels: Record<string, string> = {
+    group: 'Fase de Grupos', r32: 'Dieciseisavos', r16: 'Octavos', qf: 'Cuartos',
+    sf: 'Semifinales', '3rd': '3er y 4to puesto', final: 'Final',
+  };
+  const resultsPhaseOrder = ['group', 'r32', 'r16', 'qf', 'sf', '3rd', 'final'];
+
+  // Build bracket lookup for results comparison
+  const bracketLookup: Record<string, Record<number, { team_id: number; points_earned: number }>> = {};
+  for (const bp of data.userBracketPredsFull) {
+    if (!bracketLookup[bp.phase]) bracketLookup[bp.phase] = {};
+    bracketLookup[bp.phase][bp.match_index] = { team_id: bp.team_id, points_earned: bp.points_earned };
+  }
+  const groupPredLookup: Record<string, number[]> = {};
+  for (const gp of data.userGroupPredsFull) {
+    groupPredLookup[gp.group_name] = [gp.position_1, gp.position_2, gp.position_3, gp.position_4];
+  }
+
+  function getTeamName(id: number) { return data.resultsTeamCache[id]?.name || 'TBD'; }
+  function getTeamFlag(id: number) { return flag(data.resultsTeamCache[id]?.flag_code || ''); }
+  function isGroupCorrect(groupName: string, position: number, actualTeamId: number) {
+    const predicted = groupPredLookup[groupName]?.[position - 1];
+    return predicted && predicted === actualTeamId;
+  }
+  function countFinished(phase: string) {
+    return (data.resultsPhases[phase] || []).filter((m: any) => m.status === 'finished').length;
+  }
+  function countTotal(phase: string) {
+    return (data.resultsPhases[phase] || []).length;
+  }
+
   const tabs = [
     { id: 'predictions', label: 'Pronósticos' },
     { id: 'leaderboard', label: 'Clasificación' },
     { id: 'members', label: 'Miembros' },
     { id: 'summary', label: '📋 Resumen' },
-    { id: 'results', label: '🏆 Resultados', link: true },
+    { id: 'results', label: '🏆 Resultados' },
     { id: 'scoring', label: 'Puntuación' },
   ];
 
@@ -383,6 +414,100 @@
 
         <div style="text-align: center; padding: 16px; border-top: 1px solid var(--border);">
           <p style="font-size: 9px; color: var(--text-muted);">📸 Haz captura para compartir</p>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+   {#if tab === 'results'}
+    <div style="max-width: 600px; margin: 0 auto;">
+      {#if data.predictions.length > 0}
+        {@const totalUserPoints = data.userGroupPredsFull.reduce((sum: number, g: any) => sum + (g.points_earned || 0), 0) + data.userBracketPredsFull.reduce((sum: number, b: any) => sum + (b.points_earned || 0), 0)}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <span style="font-size: 11px; color: var(--text-muted);">Tu puntuación</span>
+          <span style="font-size: 16px; font-weight: 700; color: var(--gold);">{totalUserPoints} pts</span>
+        </div>
+      {:else}
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 20px;">Aún no has hecho predicciones. <a href="/pool/{pool.id}/predict" style="color: var(--gold);">Predecir ahora</a></p>
+      {/if}
+
+      {#each resultsPhaseOrder as phase}
+        {@const matches = data.resultsPhases[phase] || []}
+        {@const finished = countFinished(phase)}
+        {@const total = countTotal(phase)}
+
+        {#if matches.length > 0}
+          <div style="margin-bottom: 24px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+              <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin: 0;">{resultsPhaseLabels[phase] || phase}</h2>
+              <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 8px; border-radius: 8px;">{finished}/{total} jugados</span>
+            </div>
+
+            {#if phase === 'group'}
+              {#each Object.entries(data.resultsGroupStandings).sort(([a], [b]) => a.localeCompare(b)) as [group, teams]}
+                {@const predicted = groupPredLookup[group]}
+                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                  <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px;">Grupo {group}</div>
+                  <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
+                    <tbody>
+                    <tr style="color: var(--text-muted); font-size: 9px;"><td style="padding: 2px 0; width: 24px;"></td><td style="padding: 2px 4px;"></td><td style="padding: 2px 4px; text-align: center;">Pts</td><td style="padding: 2px 4px; text-align: center;">GF</td><td style="padding: 2px 4px; text-align: center;">GC</td><td style="padding: 2px 4px; text-align: center;">DG</td>{#if predicted}<td style="padding: 2px 4px; text-align: center; font-size: 8px;">Pred.</td>{/if}</tr>
+                    {#each teams as team, idx}
+                      {@const correct = isGroupCorrect(group, idx + 1, team.id)}
+                      <tr style="border-top: 1px solid var(--border); {idx < 2 ? 'color: var(--text);' : 'color: var(--text-muted);'}">
+                        <td style="padding: 4px 0; font-size: 9px; color: var(--text-muted);">{idx + 1}</td>
+                        <td style="padding: 4px;">{flag(team.flag_code)} {team.name}</td>
+                        <td style="padding: 4px; text-align: center; font-weight: 600;">{team.pts}</td>
+                        <td style="padding: 4px; text-align: center;">{team.gf}</td>
+                        <td style="padding: 4px; text-align: center;">{team.ga}</td>
+                        <td style="padding: 4px; text-align: center;">{team.gd > 0 ? '+' : ''}{team.gd}</td>
+                        {#if predicted}
+                          <td style="padding: 4px; text-align: center;">{#if correct}<span style="color: var(--green); font-size: 10px;">✓</span>{:else if predicted[idx]}<span style="color: var(--text-muted); font-size: 9px;">✗</span>{:else}<span style="color: var(--text-muted); font-size: 9px;">—</span>{/if}</td>
+                        {/if}
+                      </tr>
+                    {/each}
+                    </tbody>
+                  </table>
+                </div>
+              {/each}
+              {#if Object.keys(data.resultsGroupStandings).length === 0}
+                <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No hay resultados de fase de grupos todavía.</p>
+              {/if}
+            {:else}
+              {#each matches as match, mi}
+                {@const pred = bracketLookup[phase]?.[mi]}
+                {@const isFinished = match.status === 'finished'}
+                {@const homeWin = isFinished && match.home_score > match.away_score}
+                {@const awayWin = isFinished && match.away_score > match.home_score}
+                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+                  <span style="flex: 1; text-align: right; font-size: 12px; {homeWin ? 'font-weight: 600; color: var(--text);' : isFinished ? 'color: var(--text-muted);' : 'color: var(--text);'}">{flag(match.home_flag)} {match.home_name ?? 'TBD'}</span>
+                  <div style="min-width: 56px; text-align: center;">
+                    {#if isFinished}
+                      <span style="font-size: 14px; font-weight: 700; color: var(--gold);">{match.home_score} - {match.away_score}</span>
+                    {:else}
+                      <span style="font-size: 9px; color: var(--text-muted);">Pend.</span>
+                    {/if}
+                  </div>
+                  <span style="flex: 1; text-align: left; font-size: 12px; {awayWin ? 'font-weight: 600; color: var(--text);' : isFinished ? 'color: var(--text-muted);' : 'color: var(--text);'}">{match.away_name ?? 'TBD'} {flag(match.away_flag)}</span>
+                </div>
+                {#if pred && isFinished}
+                  {@const actualWinner = homeWin ? match.home_team_id : awayWin ? match.away_team_id : null}
+                  {@const correct = actualWinner && pred.team_id === actualWinner}
+                  <div style="font-size: 9px; padding: 0 0 6px 0; text-align: center;">
+                    Tu predicción: {getTeamFlag(pred.team_id)} {getTeamName(pred.team_id)}
+                    {#if correct}<span style="color: var(--green);"> ✓ +{pred.points_earned}pts</span>{:else}<span style="color: var(--red);"> ✗</span>{/if}
+                  </div>
+                {/if}
+              {/each}
+            {/if}
+          </div>
+        {/if}
+      {/each}
+
+      {#if Object.keys(data.resultsPhases).length === 0}
+        <div style="text-align: center; padding: 40px 20px;">
+          <p style="font-size: 32px; margin-bottom: 8px;">⚽</p>
+          <p style="font-size: 12px; color: var(--text-muted);">Los resultados aparecerán aquí cuando comience el torneo.</p>
+          <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Mundial 2026 · 11 de junio</p>
         </div>
       {/if}
     </div>
