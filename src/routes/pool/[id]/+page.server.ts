@@ -71,5 +71,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     teams,
     groupPreds,
     bracketPreds,
+    deadlinePassed: !!(pool as any).deadline_group && new Date((pool as any).deadline_group) <= new Date(),
   };
 };

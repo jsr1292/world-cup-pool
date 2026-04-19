@@ -1,6 +1,6 @@
 <script lang="ts">
   let { data } = $props();
-  let tab = $state('predictions');
+  let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
   let copied = $state(false);
   let summaryEntry = $state(data.predictions.length > 0 ? data.predictions[0].id : null);
 
