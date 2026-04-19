@@ -68,11 +68,21 @@
     final_exact_score: 'Resultado exacto final',
   };
 
+  let shared = $state(false);
+
   function copyCode() {
     const url = `${window.location.origin}/join/${pool.invite_code}`;
     navigator.clipboard.writeText(url).then(() => {
       copied = true;
       setTimeout(() => { copied = false; }, 2000);
+    });
+  }
+
+  function shareScoreboard() {
+    const url = `${window.location.origin}/s/${pool.invite_code}`;
+    navigator.clipboard.writeText(url).then(() => {
+      shared = true;
+      setTimeout(() => { shared = false; }, 2000);
     });
   }
 </script>
@@ -166,6 +176,13 @@
           </div>
         </div>
       {/if}
+
+      <!-- Share scoreboard button -->
+      <div style="display: flex; justify-content: flex-end; margin-bottom: 4px;">
+        <button onclick={shareScoreboard} style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: {shared ? 'var(--green)' : 'var(--text-muted)'}; cursor: pointer;">
+          {shared ? '✓ Enlace copiado' : '🔗 Compartir clasificación'}
+        </button>
+      </div>
 
       <div style="display: flex; flex-direction: column; gap: 8px;">
         {#each data.leaderboard as entry, i}
