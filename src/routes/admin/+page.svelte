@@ -71,20 +71,22 @@
     <h2 style="font-size: 12px; color: var(--text); font-weight: 600; margin-bottom: 12px;">¿Quién puede crear quinielas?</h2>
 
     <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
-      <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; padding: 10px 12px; border-radius: 6px; border: 1px solid {mode === 'admin' ? 'var(--gold)' : 'var(--border)'}; background: {mode === 'admin' ? 'rgba(232,201,106,0.06)' : 'transparent'}; overflow: hidden;">
-        <input type="radio" name="mode" bind:group={mode} value="admin" style="accent-color: var(--gold); margin-top: 3px; flex-shrink: 0;" />
-        <div style="overflow-wrap: break-word; word-break: break-word;">
-          <div style="font-size: 12px; color: var(--text); line-height: 1.4;">Solo administradores y usuarios autorizados</div>
-          <div style="font-size: 9px; color: var(--text-muted); margin-top: 2px;">Tú decides quién puede crear</div>
-        </div>
-      </label>
-      <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; padding: 10px 12px; border-radius: 6px; border: 1px solid {mode === 'anyone' ? 'var(--gold)' : 'var(--border)'}; background: {mode === 'anyone' ? 'rgba(232,201,106,0.06)' : 'transparent'}; overflow: hidden;">
-        <input type="radio" name="mode" bind:group={mode} value="anyone" style="accent-color: var(--gold); margin-top: 3px; flex-shrink: 0;" />
-        <div style="overflow-wrap: break-word; word-break: break-word;">
-          <div style="font-size: 12px; color: var(--text); line-height: 1.4;">Cualquiera puede crear</div>
-          <div style="font-size: 9px; color: var(--text-muted); margin-top: 2px;">Todos los usuarios registrados</div>
-        </div>
-      </label>
+      <div onclick={() => mode = 'admin'} style="cursor: pointer; padding: 10px 12px; border-radius: 6px; border: 1px solid {mode === 'admin' ? 'var(--gold)' : 'var(--border)'}; background: {mode === 'admin' ? 'rgba(232,201,106,0.06)' : 'transparent'};">
+        <label style="display: block; cursor: pointer;">
+          <input type="radio" name="mode" bind:group={mode} value="admin" style="accent-color: var(--gold); vertical-align: middle; margin-right: 6px;" />
+          <span style="font-size: 12px; color: var(--text);">Solo administradores y usuarios autorizados</span>
+          <br />
+          <span style="font-size: 9px; color: var(--text-muted); margin-left: 22px;">Tú decides quién puede crear</span>
+        </label>
+      </div>
+      <div onclick={() => mode = 'anyone'} style="cursor: pointer; padding: 10px 12px; border-radius: 6px; border: 1px solid {mode === 'anyone' ? 'var(--gold)' : 'var(--border)'}; background: {mode === 'anyone' ? 'rgba(232,201,106,0.06)' : 'transparent'};">
+        <label style="display: block; cursor: pointer;">
+          <input type="radio" name="mode" bind:group={mode} value="anyone" style="accent-color: var(--gold); vertical-align: middle; margin-right: 6px;" />
+          <span style="font-size: 12px; color: var(--text);">Cualquiera puede crear</span>
+          <br />
+          <span style="font-size: 9px; color: var(--text-muted); margin-left: 22px;">Todos los usuarios registrados</span>
+        </label>
+      </div>
     </div>
 
     <button class="btn-primary" onclick={saveMode} disabled={saving} style="font-size: 9px; padding: 8px 16px;">
