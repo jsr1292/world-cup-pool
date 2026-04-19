@@ -1,6 +1,6 @@
 <script lang="ts">
   let { data } = $props();
-  let tab = $state('leaderboard');
+  let tab = $state('predictions');
   let copied = $state(false);
   let summaryEntry = $state(data.predictions.length > 0 ? data.predictions[0].id : null);
 
@@ -31,8 +31,8 @@
   }
 
   const tabs = [
-    { id: 'leaderboard', label: 'Clasificación' },
     { id: 'predictions', label: 'Pronósticos' },
+    { id: 'leaderboard', label: 'Clasificación' },
     { id: 'members', label: 'Miembros' },
     { id: 'summary', label: '📋 Resumen' },
     { id: 'results', label: '🏆 Resultados', link: true },
@@ -259,26 +259,23 @@
         </div>
       </div>
     {:else}
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h3 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Mis Pronósticos</h3>
-      </div>
       {#each data.predictions as pred}
         <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 8px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <span style="font-size: 13px; font-weight: 600;">{pred.label || 'Apuesta principal'}</span>
-            <span style="font-size: 13px; color: var(--gold); font-weight: 700;">{pred.total_score} pts</span>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            <a href="/pool/{pool.id}/predict" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none; transition: all 0.15s;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+            <a href="/pool/{pool.id}/predict" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none;">
               <span style="font-size: 24px;">📋</span>
               <span style="font-size: 12px; font-weight: 600; color: var(--text);">Fase de Grupos</span>
               <span style="font-size: 9px; color: var(--text-muted);">Predice 1º 2º 3º 4º</span>
             </a>
-            <a href="/pool/{pool.id}/bracket" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none; transition: all 0.15s;">
+            <a href="/pool/{pool.id}/bracket" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none;">
               <span style="font-size: 24px;">⚔️</span>
               <span style="font-size: 12px; font-weight: 600; color: var(--text);">Eliminatorias</span>
               <span style="font-size: 9px; color: var(--text-muted);">Cuadro completo</span>
             </a>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted);">
+            <span>{pred.label || 'Apuesta principal'}</span>
+            <span style="color: var(--gold); font-weight: 600;">{pred.total_score} pts</span>
           </div>
         </div>
       {/each}
