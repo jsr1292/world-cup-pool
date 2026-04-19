@@ -36,21 +36,23 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="url(#gold-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e8c96a"/><stop offset="50%" stop-color="#c9a84c"/><stop offset="100%" stop-color="#f0d98c"/></linearGradient></defs><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
           <span>Mundial 2026</span>
         </div>
-        {#if typeof window !== 'undefined'}
-          {@const kickoff = new Date('2026-06-11T00:00:00Z')}
-          {@const now = Date.now()}
-          {@const diff = kickoff.getTime() - now}
-          {#if diff > 0}
-            <div class="countdown" title="11 de junio de 2026">
-              {Math.ceil(diff / (1000 * 60 * 60 * 24))} días
-            </div>
-          {:else if diff > -(1000 * 60 * 60 * 24 * 35)}
-            <div class="countdown live">⚽ En juego</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          {#if typeof window !== 'undefined'}
+            {@const kickoff = new Date('2026-06-11T00:00:00Z')}
+            {@const now = Date.now()}
+            {@const diff = kickoff.getTime() - now}
+            {#if diff > 0}
+              <div class="countdown" title="11 de junio de 2026">
+                {Math.ceil(diff / (1000 * 60 * 60 * 24))} días
+              </div>
+            {:else if diff > -(1000 * 60 * 60 * 24 * 35)}
+              <div class="countdown live">⚽ En juego</div>
+            {/if}
           {/if}
-        {/if}
-        <a href="/profile" class="top-bar-avatar" title="Perfil">
-          {data.user.display_name?.charAt(0).toUpperCase() ?? '?'}
-        </a>
+          <a href="/profile" class="top-bar-avatar" title="Perfil">
+            {data.user.display_name?.charAt(0).toUpperCase() ?? '?'}
+          </a>
+        </div>
       </div>
     </header>
   {/if}
