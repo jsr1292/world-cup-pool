@@ -52,3 +52,21 @@ export function listBackups() {
     })
     .sort((a, b) => b.created.localeCompare(a.created));
 }
+
+export function restoreBackup(backupName: string) {
+  const backupPath = join(BACKUP_DIR, backupName);
+  if (!existsSync(backupPath)) throw new Error('Backup not found');
+
+  // Safety: create a pre-restore backup of current state
+  createBackup('pre-restore');
+
+  // Copy backup over the live DB
+  copyFileSync(backupPath, DB_PATH);
+
+  // Remove WAL/SHM so SQLite starts fresh
+  try { unlinkSync(DB_PATH + '-wal'); } catch {}
+  try { unlinkSync(DB_PATH + '-shm'); } catch {}
+
+  const s = statSync(DB_PATH);
+  return { name: backupName, size: s.size };
+}

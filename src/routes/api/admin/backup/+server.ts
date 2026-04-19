@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { createBackup, listBackups } from '$lib/server/backup.js';
+import { createBackup, listBackups, restoreBackup } from '$lib/server/backup.js';
 import { db } from '$lib/server/db.js';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -19,4 +19,26 @@ export const GET: RequestHandler = async ({ locals }) => {
   if (!user?.is_admin) return json({ error: 'Prohibido' }, { status: 403 });
 
   return json(listBackups());
+};
+
+// PUT /api/admin/backup — restore from a backup
+export const PUT: RequestHandler = async ({ request, locals }) => {
+  if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
+  const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(locals.user.id) as any;
+  if (!user?.is_admin) return json({ error: 'Prohibido' }, { status: 403 });
+
+  const { name } = await request.json() as { name: string };
+  if (!name) return json({ error: 'Falta nombre del backup' }, { status: 400 });
+
+  // Validate filename (no path traversal)
+  if (name.includes('/') || name.includes('\\') || name.includes('..')) {
+    return json({ error: 'Nombre inválido' }, { status: 400 });
+  }
+
+  try {
+    const result = restoreBackup(name);
+    return json({ ok: true, ...result });
+  } catch (e: any) {
+    return json({ error: e.message }, { status: 500 });
+  }
 };

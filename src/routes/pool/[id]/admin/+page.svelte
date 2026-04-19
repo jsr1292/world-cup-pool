@@ -9,6 +9,10 @@
   let message = $state('');
   let recalcMsg = $state('');
   let backupMsg = $state('');
+  let showBackups = $state(false);
+  let backupList = $state([]);
+  let restoreTarget = $state('');
+  let restoreMsg = $state('');
   let memberSearch = $state('');
 
   const filteredMembers = $derived(
@@ -317,6 +321,41 @@
         <span style="font-size: 11px; color: {backupMsg.startsWith('✓') ? 'var(--green)' : 'var(--text-muted)'};">{backupMsg}</span>
       {/if}
     </div>
+
+    <!-- Restore section -->
+    <div style="margin-top: 8px;">
+      <button class="btn-ghost" onclick={async () => {
+        showBackups = !showBackups;
+        if (showBackups) {
+          const res = await fetch('/api/admin/backup');
+          if (res.ok) backupList = await res.json();
+        }
+      }} style="font-size: 9px; padding: 8px 16px;">
+        {showBackups ? '▾ Cerrar' : '📂 Ver backups'}
+      </button>
+      {#if showBackups}
+        <div style="margin-top: 8px; max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+          {#if backupList.length === 0}
+            <span style="font-size: 10px; color: var(--text-muted);">Sin backups</span>
+          {:else}
+            {#each backupList as bk}
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; font-size: 10px;">
+                <div>
+                  <span style="color: var(--text);">{bk.name}</span>
+                  <span style="color: var(--text-muted); margin-left: 6px;">{(bk.size / 1024).toFixed(0)}KB</span>
+                </div>
+                <button onclick={() => { restoreTarget = bk.name; restoreMsg = ''; }} style="font-size: 9px; padding: 3px 8px; border: 1px solid var(--red); border-radius: 4px; background: rgba(255,77,106,0.1); color: var(--red); cursor: pointer;">
+                  Restaurar
+                </button>
+              </div>
+            {/each}
+          {/if}
+        </div>
+      {/if}
+      {#if restoreMsg}
+        <span style="font-size: 11px; color: {restoreMsg.startsWith('✓') ? 'var(--green)' : 'var(--text-muted)'};">{restoreMsg}</span>
+      {/if}
+    </div>
   </div>
 
   <!-- Members & Payment -->
@@ -432,6 +471,35 @@
             style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--red); border-radius: 6px; background: rgba(255,77,106,0.15); color: var(--red); cursor: pointer; font-weight: 500;">
             Confirmar
           </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Restore Confirmation Dialog -->
+  {#if restoreTarget}
+    <div style="position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);" role="dialog" aria-modal="true">
+      <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px; max-width: 340px; width: 90%;" onclick={(e) => e.stopPropagation()}>
+        <div style="font-size: 13px; font-weight: 600; color: var(--red); margin-bottom: 8px;">⚠️ Restaurar backup</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; line-height: 1.5;">
+          Esto reemplazará TODA la base de datos actual con:
+        </div>
+        <div style="font-size: 11px; color: var(--text); background: var(--bg-surface); padding: 8px; border-radius: 4px; margin-bottom: 12px; word-break: break-all;">{restoreTarget}</div>
+        <div style="font-size: 10px; color: var(--green); margin-bottom: 16px;">✓ Se creará un backup del estado actual antes de restaurar</div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button onclick={() => { restoreTarget = ''; }} style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer;">Cancelar</button>
+          <button onclick={async () => {
+            restoreMsg = 'Restaurando...';
+            try {
+              const res = await fetch('/api/admin/backup', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: restoreTarget }),
+              });
+              if (res.ok) { restoreMsg = '✓ Restaurado. Recarga la página.'; restoreTarget = ''; }
+              else { restoreMsg = '✗ Error'; }
+            } catch { restoreMsg = '✗ Error'; }
+          }} style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--red); border-radius: 6px; background: rgba(255,77,106,0.15); color: var(--red); cursor: pointer; font-weight: 500;">Restaurar</button>
         </div>
       </div>
     </div>
