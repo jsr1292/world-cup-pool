@@ -4,8 +4,10 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_PATH = join(__dirname, '../data/pool.db');
-const BACKUP_DIR = join(__dirname, '../data/backups');
+// Resolve from project root, not compiled output
+const ROOT = join(__dirname, '../../..');
+const DB_PATH = join(ROOT, 'data/pool.db');
+const BACKUP_DIR = join(ROOT, 'data/backups');
 const MAX_BACKUPS = 30; // Keep last 30 backups (~1 month of daily)
 
 function ensureBackupDir() {
