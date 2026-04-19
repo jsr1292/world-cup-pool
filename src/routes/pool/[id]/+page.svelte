@@ -72,18 +72,45 @@
 
   function copyCode() {
     const url = `${window.location.origin}/join/${pool.invite_code}`;
-    navigator.clipboard.writeText(url).then(() => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(url).then(() => {
+        copied = true;
+        setTimeout(() => { copied = false; }, 2000);
+      });
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
       copied = true;
       setTimeout(() => { copied = false; }, 2000);
-    });
+    }
   }
 
   function shareScoreboard() {
     const url = `${window.location.origin}/s/${pool.invite_code}`;
-    navigator.clipboard.writeText(url).then(() => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(url).then(() => {
+        shared = true;
+        setTimeout(() => { shared = false; }, 2000);
+      });
+    } else {
+      // Fallback for HTTP
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
       shared = true;
       setTimeout(() => { shared = false; }, 2000);
-    });
+    }
   }
 </script>
 
