@@ -45,7 +45,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
       // Bracket predictions
       userBracketPreds = db.prepare(`
-        SELECT phase, match_index, team_id, points_earned
+        SELECT phase, slot as match_index, team_id, points_earned
         FROM bracket_predictions WHERE prediction_id = ?
       `).all(selectedEntryId) as any[];
     }
