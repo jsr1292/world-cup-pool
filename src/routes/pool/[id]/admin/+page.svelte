@@ -8,6 +8,7 @@
   let saving = $state(false);
   let message = $state('');
   let recalcMsg = $state('');
+  let backupMsg = $state('');
   let memberSearch = $state('');
 
   const filteredMembers = $derived(
@@ -297,6 +298,23 @@
       </button>
       {#if recalcMsg}
         <span style="font-size: 11px; color: {recalcMsg.startsWith('✓') ? 'var(--green)' : 'var(--text-muted)'};">{recalcMsg}</span>
+      {/if}
+      <button class="btn-ghost" onclick={async () => {
+        backupMsg = 'Guardando...';
+        try {
+          const res = await fetch('/api/admin/backup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ label: 'admin' }),
+          });
+          if (res.ok) { backupMsg = '✓ Backup creado'; setTimeout(() => backupMsg = '', 3000); }
+          else { backupMsg = '✗ Error'; }
+        } catch { backupMsg = '✗ Error'; }
+      }} style="font-size: 9px; padding: 8px 16px;">
+        💾 Crear backup
+      </button>
+      {#if backupMsg}
+        <span style="font-size: 11px; color: {backupMsg.startsWith('✓') ? 'var(--green)' : 'var(--text-muted)'};">{backupMsg}</span>
       {/if}
     </div>
   </div>

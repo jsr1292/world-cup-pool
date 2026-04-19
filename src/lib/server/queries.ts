@@ -48,34 +48,40 @@ export function authenticateUser(username: string, password: string) {
 // Pool CRUD
 export function createPool(name: string, createdBy: number, buyIn = 0, allowMultiple = 0, currency = 'EUR') {
   const inviteCode = generateInviteCode();
-  const stmt = db.prepare(`
-    INSERT INTO pools (name, invite_code, created_by, buy_in, allow_multiple_predictions, currency)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  const result = stmt.run(name, inviteCode, createdBy, buyIn, allowMultiple, currency);
 
-  // Creator auto-joins
-  db.prepare('INSERT INTO pool_members (pool_id, user_id) VALUES (?, ?)').run(Number(result.lastInsertRowid), createdBy);
+  const doCreate = db.transaction(() => {
+    const stmt = db.prepare(`
+      INSERT INTO pools (name, invite_code, created_by, buy_in, allow_multiple_predictions, currency)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(name, inviteCode, createdBy, buyIn, allowMultiple, currency);
+    const poolId = Number(result.lastInsertRowid);
 
-  // Default scoring config
-  const defaults = [
-    ['match_outcome', 1],
-    ['exact_score', 3],
-    ['group_position', 2],
-    ['knockout_r32', 2],
-    ['knockout_r16', 3],
-    ['knockout_qf', 4],
-    ['knockout_sf', 6],
-    ['knockout_final', 6],
-    ['knockout_winner', 8],
-    ['final_exact_score', 5],
-  ];
-  const insertConfig = db.prepare('INSERT INTO scoring_config (pool_id, rule, points) VALUES (?, ?, ?)');
-  for (const [rule, pts] of defaults) {
-    insertConfig.run(Number(result.lastInsertRowid), rule, pts);
-  }
+    // Creator auto-joins
+    db.prepare('INSERT INTO pool_members (pool_id, user_id) VALUES (?, ?)').run(poolId, createdBy);
 
-  return { id: result.lastInsertRowid, inviteCode };
+    // Default scoring config
+    const defaults = [
+      ['match_outcome', 1],
+      ['exact_score', 3],
+      ['group_position', 2],
+      ['knockout_r32', 2],
+      ['knockout_r16', 3],
+      ['knockout_qf', 4],
+      ['knockout_sf', 6],
+      ['knockout_final', 6],
+      ['knockout_winner', 8],
+      ['final_exact_score', 5],
+    ];
+    const insertConfig = db.prepare('INSERT INTO scoring_config (pool_id, rule, points) VALUES (?, ?, ?)');
+    for (const [rule, pts] of defaults) {
+      insertConfig.run(poolId, rule, pts);
+    }
+
+    return { id: poolId, inviteCode };
+  });
+
+  return doCreate();
 }
 
 export function getPoolByInvite(code: string) {
