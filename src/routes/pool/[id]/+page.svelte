@@ -137,14 +137,44 @@
         <a href="/pool/{pool.id}/predict" class="btn-primary" style="display: inline-block; font-size: 11px; padding: 10px 24px;">¡Predice ahora!</a>
       </div>
     {:else}
+      {@const myIndex = data.leaderboard.findIndex((e: any) => e.user_id === data.userId)}
+      {@const myEntry = myIndex >= 0 ? data.leaderboard[myIndex] : null}
+      {@const prevEntry = myIndex > 0 ? data.leaderboard[myIndex - 1] : null}
+      {@const nextEntry = myIndex < data.leaderboard.length - 1 ? data.leaderboard[myIndex + 1] : null}
+
+      <!-- Your position card -->
+      {#if myEntry && data.leaderboard.length > 5}
+        <div style="background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.25); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; cursor: pointer;" onclick={() => document.getElementById('my-row')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="font-size: 22px; font-weight: 800; color: var(--gold);">{myIndex + 1}º</div>
+              <div>
+                <div style="font-size: 12px; font-weight: 600; color: var(--gold);">Tu posición</div>
+                <div style="font-size: 10px; color: var(--text-muted);">{myEntry.total_score} pts</div>
+              </div>
+            </div>
+            <div style="text-align: right;">
+              {#if prevEntry}
+                <div style="font-size: 9px; color: var(--text-muted);">
+                  {prevEntry.total_score - myEntry.total_score > 0 ? `${prevEntry.total_score - myEntry.total_score} pts para ${myIndex}º` : `¡empatado con ${myIndex}º!`}
+                </div>
+              {/if}
+              {#if data.leaderboard.length > 3}
+                <div style="font-size: 8px; color: var(--text-dim); margin-top: 2px;">toca para ir</div>
+              {/if}
+            </div>
+          </div>
+        </div>
+      {/if}
+
       <div style="display: flex; flex-direction: column; gap: 8px;">
         {#each data.leaderboard as entry, i}
-          <div class="leaderboard-row" style="display: flex; align-items: center; gap: 12px; background: {entry.user_id === data.userId ? 'rgba(201,168,76,0.08)' : 'var(--bg-card)'}; border: 1px solid {entry.user_id === data.userId ? 'var(--gold)' : i === 0 ? 'rgba(201,168,76,0.2)' : 'var(--border)'}; border-radius: 8px; padding: 12px 16px; {entry.user_id === data.userId ? 'box-shadow: 0 0 12px rgba(201,168,76,0.15);' : i === 0 ? 'box-shadow: 0 0 16px rgba(201,168,76,0.1);' : ''}">
+          <div id={entry.user_id === data.userId ? 'my-row' : ''} class="leaderboard-row" style="display: flex; align-items: center; gap: 12px; background: {entry.user_id === data.userId ? 'rgba(201,168,76,0.08)' : 'var(--bg-card)'}; border: 1px solid {entry.user_id === data.userId ? 'var(--gold)' : i === 0 ? 'rgba(201,168,76,0.2)' : 'var(--border)'}; border-radius: 8px; padding: 12px 16px; {entry.user_id === data.userId ? 'box-shadow: 0 0 12px rgba(201,168,76,0.15);' : i === 0 ? 'box-shadow: 0 0 16px rgba(201,168,76,0.1);' : ''}">
             <div style="width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; {i === 0 ? 'background: linear-gradient(135deg, #c9a84c, #e8c96a); color: #1a1a2e;' : i === 1 ? 'background: linear-gradient(135deg, #a0a0a0, #c0c0c0); color: #1a1a2e;' : i === 2 ? 'background: linear-gradient(135deg, #b87333, #cd7f32); color: #1a1a2e;' : 'background: rgba(255,255,255,0.06); color: var(--text-dim);'} flex-shrink: 0;">
               {entry.display_name?.[0]?.toUpperCase() || '?'}
             </div>
             <div style="flex: 1; min-width: 0;">
-              <div style="font-size: 13px; font-weight: 600; {entry.user_id === data.userId ? 'color: var(--gold);' : ''}">{entry.display_name}{entry.label ? ` (${entry.label})` : ''}</div>
+              <div style="font-size: 13px; font-weight: 600; {entry.user_id === data.userId ? 'color: var(--gold);' : ''}">{i + 1}. {entry.display_name}{entry.label ? ` (${entry.label})` : ''}</div>
               <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">
                 {#if entry.group_correct > 0}
                   <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">Grupos: {entry.group_correct}</span>
