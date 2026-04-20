@@ -145,13 +145,16 @@
   }
 </script>
 
-<div>
+<div style="flex: 1; display: flex; flex-direction: column;">
   <!-- Sticky Back Link -->
-  <div style="position: sticky; top: 0; z-index: 10; background: var(--bg-base); padding: 8px 0; margin-bottom: 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px;">
+  <div style="position: sticky; top: 0; z-index: 10; background: var(--bg-base); padding: 8px 0; margin-bottom: 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
     <a href="/" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; text-decoration: none;">← Quinielas</a>
     <span style="color: var(--border); font-size: 10px;">/</span>
     <span style="font-size: 10px; color: var(--gold);">{pool.name}</span>
   </div>
+
+  <!-- Content -->
+  <div style="flex: 1; display: flex; flex-direction: column;">
 
   <!-- Pool Header -->
   <div style="margin-bottom: 24px; padding: 24px; background: linear-gradient(135deg, rgba(201,168,76,0.08) 0%, transparent 100%); border-radius: 16px; border: 1px solid rgba(201,168,76,0.12);">
@@ -512,4 +515,5 @@
       {/if}
     </div>
   {/if}
+  </div>
 </div>

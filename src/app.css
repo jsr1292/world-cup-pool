@@ -152,6 +152,7 @@ button {
 @media (min-width: 768px) {
   .app-layout {
     display: flex;
+    flex-direction: column;
     min-height: 100dvh;
   }
   .sidebar {
@@ -231,11 +232,19 @@ button {
 }
 
 @media (max-width: 767px) {
+  .app-layout {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
   .sidebar { display: none; }
   .main-content {
+    display: flex;
+    flex-direction: column;
     padding: 12px;
-    padding-top: calc(8px + 42px + max(44px, env(safe-area-inset-top, 0px)));
-    padding-bottom: calc(5rem + max(20px, env(safe-area-inset-bottom, 0px)));
+    padding-top: calc(8px + 36px + max(12px, env(safe-area-inset-top, 0px)));
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
+    flex: 1;
   }
   .pool-grid { grid-template-columns: 1fr !important; }
   .stats-grid { grid-template-columns: repeat(3, 1fr) !important; }
