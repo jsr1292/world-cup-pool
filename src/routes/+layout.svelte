@@ -27,7 +27,7 @@
   ];
 </script>
 
-<div class="app-layout">
+<div class="app-layout" style="min-height: 100dvh; padding-bottom: 80px;">
   <!-- Top Bar (mobile only) -->
   {#if data?.user}
     <header class="top-bar">
@@ -180,17 +180,11 @@
 
   /* Mobile top bar */
   .top-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 50;
-    padding: max(12px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
     background: var(--bg-nav);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid rgba(201, 168, 76, 0.12);
-    box-shadow: 0 1px 12px rgba(0, 0, 0, 0.3);
+    padding: max(12px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
   }
 
   .top-bar-inner {
