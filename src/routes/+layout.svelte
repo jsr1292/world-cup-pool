@@ -180,7 +180,10 @@
 
   /* Mobile top bar */
   .top-bar {
-    background: var(--bg-nav);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(13,17,32,0.80);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid rgba(201, 168, 76, 0.12);
