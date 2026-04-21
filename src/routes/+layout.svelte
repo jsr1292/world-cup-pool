@@ -27,7 +27,7 @@
   ];
 </script>
 
-<div class="app-layout" style="min-height: 100dvh; padding-bottom: 80px;">
+<div class="app-layout" style="height: 100vh; padding-bottom: 0;">
   <!-- Top Bar (mobile only) -->
   {#if data?.user}
     <header class="top-bar">
@@ -119,20 +119,21 @@
     {@render children()}
   </main>
 
-  <!-- Mobile Bottom Nav -->
-  {#if data?.user}
-  <div class="bottom-nav">
-    {#each navItems as item}
-      <a href={item.path}>
-        <button class:active={isActive(item.path)}>
-          <svg class="nav-icon-mobile"><use href="/icon.svg#{item.icon}" /></svg>
-          <span class="nav-label">{item.label}</span>
-        </button>
-      </a>
-    {/each}
-  </div>
-  {/if}
 </div>
+
+<!-- Mobile Bottom Nav — OUTSIDE the wrapper so position:fixed is truly viewport-relative -->
+{#if data?.user}
+<div class="bottom-nav">
+  {#each navItems as item}
+    <a href={item.path}>
+      <button class:active={isActive(item.path)}>
+        <svg class="nav-icon-mobile"><use href="/icon.svg#{item.icon}" /></svg>
+        <span class="nav-label">{item.label}</span>
+      </button>
+    </a>
+  {/each}
+</div>
+{/if}
 
 <style>
   .nav-link {
