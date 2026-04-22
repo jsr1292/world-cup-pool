@@ -1,10 +1,28 @@
 <script lang="ts">
+  import { headerTitle } from '$lib/stores/header';
+  import { haptic } from '$lib/haptic';
   let { data } = $props();
   let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
+  const tabIndexOrder = ['predictions', 'leaderboard', 'members', 'summary', 'results', 'scoring'];
+  let prevTabIndex = $state(tabIndexOrder.indexOf(tab));
+  let slideDir = $state<'left' | 'right'>('left');
+  function switchTab(newTab: string) {
+    haptic(8);
+    const oldIdx = tabIndexOrder.indexOf(tab);
+    const newIdx = tabIndexOrder.indexOf(newTab);
+    prevTabIndex = newIdx;
+    slideDir = newIdx > oldIdx ? 'left' : 'right';
+    tab = newTab;
+  }
   let copied = $state(false);
   let summaryEntry = $state(data.predictions.length > 0 ? data.predictions[0].id : null);
 
   const pool = data.pool;
+
+  $effect(() => {
+    headerTitle.set({ text: pool.name, emoji: pool.emoji || '🏆', showBack: false, poolName: pool.name, poolEmoji: pool.emoji || '🏆' });
+    return () => { headerTitle.set({ text: 'Mundial 2026', emoji: '🏆', showBack: false, poolName: null, poolEmoji: null }); };
+  });
 
   const phaseOrder = ['r32', 'r16', 'qf', 'sf', '3rd', 'final'];
 
@@ -100,6 +118,23 @@
   };
 
   let shared = $state(false);
+  let sheetOpen = $state(false);
+  let sheetStartY = 0;
+  let sheetDrag = $state(0);
+
+  function openSheet() { sheetOpen = true; haptic(8); }
+  function closeSheet() { sheetOpen = false; sheetDrag = 0; }
+  function onSheetTouchStart(e: TouchEvent) { sheetStartY = e.touches[0].clientY; }
+  function onSheetTouchMove(e: TouchEvent) {
+    if (!sheetOpen) return;
+    const dy = e.touches[0].clientY - sheetStartY;
+    sheetDrag = Math.max(0, dy);
+  }
+  function onSheetTouchEnd() {
+    if (sheetDrag > 80) closeSheet();
+    else sheetDrag = 0;
+    sheetStartY = 0;
+  }
 
   function copyCode() {
     const url = `${window.location.origin}/join/${pool.invite_code}`;
@@ -173,12 +208,7 @@
       </div>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
         <span style="font-size: 10px; color: var(--text-muted);">🔗 <span style="color: var(--gold); font-weight: 600;">{pool.invite_code}</span></span>
-        <button onclick={copyCode} style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: {copied ? 'var(--green)' : 'var(--text-muted)'}; cursor: pointer; transition: all 0.2s;">
-          {copied ? '✓ Copiado' : 'Compartir enlace'}
-        </button>
-        {#if data.isAdmin}
-          <a href="/pool/{pool.id}/admin" class="btn-ghost" style="font-size: 9px; padding: 6px 14px; text-decoration: none;">⚙️ Admin</a>
-        {/if}
+        <button onclick={openSheet} style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 14px; color: var(--text-muted); cursor: pointer; line-height: 1;">⋯</button>
       </div>
     </div>
   </div>
@@ -190,7 +220,7 @@
         <a href="/pool/{pool.id}/{t.id}" class="pool-tab" class:active={false}>{t.label}</a>
       {:else}
         <button
-          onclick={() => tab = t.id}
+          onclick={() => switchTab(t.id)}
           class="pool-tab"
           class:active={tab === t.id}
         >{t.label}</button>
@@ -198,6 +228,8 @@
     {/each}
   </div>
 
+  <!-- Tab Content with slide animation -->
+  <div class="tab-content-wrapper slide-{slideDir}">
   <!-- Clasificación -->
   {#if tab === 'leaderboard'}
     {#if data.leaderboard == null}
@@ -254,7 +286,7 @@
 
       <!-- Share scoreboard button -->
       <div style="display: flex; justify-content: flex-end; margin-bottom: 4px;">
-        <button onclick={shareScoreboard} style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: {shared ? 'var(--green)' : 'var(--text-muted)'}; cursor: pointer;">
+        <button onclick={() => { shareScoreboard(); haptic(10); }} style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: {shared ? 'var(--green)' : 'var(--text-muted)'}; cursor: pointer;">
           {shared ? '✓ Enlace copiado' : '🔗 Compartir clasificación'}
         </button>
       </div>
@@ -541,4 +573,50 @@
     </div>
   {/if}
   </div>
+  </div>
 </div>
+
+<!-- Bottom Sheet for Pool Actions -->
+{#if sheetOpen}
+  <div class="bottom-sheet-overlay" onclick={closeSheet} ontouchstart={onSheetTouchStart} ontouchmove={onSheetTouchMove} ontouchend={onSheetTouchEnd}>
+    <div class="bottom-sheet" style="transform: translateY({sheetDrag}px);" ontouchstart={onSheetTouchStart} ontouchmove={onSheetTouchMove} ontouchend={onSheetTouchEnd} onclick={(e) => e.stopPropagation()}>
+      <div class="bottom-sheet-handle"></div>
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <button onclick={() => { copyCode(); haptic(10); closeSheet(); }} style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-size: 13px; color: var(--text); cursor: pointer; text-align: left; display: flex; align-items: center; gap: 12px; width: 100%;">
+          <span style="font-size: 16px;">🔗</span> {copied ? '¡Copiado!' : 'Copiar enlace de invitación'}
+        </button>
+        <button onclick={() => { shareScoreboard(); haptic(10); closeSheet(); }} style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-size: 13px; color: var(--text); cursor: pointer; text-align: left; display: flex; align-items: center; gap: 12px; width: 100%;">
+          <span style="font-size: 16px;">📊</span> {shared ? '¡Copiado!' : 'Compartir clasificación'}
+        </button>
+        {#if data.isAdmin}
+          <a href="/pool/{pool.id}/admin" onclick={() => haptic(10)} style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-size: 13px; color: var(--text); cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 16px;">⚙️</span> Administración
+          </a>
+        {/if}
+        <button onclick={() => { haptic(10); closeSheet(); }} style="background: none; border: none; border-top: 1px solid var(--border); padding: 16px; font-size: 13px; color: var(--text-muted); cursor: pointer; text-align: center; width: 100%; margin-top: 4px;">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<style>
+  .tab-content-wrapper {
+    transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+  }
+  .slide-left {
+    animation: slideFromRight 0.2s ease-out;
+  }
+  .slide-right {
+    animation: slideFromLeft 0.2s ease-out;
+  }
+  @keyframes slideFromRight {
+    from { transform: translateX(24px); opacity: 0.6; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes slideFromLeft {
+    from { transform: translateX(-24px); opacity: 0.6; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+</style>

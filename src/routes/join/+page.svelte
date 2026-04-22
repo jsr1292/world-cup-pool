@@ -1,4 +1,5 @@
 <script>
+  import { haptic } from '$lib/haptic';
   let code = $state('');
   let error = $state('');
   let loading = $state(false);
@@ -44,7 +45,7 @@
       <p style="font-size: 10px; color: var(--red);">{error}</p>
     {/if}
 
-    <button type="submit" class="btn-primary" style="width: 100%;" disabled={loading}>
+    <button type="submit" class="btn-primary" style="width: 100%;" disabled={loading} onclick={() => haptic(10)}>
       {loading ? 'Uniéndose...' : 'Unirse'}
     </button>
   </form>

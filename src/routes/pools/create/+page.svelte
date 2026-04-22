@@ -1,4 +1,5 @@
 <script>
+  import { haptic } from '$lib/haptic';
   let name = $state('');
   let buyIn = $state('0');
   let allowMultiple = $state(false);
@@ -61,7 +62,7 @@
       <p style="font-size: 10px; color: var(--red);">{error}</p>
     {/if}
 
-    <button type="submit" class="btn-primary" style="width: 100%;" disabled={loading}>
+    <button type="submit" class="btn-primary" style="width: 100%;" disabled={loading} onclick={() => haptic(10)}>
       {loading ? 'Creando...' : 'Crear Quiniela'}
     </button>
   </form>

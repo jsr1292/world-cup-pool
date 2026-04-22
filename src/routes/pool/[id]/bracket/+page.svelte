@@ -1,6 +1,13 @@
 <script>
   import { showToast } from '$lib/toast';
+  import { haptic } from '$lib/haptic';
+  import { headerTitle } from '$lib/stores/header';
   let { data } = $props();
+
+  $effect(() => {
+    headerTitle.set({ text: 'Mi Quiniela', emoji: '⚔️', showBack: true, poolName: data.pool?.name, poolEmoji: data.pool?.emoji || '⚔️' });
+    return () => { headerTitle.set({ text: 'Mundial 2026', emoji: '🏆', showBack: false, poolName: null, poolEmoji: null }); };
+  });
 
   const R32_MAP = [
     { t1g: 'A', t1p: 1, t2g: 'B', t2p: 2 },
@@ -163,7 +170,21 @@
     return null;
   }
 
+  function animatePick(phase, matchIdx, teamIdx) {
+    const btn = document.getElementById(`btn-${phase}-${matchIdx}-${teamIdx}`);
+    if (!btn) return;
+    btn.classList.add('team-pick');
+    const origBg = btn.style.background;
+    btn.style.background = 'rgba(201,168,76,0.15)';
+    setTimeout(() => {
+      btn.classList.remove('team-pick');
+      btn.style.background = origBg;
+    }, 200);
+  }
+
   function pickTeam(phase, matchIdx, teamIdx, teamId) {
+    haptic(10);
+    animatePick(phase, matchIdx, teamIdx);
     const exp = _picks[phase][matchIdx];
     if (exp[teamIdx]) {
       // Undo
@@ -464,7 +485,7 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && !isPlaceholder && tid !== null}
-                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r32', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                  <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r32', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                     {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else if isPlaceholder}<span class="team-tbd">TBD</span>{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
@@ -635,7 +656,7 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && !isPlaceholder && tid !== null}
-                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r32', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                  <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r32', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                     {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else if isPlaceholder}<span class="team-tbd">TBD</span>{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
@@ -661,7 +682,7 @@
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
                 {@const canClick = !data.isLocked && !isPlaceholder && tid !== null}
-                <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r32', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r32', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                   {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else if isPlaceholder}<span class="team-tbd">TBD</span>{:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
@@ -1319,5 +1340,15 @@
       font-size: 20px;
       padding: 10px;
     }
+  }
+
+  /* Tap feedback for bracket picks */
+  @keyframes pickPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.95); }
+    100% { transform: scale(1); }
+  }
+  .team-pick {
+    animation: pickPulse 0.2s ease;
   }
 </style>
