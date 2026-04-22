@@ -200,7 +200,21 @@
 
   <!-- Clasificación -->
   {#if tab === 'leaderboard'}
-    {#if data.leaderboard.length === 0}
+    {#if data.leaderboard == null}
+      <!-- Skeleton -->
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        {#each [1,2,3,4,5] as _}
+          <div style="display: flex; align-items: center; gap: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px;">
+            <div class="skeleton skeleton-circle"></div>
+            <div style="flex: 1;">
+              <div class="skeleton skeleton-text medium" style="width: 140px;"></div>
+              <div class="skeleton skeleton-text short" style="margin-top: 6px; width: 100px;"></div>
+            </div>
+            <div class="skeleton" style="height: 20px; width: 32px;"></div>
+          </div>
+        {/each}
+      </div>
+    {:else if data.leaderboard.length === 0}
       <div style="text-align: center; padding: 40px 20px;">
         <div style="font-size: 40px; margin-bottom: 12px;">📊</div>
         <h3 style="font-size: 16px; color: var(--gold); margin-bottom: 8px;">Sin pronósticos aún</h3>
@@ -319,6 +333,16 @@
 
   <!-- Members Tab -->
   {#if tab === 'members'}
+    {#if data.members == null}
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        {#each [1,2,3,4] as _}
+          <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px;">
+            <div class="skeleton skeleton-text medium" style="width: 120px;"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+        {/each}
+      </div>
+    {:else}
     <div style="display: flex; flex-direction: column; gap: 6px;">
       {#each data.members as member}
         <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px;">
@@ -331,6 +355,7 @@
         </div>
       {/each}
     </div>
+    {/if}
   {/if}
 
   <!-- Scoring Tab -->

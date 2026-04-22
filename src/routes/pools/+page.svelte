@@ -15,7 +15,25 @@
     </div>
   </div>
 
-  {#if data.pools.length === 0}
+  {#if data.pools == null}
+    <!-- Skeleton while loading -->
+    <div style="display: grid; gap: 8px;">
+      {#each [1,2,3] as _}
+        <div style="display: block; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div class="skeleton skeleton-text medium" style="width: 140px;"></div>
+              <div class="skeleton skeleton-text short" style="margin-top: 8px;"></div>
+            </div>
+            <div style="text-align: right;">
+              <div class="skeleton skeleton-text short"></div>
+              <div class="skeleton skeleton-text short" style="margin-top: 4px;"></div>
+            </div>
+          </div>
+        </div>
+      {/each}
+    </div>
+  {:else if data.pools.length === 0}
     <div style="text-align: center; padding: 48px 20px; color: var(--text-muted);">
       <div style="font-size: 40px; margin-bottom: 12px;">🏆</div>
       <p style="font-size: 13px; margin-bottom: 16px;">Aún no estás en ninguna quiniela</p>

@@ -1,4 +1,5 @@
 <script>
+  import { showToast } from '$lib/toast';
   let { data } = $props();
 
   const R32_MAP = [
@@ -224,7 +225,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prediction_id: data.selectedId, home_score: h, away_score: a }),
       });
-      if (r.ok) { tieSaved = true; setTimeout(() => tieSaved = false, 2000); }
+      if (r.ok) { showToast('✓ Guardado'); }
     } catch {}
     tieSaving = false;
   }
@@ -302,7 +303,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prediction_id: data.selectedId, picks }),
       });
-      if (res.ok) { saved = true; setTimeout(() => { saved = false; }, 2500); }
+      if (res.ok) { showToast('✓ Guardado'); }
       else { saveError = 'Error al guardar'; setTimeout(() => { saveError = null; }, 3000); }
     } catch (e) { console.error(e); }
     finally { saving = false; }

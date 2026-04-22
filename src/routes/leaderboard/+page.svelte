@@ -11,7 +11,25 @@
     </p>
   </div>
 
-  {#if leaderboard.length === 0}
+  {#if data.leaderboard == null}
+    <!-- Skeleton -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+      <div style="display: grid; grid-template-columns: 40px 1fr 60px 60px; padding: 10px 16px; font-size: 8px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; border-bottom: 1px solid var(--border);">
+        <div>#</div><div>Usuario</div><div style="text-align: right;">Pts</div><div style="text-align: right;">Aciertos</div>
+      </div>
+      {#each [1,2,3,4,5,6] as _}
+        <div style="display: grid; grid-template-columns: 40px 1fr 70px 60px; padding: 12px 16px; border-bottom: 1px solid var(--border); align-items: center;">
+          <div class="skeleton skeleton-circle"></div>
+          <div>
+            <div class="skeleton skeleton-text medium" style="width: 120px;"></div>
+            <div class="skeleton skeleton-text short" style="margin-top: 6px; width: 80px;"></div>
+          </div>
+          <div class="skeleton" style="height: 20px; width: 32px; margin-left: auto;"></div>
+          <div class="skeleton" style="height: 20px; width: 24px; margin-left: auto;"></div>
+        </div>
+      {/each}
+    </div>
+  {:else if leaderboard.length === 0}
     <div style="text-align: center; padding: 48px 20px; color: var(--text-muted);">
       <div style="font-size: 40px; margin-bottom: 12px;">🏆</div>
       <p style="font-size: 13px;">Aún no hay predicciones registradas.</p>
