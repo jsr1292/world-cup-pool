@@ -32,7 +32,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     `).all(entry.id) as any[];
   }
 
-  // Enrich leaderboard with per-phase correct pick counts
+  // Get actual final match score for tiebreaker closeness
+  const finalMatch = db.prepare(`
+    SELECT home_score, away_score FROM matches
+    WHERE phase = 'final' AND status = 'finished' AND home_score IS NOT NULL
+    LIMIT 1
+  `).get() as any;
+
+  // Enrich leaderboard with per-phase correct pick counts + tiebreaker closeness
   const enrichedLeaderboard = leaderboard.map((entry: any) => {
     const predId = entry.id;
 
@@ -53,16 +60,30 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       }
     }
 
+    // Tiebreaker closeness: smaller = better
+    let tiebreakerClose = 9999;
+    if (finalMatch) {
+      const tb = db.prepare(`
+        SELECT home_score, away_score FROM tiebreaker WHERE prediction_id = ?
+      `).get(predId) as any;
+      if (tb && tb.home_score != null && tb.away_score != null) {
+        tiebreakerClose = Math.abs(tb.home_score - finalMatch.home_score) + Math.abs(tb.away_score - finalMatch.away_score);
+      }
+    }
+
     return {
       ...entry,
       group_correct: groupCorrect,
       bracket_correct: bracketByPhase,
       total_correct: groupCorrect + Object.values(bracketByPhase).reduce((a: number, b: number) => a + b, 0),
+      tiebreaker_close: tiebreakerClose,
     };
   });
 
-  // Sort: total_score DESC, then total_correct DESC
-  enrichedLeaderboard.sort((a: any, b: any) => b.total_score - a.total_score || b.total_correct - a.total_correct);
+  // Sort: total_score DESC, then total_correct DESC, then tiebreaker closeness ASC
+  enrichedLeaderboard.sort((a: any, b: any) =>
+    b.total_score - a.total_score || b.total_correct - a.total_correct || a.tiebreaker_close - b.tiebreaker_close
+  );
 
   return {
     pool, members, leaderboard: enrichedLeaderboard, scoring, predictions,
