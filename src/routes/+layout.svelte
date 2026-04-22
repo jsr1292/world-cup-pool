@@ -108,7 +108,7 @@
       <div class="top-bar-inner">
         <div class="top-bar-brand">
           {#if header.showBack}
-            <button onclick={() => goto('/')} style="background:none;border:none;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;padding:0;font-size:16px;line-height:1;">←</button>
+            <button onclick={() => history.back()} style="background:none;border:none;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;padding:0;font-size:16px;line-height:1;">←</button>
           {/if}
           {#if header.poolEmoji}
             <span style="font-size:16px;">{header.poolEmoji}</span>

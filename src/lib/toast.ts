@@ -1,7 +1,9 @@
 import { writable } from 'svelte/store';
 
 export const toast = writable('');
+let timer: ReturnType<typeof setTimeout>;
 export function showToast(msg: string) {
+  clearTimeout(timer);
   toast.set(msg);
-  setTimeout(() => toast.set(''), 2500);
+  timer = setTimeout(() => toast.set(''), 2500);
 }

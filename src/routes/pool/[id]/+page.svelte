@@ -229,7 +229,7 @@
   </div>
 
   <!-- Tab Content with slide animation -->
-  <div class="tab-content-wrapper slide-{slideDir}">
+  <div class="tab-content-wrapper slide-{slideDir}" onanimationend={() => slideDir = 'left'}>
   <!-- Clasificación -->
   {#if tab === 'leaderboard'}
     {#if data.leaderboard == null}
@@ -579,7 +579,7 @@
 <!-- Bottom Sheet for Pool Actions -->
 {#if sheetOpen}
   <div class="bottom-sheet-overlay" onclick={closeSheet} ontouchstart={onSheetTouchStart} ontouchmove={onSheetTouchMove} ontouchend={onSheetTouchEnd}>
-    <div class="bottom-sheet" style="transform: translateY({sheetDrag}px);" ontouchstart={onSheetTouchStart} ontouchmove={onSheetTouchMove} ontouchend={onSheetTouchEnd} onclick={(e) => e.stopPropagation()}>
+    <div class="bottom-sheet" style="transform: translateY({sheetDrag}px); padding-bottom: calc(20px + env(safe-area-inset-bottom));" ontouchstart={onSheetTouchStart} ontouchmove={onSheetTouchMove} ontouchend={onSheetTouchEnd} onclick={(e) => e.stopPropagation()}>
       <div class="bottom-sheet-handle"></div>
       <div style="display: flex; flex-direction: column; gap: 4px;">
         <button onclick={() => { copyCode(); haptic(10); closeSheet(); }} style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-size: 13px; color: var(--text); cursor: pointer; text-align: left; display: flex; align-items: center; gap: 12px; width: 100%;">
