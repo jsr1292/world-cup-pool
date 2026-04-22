@@ -105,6 +105,7 @@ body {
   background: var(--bg);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+  overscroll-behavior: none;
 }
 
 a { color: var(--gold); text-decoration: none; }
@@ -206,6 +207,8 @@ button {
 /* Mobile: content needs padding-bottom for fixed nav */
 .main-content {
   padding-bottom: 80px;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Desktop sidebar */

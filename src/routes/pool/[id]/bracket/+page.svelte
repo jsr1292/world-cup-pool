@@ -504,7 +504,7 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                  <button id={"btn-r16-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                     {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
@@ -523,7 +523,7 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                  <button id={"btn-qf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                     {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
@@ -542,7 +542,7 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.sf?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.sf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('sf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('sf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                  <button id={"btn-sf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.sf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('sf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('sf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                     {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
@@ -562,7 +562,7 @@
             {@const t = teamMap[tid]}
             {@const isPicked = explicitPicks.final?.[0]?.[ti]}
             {@const canClick = !data.isLocked && tid !== null}
-            <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.final?.[0]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('final', 0, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('final', 0, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+            <button id={"btn-final-0-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.final?.[0]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('final', 0, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('final', 0, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
               {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
             </button>
           {/each}
@@ -574,7 +574,7 @@
             {@const t = teamMap[tid]}
             {@const isPicked = explicitPicks['3rd']?.[0]?.[ti]}
             {@const canClick = !data.isLocked && tid !== null}
-            <button class="team-btn" class:picked={isPicked} class:path-highlight={isInPath('3rd', 0, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('3rd', 0, ti, tid)}>
+            <button id={"btn-3rd-0-"+ti} class="team-btn" class:picked={isPicked} class:path-highlight={isInPath('3rd', 0, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('3rd', 0, ti, tid)}>
               {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
             </button>
           {/each}
@@ -594,7 +594,7 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.sf?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.sf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('sf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('sf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                  <button id={"btn-sf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.sf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('sf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('sf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                     {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
@@ -614,7 +614,7 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                  <button id={"btn-qf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                     {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
@@ -634,7 +634,7 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                  <button id={"btn-r16-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                     {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
@@ -701,7 +701,7 @@
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
                 {@const canClick = !data.isLocked && tid !== null}
-                <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                <button id={"btn-r16-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                   {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
@@ -720,7 +720,7 @@
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
                 {@const canClick = !data.isLocked && tid !== null}
-                <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                <button id={"btn-qf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                   {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
@@ -739,7 +739,7 @@
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.sf?.[mi]?.[ti]}
                 {@const canClick = !data.isLocked && tid !== null}
-                <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.sf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('sf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('sf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+                <button id={"btn-sf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.sf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('sf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('sf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                   {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
@@ -757,7 +757,7 @@
               {@const t = teamMap[tid]}
               {@const isPicked = explicitPicks.final?.[0]?.[ti]}
               {@const canClick = !data.isLocked && tid !== null}
-              <button class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.final?.[0]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('final', 0, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('final', 0, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
+              <button id={"btn-final-0-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.final?.[0]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('final', 0, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('final', 0, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
                 {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
               </button>
             {/each}
@@ -770,7 +770,7 @@
               {@const t = teamMap[tid]}
               {@const isPicked = explicitPicks['3rd']?.[0]?.[ti]}
               {@const canClick = !data.isLocked && tid !== null}
-              <button class="team-btn" class:picked={isPicked} class:path-highlight={isInPath('3rd', 0, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('3rd', 0, ti, tid)}>
+              <button id={"btn-3rd-0-"+ti} class="team-btn" class:picked={isPicked} class:path-highlight={isInPath('3rd', 0, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('3rd', 0, ti, tid)}>
                 {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
               </button>
             {/each}
@@ -1348,7 +1348,7 @@
     50% { transform: scale(0.95); }
     100% { transform: scale(1); }
   }
-  .team-pick {
+  :global(.team-pick) {
     animation: pickPulse 0.2s ease;
   }
 </style>
