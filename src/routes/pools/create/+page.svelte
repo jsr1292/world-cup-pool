@@ -44,7 +44,7 @@
 
     <div>
       <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5px; letter-spacing: 0.12em; text-transform: uppercase;">Cuota de entrada (€) — 0 para gratis</label>
-      <input type="number" min="0" step="0.01" bind:value={buyIn} placeholder="10" oninput={(e) => { if (Number(e.target.value) < 0) buyIn = '0'; }} />
+      <input inputmode="decimal" min="0" step="0.01" bind:value={buyIn} placeholder="10" oninput={(e) => { if (Number(e.target.value) < 0) buyIn = '0'; }} />
     </div>
 
     <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 12px;">

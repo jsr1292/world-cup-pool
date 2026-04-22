@@ -1,4 +1,50 @@
+/* Skeleton shimmer */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg2) 25%, var(--bg3, #1a1d26) 50%, var(--bg2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton-text { height: 14px; margin: 6px 0; }
+.skeleton-text.short { width: 40%; }
+.skeleton-text.medium { width: 70%; }
+.skeleton-text.long { width: 90%; }
+.skeleton-circle { border-radius: 50%; width: 40px; height: 40px; }
+.skeleton-card { padding: 16px; border-radius: 12px; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+  background: var(--gold); color: #000; padding: 10px 20px; border-radius: 20px;
+  font-size: 13px; font-weight: 600; z-index: 9999;
+  animation: toastIn 0.25s ease forwards;
+  pointer-events: none;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 @import "tailwindcss";
+
+/* Hide number input spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+input[inputmode="decimal"]::-webkit-inner-spin-button,
+input[inputmode="decimal"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
 :root {
   --bg: #07090f;
