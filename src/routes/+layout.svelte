@@ -1,7 +1,15 @@
 <script>
   import { browser } from '$app/environment';
+  import { onNavigate } from '$app/navigation';
+  import { toast } from '$lib/toast';
   import '../app.css';
   import { page } from '$app/stores';
+
+  let fading = $state(false);
+  onNavigate(() => {
+    fading = true;
+    return () => { fading = false; };
+  });
   let { children, data } = $props();
 
   // Register service worker for PWA
@@ -115,9 +123,14 @@
   {/if}
 
   <!-- Main Content -->
-  <main class="main-content">
+  <main class="main-content" style="transition: opacity 0.15s ease; opacity: {fading ? 0 : 1};">
     {@render children()}
   </main>
+
+  <!-- Toast -->
+  {#if $toast}
+    <div class="toast">{$toast}</div>
+  {/if}
 
 </div>
 
