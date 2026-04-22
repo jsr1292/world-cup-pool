@@ -9,9 +9,13 @@
   import { headerTitle } from '$lib/stores/header';
 
   let fading = $state(false);
+  let fadeTimer: ReturnType<typeof setTimeout>;
   onNavigate(() => {
     fading = true;
-    return () => { fading = false; };
+    clearTimeout(fadeTimer);
+    fadeTimer = setTimeout(() => { fading = false; }, 200);
+    // Scroll to top on navigation
+    if (browser) window.scrollTo(0, 0);
   });
   let { children, data } = $props();
 
