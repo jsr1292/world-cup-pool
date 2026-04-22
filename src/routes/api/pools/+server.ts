@@ -27,7 +27,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const body = await request.json();
   const { name, buy_in = 0, allow_multiple = false } = body;
 
-  if (!name?.trim()) return json({ error: 'Nombre requerido' }, { status: 400 });
+  if (!name?.trim() || name.trim().length < 2) return json({ error: 'Nombre requerido (mínimo 2 caracteres)' }, { status: 400 });
+  if (typeof buy_in === 'number' && buy_in < 0) return json({ error: 'buy_in debe ser positivo' }, { status: 400 });
 
   const result = createPool(name.trim(), locals.user.id, buy_in, allow_multiple ? 1 : 0);
   return json({ id: Number(result.id), invite_code: result.inviteCode });

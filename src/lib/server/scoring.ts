@@ -2,11 +2,12 @@ import { db } from './db.js';
 
 const DEFAULT_RULES: Record<string, number> = {
   group_position: 3,
-  r32_winner: 5,
-  r16_winner: 10,
-  qf_winner: 20,
-  sf_winner: 40,
-  final_winner: 80,
+  knockout_r32: 5,
+  knockout_r16: 10,
+  knockout_qf: 20,
+  knockout_sf: 40,
+  knockout_final: 80,
+  knockout_winner: 100,
   third_place: 25,
 };
 
@@ -147,7 +148,7 @@ export function calculateBracketScores(poolId: number): void {
       for (const bp of bpRows) {
         const winners = phaseWinners[bp.phase];
         if (winners && bp.team_id && winners.has(bp.team_id)) {
-          const ruleKey = bp.phase === '3rd' ? 'third_place' : `${bp.phase}_winner`;
+          const ruleKey = bp.phase === '3rd' ? 'third_place' : `knockout_${bp.phase}`;
           const pts = rules[ruleKey] ?? 0;
           updateBP.run(pts, pred.id, bp.phase, bp.team_id);
         }

@@ -15,6 +15,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 
     if (user) {
       event.locals.user = user;
+    } else {
+      // Clean expired sessions periodically
+      db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run();
     }
   }
 

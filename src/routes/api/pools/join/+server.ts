@@ -7,7 +7,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const { code } = await request.json();
   if (!code) return json({ error: 'Código requerido' }, { status: 400 });
 
-  const pool = getPoolByInvite(code);
+  const pool = getPoolByInvite(code.toUpperCase());
   if (!pool) return json({ error: 'Código de invitación inválido' }, { status: 404 });
 
   const joined = joinPool(pool.id, locals.user.id);

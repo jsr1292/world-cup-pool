@@ -15,7 +15,7 @@ export function verifyPwd(password: string, stored: string): boolean {
 
 // Generate unique invite codes
 export function generateInviteCode(): string {
-  return crypto.randomBytes(6).toString('base64url').slice(0, 8).toUpperCase();
+  return crypto.randomBytes(16).toString('base64url').slice(0, 16).toUpperCase();
 }
 
 // Session tokens
