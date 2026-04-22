@@ -2,9 +2,29 @@ import { db } from '$lib/server/db.js';
 import type { PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async () => {
-  // Get top 50 scorers across all pools
+  // Get the actual final match score for tiebreaker closeness
+  const finalMatch = db.prepare(`
+    SELECT home_score, away_score FROM matches
+    WHERE phase = 'final' AND status = 'finished' AND home_score IS NOT NULL
+    LIMIT 1
+  `).get() as any;
+
+  // Build tiebreaker expression for ORDER BY
+  let orderByTiebreaker = '0'; // no-op if no final yet
+  if (finalMatch) {
+    // Smaller closeness = better: sum of absolute differences
+    orderByTiebreaker = `(
+      COALESCE(ABS(tb.home_score - ${finalMatch.home_score}) + ABS(tb.away_score - ${finalMatch.away_score}), 9999)
+    )`;
+  }
+
+  // Get top 50 scorers across all pools, using a CTE for tiebreaker join
   const rows = db.prepare(`
-    SELECT 
+    WITH tiebreaker_close AS (
+      SELECT prediction_id, ${orderByTiebreaker} as closeness
+      FROM tiebreaker tb
+    )
+    SELECT
       u.id as user_id,
       u.username,
       u.display_name,
@@ -16,8 +36,9 @@ export const load: PageServerLoad = async () => {
       ) as total_correct
     FROM predictions p
     JOIN users u ON u.id = p.user_id
+    LEFT JOIN tiebreaker_close tc ON tc.prediction_id = p.id
     GROUP BY u.id
-    ORDER BY total_score DESC, total_correct DESC
+    ORDER BY total_score DESC, total_correct DESC, tc.closeness ASC
     LIMIT 100
   `).all() as any[];
 

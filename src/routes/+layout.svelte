@@ -99,6 +99,30 @@
     ...(data?.user?.is_admin ? [{ path: '/admin', label: 'Admin', icon: 'settings' }] : []),
     { path: '/profile', label: 'Perfil', icon: 'user' },
   ];
+
+  // ─── Countdown timer ────────────────────────────────────────────────────────
+  let countdownDays = $state('');
+  let countdownHours = $state('');
+  let countdownLive = $state(false);
+
+  $effect(() => {
+    const kickoff = new Date('2026-06-11T00:00:00Z');
+    function update() {
+      const diff = kickoff.getTime() - Date.now();
+      if (diff <= 0) {
+        countdownDays = '0';
+        countdownHours = '0';
+        countdownLive = true;
+        return;
+      }
+      countdownLive = false;
+      countdownDays = String(Math.floor(diff / (1000 * 60 * 60 * 24)));
+      countdownHours = String(Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+    }
+    update();
+    const interval = setInterval(update, 60000);
+    return () => clearInterval(interval);
+  });
 </script>
 
 <div class="app-layout" style="height: 100vh; padding-bottom: 0;">
@@ -122,16 +146,13 @@
           {/if}
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          {#if typeof window !== 'undefined'}
-            {@const kickoff = new Date('2026-06-11T00:00:00Z')}
-            {@const now = Date.now()}
-            {@const diff = kickoff.getTime() - now}
-            {#if diff > 0}
-              <div class="countdown" title="11 de junio de 2026">
-                {Math.ceil(diff / (1000 * 60 * 60 * 24))} días
-              </div>
-            {:else if diff > -(1000 * 60 * 60 * 24 * 35)}
+          {#if countdownDays !== '' && typeof window !== 'undefined'}
+            {#if countdownLive}
               <div class="countdown live">⚽ En juego</div>
+            {:else}
+              <div class="countdown" title="11 de junio de 2026">
+                {countdownDays} días
+              </div>
             {/if}
           {/if}
           <a href="/profile" class="top-bar-avatar" title="Perfil">

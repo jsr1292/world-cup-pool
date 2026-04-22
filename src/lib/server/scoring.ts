@@ -9,6 +9,8 @@ const DEFAULT_RULES: Record<string, number> = {
   knockout_final: 80,
   knockout_winner: 100,
   third_place: 25,
+  match_outcome: 2,
+  exact_score: 5,
 };
 
 export function getScoringRules(poolId: number): Record<string, number> {
@@ -160,17 +162,95 @@ export function calculateBracketScores(poolId: number): void {
 }
 
 /**
+ * Calculate match prediction scores for all predictions in a pool.
+ * Awards points_earned on match_predictions rows:
+ *   - match_outcome points for correct 1/X/2
+ *   - exact_score points on top for exact scoreline
+ */
+export function calculateMatchScores(poolId: number): void {
+  const rules = getScoringRules(poolId);
+  const outcomePts = rules.match_outcome ?? 2;
+  const exactPts = rules.exact_score ?? 5;
+
+  // Get all finished matches (group or knockout) with scores
+  const matches = db.prepare(`
+    SELECT id, home_team_id, away_team_id, home_score, away_score
+    FROM matches
+    WHERE status = 'finished' AND home_score IS NOT NULL AND away_score IS NOT NULL
+  `).all() as any[];
+
+  if (matches.length === 0) return;
+
+  // Build a lookup: matchId -> { homeScore, awayScore, outcome }
+  const matchMap: Record<number, { homeScore: number; awayScore: number; outcome: string }> = {};
+  for (const m of matches) {
+    let outcome: string;
+    if (m.home_score > m.away_score) outcome = '1';
+    else if (m.home_score < m.away_score) outcome = '2';
+    else outcome = 'X';
+    matchMap[m.id] = { homeScore: m.home_score, awayScore: m.away_score, outcome };
+  }
+
+  // Get all predictions in this pool
+  const predictions = db.prepare(
+    'SELECT id FROM predictions WHERE pool_id = ?'
+  ).all(poolId) as any[];
+
+  const updateMP = db.prepare(
+    'UPDATE match_predictions SET points_earned = ? WHERE id = ?'
+  );
+
+  const calcAll = db.transaction(() => {
+    for (const pred of predictions) {
+      const mpRows = db.prepare(`
+        SELECT id, match_id, home_score, away_score
+        FROM match_predictions WHERE prediction_id = ?
+      `).all(pred.id) as any[];
+
+      for (const mp of mpRows) {
+        const m = matchMap[mp.match_id];
+        if (!m) continue;
+
+        let pts = 0;
+
+        // Determine predicted outcome
+        let predOutcome: string;
+        if (mp.home_score > mp.away_score) predOutcome = '1';
+        else if (mp.home_score < mp.away_score) predOutcome = '2';
+        else predOutcome = 'X';
+
+        // Correct outcome?
+        if (predOutcome === m.outcome) {
+          pts += outcomePts;
+        }
+
+        // Exact score?
+        if (mp.home_score === m.homeScore && mp.away_score === m.awayScore) {
+          pts += exactPts;
+        }
+
+        updateMP.run(pts, mp.id);
+      }
+    }
+  });
+
+  calcAll();
+}
+
+/**
  * Run all score calculations and update total_score in predictions table.
  */
 export function calculateAllScores(poolId: number): void {
   calculateGroupScores(poolId);
   calculateBracketScores(poolId);
+  calculateMatchScores(poolId);
 
   // Sum up all points per prediction
   db.prepare(`
     UPDATE predictions SET total_score = (
       COALESCE((SELECT SUM(points_earned) FROM group_predictions WHERE prediction_id = predictions.id), 0)
       + COALESCE((SELECT SUM(points_earned) FROM bracket_predictions WHERE prediction_id = predictions.id), 0)
+      + COALESCE((SELECT SUM(points_earned) FROM match_predictions WHERE prediction_id = predictions.id), 0)
     ),
     updated_at = datetime('now')
     WHERE pool_id = ?

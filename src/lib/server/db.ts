@@ -38,6 +38,7 @@ db.exec(`
     is_active INTEGER DEFAULT 1,
     deadline_group TEXT,        -- ISO datetime when group predictions lock
     deadline_knockout TEXT,     -- ISO datetime when knockout predictions lock
+    allow_multiple_predictions INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
@@ -83,6 +84,7 @@ db.exec(`
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     label TEXT DEFAULT '',      -- e.g. '' for main, '2nd entry' for multi-entry
     total_score INTEGER DEFAULT 0,
+    has_paid INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now')),
     UNIQUE(pool_id, user_id, label)
@@ -169,3 +171,20 @@ db.exec(`
     user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE
   );
 `);
+
+// ─── Migrations ────────────────────────────────────────────────────────────────
+// Add columns that may not exist on fresh installs but exist in production
+const migrations: [string, string][] = [
+  ['pools',         'ALTER TABLE pools ADD COLUMN allow_multiple_predictions INTEGER DEFAULT 0'],
+  ['predictions',   'ALTER TABLE predictions ADD COLUMN has_paid INTEGER DEFAULT 0'],
+];
+
+for (const [table, sql] of migrations) {
+  try {
+    db.exec(sql);
+  } catch (e: any) {
+    if (!e.message?.includes('duplicate column name')) {
+      console.warn(`[db] migration skipped for ${table}: ${e.message}`);
+    }
+  }
+}
