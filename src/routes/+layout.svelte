@@ -122,7 +122,7 @@
   {/if}
 
   <!-- Main Content -->
-  <main class="main-content">
+  <main class="main-content" style="transition: opacity 0.15s ease; opacity: {fading ? 0 : 1};">
     {@render children()}
   </main>
 
