@@ -2,16 +2,16 @@
   import { headerTitle } from '$lib/stores/header';
   import { haptic } from '$lib/haptic';
   let { data } = $props();
-  let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
+  let tab = data.deadlinePassed ? 'leaderboard' : 'predictions';
   const tabIndexOrder = ['predictions', 'leaderboard', 'members', 'summary', 'results', 'scoring'];
-  let prevTabIndex = $state(tabIndexOrder.indexOf(tab));
-  let slideDir = $state<'left' | 'right'>('left');
+  let prevTabIndex = tabIndexOrder.indexOf(tab);
+  let slideDir = 'left';
   function switchTab(newTab: string) {
     haptic(8);
     const oldIdx = tabIndexOrder.indexOf(tab);
     const newIdx = tabIndexOrder.indexOf(newTab);
     prevTabIndex = newIdx;
-    slideDir = newIdx > oldIdx ? 'left' : 'right';
+    slideDir = (newIdx > oldIdx ? 'left' : 'right') as 'left' | 'right';
     tab = newTab;
   }
   let copied = $state(false);
