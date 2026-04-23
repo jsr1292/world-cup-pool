@@ -10,23 +10,53 @@
   });
 
   const R32_MAP = [
-    { t1g: 'A', t1p: 1, t2g: 'B', t2p: 2 },
-    { t1g: 'C', t1p: 1, t2g: 'D', t2p: 2 },
-    { t1g: 'E', t1p: 1, t2g: 'F', t2p: 2 },
-    { t1g: 'G', t1p: 1, t2g: 'H', t2p: 2 },
-    { t1g: 'I', t1p: 1, t2g: 'J', t2p: 2 },
-    { t1g: 'K', t1p: 1, t2g: 'L', t2p: 2 },
-    { t1g: 'B', t1p: 1, t2g: 'A', t2p: 2 },
-    { t1g: 'D', t1p: 1, t2g: 'C', t2p: 2 },
-    { t1g: 'F', t1p: 1, t2g: 'E', t2p: 2 },
-    { t1g: 'H', t1p: 1, t2g: 'G', t2p: 2 },
-    { t1g: 'J', t1p: 1, t2g: 'I', t2p: 2 },
-    { t1g: 'L', t1p: 1, t2g: 'K', t2p: 2 },
-    { t1g: '?', t1p: 1, t2g: '?', t2p: 2 },
-    { t1g: '?', t1p: 1, t2g: '?', t2p: 2 },
-    { t1g: '?', t1p: 1, t2g: '?', t2p: 2 },
-    { t1g: '?', t1p: 1, t2g: '?', t2p: 2 },
+    // UPPER LEFT (feeds R16[2,3])
+    { t1g: 'E', t1p: 1, t2g: '?', t2p: 3 },  // R32-1: E1 vs 3rd(A/B/C/D/F)
+    { t1g: 'I', t1p: 1, t2g: '?', t2p: 3 },  // R32-2: I1 vs 3rd(C/D/F/G/H)
+    { t1g: 'A', t1p: 2, t2g: 'B', t2p: 2 },  // R32-3: 2A vs 2B
+    { t1g: 'F', t1p: 1, t2g: 'C', t2p: 2 },  // R32-4: F1 vs 2C
+    // LOWER LEFT (feeds R16[0,1])
+    { t1g: 'K', t1p: 2, t2g: 'L', t2p: 2 }, // R32-5: 2K vs 2L
+    { t1g: 'H', t1p: 1, t2g: 'J', t2p: 2 }, // R32-6: H1 vs 2J
+    { t1g: 'D', t1p: 1, t2g: '?', t2p: 3 }, // R32-7: D1 vs 3rd(B/E/F/I/J)
+    { t1g: 'G', t1p: 1, t2g: '?', t2p: 3 }, // R32-8: G1 vs 3rd(A/E/H/I/J)
+    // UPPER RIGHT (feeds R16[4,5])
+    { t1g: 'C', t1p: 1, t2g: 'F', t2p: 2 },  // R32-9: C1 vs 2F
+    { t1g: 'E', t1p: 2, t2g: 'I', t2p: 2 },  // R32-10: 2E vs 2I
+    { t1g: 'A', t1p: 1, t2g: '?', t2p: 3 },  // R32-11: A1 vs 3rd(C/E/F/H/I)
+    { t1g: 'L', t1p: 1, t2g: '?', t2p: 3 },  // R32-12: L1 vs 3rd(E/H/I/J/K)
+    // LOWER RIGHT (feeds R16[6,7])
+    { t1g: 'J', t1p: 1, t2g: 'H', t2p: 2 },  // R32-13: J1 vs 2H
+    { t1g: 'D', t1p: 2, t2g: 'G', t2p: 2 },  // R32-14: 2D vs 2G
+    { t1g: 'B', t1p: 1, t2g: '?', t2p: 3 },  // R32-15: B1 vs 3rd(E/F/G/I/J)
+    { t1g: 'K', t1p: 1, t2g: '?', t2p: 3 },  // R32-16: K1 vs 3rd(D/E/I/J/L)
   ];
+
+  // R32 → R16 feed-in: R16[i] = winner of R32[R32_TO_R16[i*2]] vs R32[R32_TO_R16[i*2+1]]
+  const R32_TO_R16 = [4, 6, 0, 2, 5, 7, 1, 3];
+
+  // Match labels
+  const R32_LABELS = [
+    '1E vs 3rd(A/B/C/D/F)', '1I vs 3rd(C/D/F/G/H)', '2A vs 2B', '1F vs 2C',
+    '2K vs 2L', '1H vs 2J', '1D vs 3rd(B/E/F/I/J)', '1G vs 3rd(A/E/H/I/J)',
+    '1C vs 2F', '2E vs 2I', '1A vs 3rd(C/E/F/H/I)', '1L vs 3rd(E/H/I/J/K)',
+    '1J vs 2H', '2D vs 2G', '1B vs 3rd(E/F/G/I/J)', '1K vs 3rd(D/E/I/J/L)',
+  ];
+  const R16_LABELS = [
+    'W(R32-5) vs W(R32-7)', 'W(R32-6) vs W(R32-8)',
+    'W(R32-1) vs W(R32-3)', 'W(R32-2) vs W(R32-4)',
+    'W(R32-9) vs W(R32-11)', 'W(R32-10) vs W(R32-12)',
+    'W(R32-13) vs W(R32-15)', 'W(R32-14) vs W(R32-16)',
+  ];
+  const QF_LABELS = ['W(R16-3) vs W(R16-4)', 'W(R16-5) vs W(R16-6)', 'W(R16-1) vs W(R16-2)', 'W(R16-7) vs W(R16-8)'];
+  const SF_LABELS = ['W(QF-1) vs W(QF-2)', 'W(QF-3) vs W(QF-4)'];
+  const FINAL_LABEL = 'W(SF-1) vs W(SF-2)';
+  const THIRD_LABEL = 'L(SF-1) vs L(SF-2)';
+
+  function r32Label(mi) { return R32_LABELS[mi] || `R32-${mi + 1}`; }
+  function r16Label(mi) { return R16_LABELS[mi] || r16Label(mi); }
+  function qfLabel(mi) { return QF_LABELS[mi] || `QF-${mi + 1}`; }
+  function sfLabel(mi) { return SF_LABELS[mi] || `SF-${mi + 1}`; }
 
   const PHASES = ['r32', 'r16', 'qf', 'sf', 'final', '3rd'];
 
@@ -130,9 +160,16 @@
       _teams.r32[i][1] = getGroupTeam(m.t2g, m.t2p);
     }
 
-    // Cascade forward
+    // Cascade: R32 → R16 uses special feed-in mapping
+    for (let i = 0; i < _teams.r16.length; i++) {
+      for (let j = 0; j < 2; j++) {
+        if (!_picks.r16[i][j]) {
+          _teams.r16[i][j] = getWinner('r32', R32_TO_R16[i * 2 + j]);
+        }
+      }
+    }
+    // Cascade: R16 → QF → SF → Final (sequential pairs)
     const cascades = [
-      { from: 'r32', to: 'r16' },
       { from: 'r16', to: 'qf' },
       { from: 'qf', to: 'sf' },
       { from: 'sf', to: 'final' },
@@ -373,12 +410,6 @@
       'Bosnia and Herzegovina': 'Bosnia', 'DR Congo': 'DR Congo', 'North Macedonia': 'N. Macedonia',
     };
     return map[name] || (name ? name.substring(0, 14) : '');
-  }
-
-  function r32Label(mi) {
-    const m = R32_MAP[mi];
-    if (m.t1g === '?') return `3rd #${mi - 11}`;
-    return `${m.t1g}${m.t1p} vs ${m.t2g}${m.t2p}`;
   }
 
   const totalPicks = $derived.by(() => {
