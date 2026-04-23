@@ -1,7 +1,14 @@
 <script>
   import { browser } from '$app/environment';
+  import { onNavigate } from '$app/navigation';
   import '../app.css';
   import { page } from '$app/stores';
+
+  let fading = $state(false);
+  onNavigate(() => {
+    fading = true;
+    return () => { fading = false; };
+  });
   let { children, data } = $props();
 
   // Register service worker for PWA
