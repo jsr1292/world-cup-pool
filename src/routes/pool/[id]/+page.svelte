@@ -4,11 +4,8 @@
   let { data } = $props();
   let tab = data.deadlinePassed ? 'leaderboard' : 'predictions';
   const tabIndexOrder = ['predictions', 'leaderboard', 'members', 'summary', 'results', 'scoring'];
-      function switchTab(newTab: string) {
+  function switchTab(newTab: string) {
     haptic(8);
-    const oldIdx = tabIndexOrder.indexOf(tab);
-    const newIdx = tabIndexOrder.indexOf(newTab);
-    prevTabIndex = newIdx;
     tab = newTab;
   }
   let copied = $state(false);
