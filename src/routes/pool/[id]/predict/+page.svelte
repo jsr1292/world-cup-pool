@@ -37,20 +37,18 @@
   });
 
   // selections[group] = ordered array of teamIds [pos1, pos2, pos3, pos4]
-  let selections = $state({});
-  $effect(() => {
-    const sel = {};
-    for (const group of GROUP_NAMES) {
-      const existing = data.existingGroupPreds?.[group] || {};
-      sel[group] = [
-        existing.pos1 ?? null,
-        existing.pos2 ?? null,
-        existing.pos3 ?? null,
-        existing.pos4 ?? null,
-      ];
-    }
-    selections = sel;
-  });
+  // Initialize synchronously so mutations are immediately reactive
+  let _initSel = {};
+  for (const group of GROUP_NAMES) {
+    const existing = data.existingGroupPreds?.[group] || {};
+    _initSel[group] = [
+      existing.pos1 ?? null,
+      existing.pos2 ?? null,
+      existing.pos3 ?? null,
+      existing.pos4 ?? null,
+    ];
+  }
+  let selections = $state(_initSel);
 
   // ─── Mobile: sequential tap-to-rank ───────────────────────────────
 
