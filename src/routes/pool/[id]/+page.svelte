@@ -2,11 +2,17 @@
   import { headerTitle } from '$lib/stores/header';
   import { haptic } from '$lib/haptic';
   let { data } = $props();
-  let tab = $state<Record<string, any>>({ active: data.deadlinePassed ? 'leaderboard' : 'predictions' });
+  let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
   const tabIndexOrder = ['predictions', 'leaderboard', 'members', 'summary', 'results', 'scoring'];
+  let prevTabIndex = $state(tabIndexOrder.indexOf(tab));
+  let slideDir = $state<'left' | 'right'>('left');
   function switchTab(newTab: string) {
     haptic(8);
-    tab = { active: newTab };
+    const oldIdx = tabIndexOrder.indexOf(tab);
+    const newIdx = tabIndexOrder.indexOf(newTab);
+    prevTabIndex = newIdx;
+    slideDir = newIdx > oldIdx ? 'left' : 'right';
+    tab = newTab;
   }
   let copied = $state(false);
   let summaryEntry = $state(data.predictions.length > 0 ? data.predictions[0].id : null);
@@ -224,10 +230,10 @@
     {/each}
   </div>
 
-  <!-- Tab Content -->
-  <div>
+  <!-- Tab Content with slide animation -->
+  <div class="tab-content-wrapper slide-{slideDir}" onanimationend={() => slideDir = 'left'}>
   <!-- Clasificación -->
-  {#if tab.active === 'leaderboard'}
+  {#if tab === 'leaderboard'}
     {#if data.leaderboard == null}
       <!-- Skeleton -->
       <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -315,7 +321,7 @@
   {/if}
 
   <!-- Pronósticos Tab -->
-  {#if tab.active === 'predictions'}
+  {#if tab === 'predictions'}
     {#if data.predictions.length === 0}
       <div style="text-align: center; padding: 40px 20px;">
         <div style="font-size: 40px; margin-bottom: 12px;">⚽</div>
@@ -360,7 +366,7 @@
 
 
   <!-- Members Tab -->
-  {#if tab.active === 'members'}
+  {#if tab === 'members'}
     {#if data.members == null}
       <div style="display: flex; flex-direction: column; gap: 6px;">
         {#each [1,2,3,4] as _}
@@ -387,7 +393,7 @@
   {/if}
 
   <!-- Scoring Tab -->
-  {#if tab.active === 'scoring'}
+  {#if tab === 'scoring'}
     <div style="display: flex; flex-direction: column; gap: 4px;">
       {#each Object.entries(data.scoring) as [rule, points]}
         <div style="display: flex; justify-content: space-between; padding: 10px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;">
@@ -399,7 +405,7 @@
     <p style="font-size: 10px; color: var(--text-dim); margin-top: 12px; text-align: center;">Puntuación configurada por el creador de la quiniela.</p>
   {/if}
 
-   {#if tab.active === 'summary'}
+   {#if tab === 'summary'}
     <div style="max-width: 500px; margin: 0 auto;">
       {#if data.predictions.length === 0}
         <div style="text-align: center; padding: 40px 20px;">
@@ -475,7 +481,7 @@
     </div>
   {/if}
 
-   {#if tab.active === 'results'}
+   {#if tab === 'results'}
     <div style="max-width: 600px; margin: 0 auto;">
       {#if data.predictions.length > 0}
         {@const totalUserPoints = data.userGroupPredsFull.reduce((sum: number, g: any) => sum + (g.points_earned || 0), 0) + data.userBracketPredsFull.reduce((sum: number, b: any) => sum + (b.points_earned || 0), 0)}
