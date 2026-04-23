@@ -28,6 +28,8 @@
 
   function flag(code: string) {
     if (!code) return '';
+    if (code === 'ENG') return '🏴\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}';
+    if (code === 'SCT') return '🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}';
     return code.toUpperCase().replace(/./g, c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65));
   }
   function teamName(id: number) { return data.teams[id]?.name || 'TBD'; }
