@@ -1,13 +1,7 @@
-<script lang="ts">
+<script>
   import { browser } from '$app/environment';
-  import { haptic } from '$lib/haptic';
-  import { toast } from '$lib/toast';
   import '../app.css';
   import { page } from '$app/stores';
-  import { headerTitle } from '$lib/stores/header';
-
-  // No-op: removed page fade transition that caused blank screens on SPA navigation
-  // Re-enable with proper SvelteKit lifecycle if needed
   let { children, data } = $props();
 
   // Register service worker for PWA
@@ -16,72 +10,9 @@
   }
 
   let currentPath = $state('');
-  let header = $state({ text: 'Mundial 2026', emoji: '🏆', showBack: false, poolName: null, poolEmoji: null });
   $effect(() => {
     currentPath = $page.url.pathname;
   });
-  $effect(() => {
-    const u = $page.url;
-    const p = u.pathname;
-    if (p === '/') {
-      header = { text: 'Mundial 2026', emoji: '🏆', showBack: false, poolName: null, poolEmoji: null };
-    } else if (p === '/leaderboard') {
-      header = { text: 'Clasificación', emoji: '📊', showBack: false, poolName: null, poolEmoji: null };
-    } else if (p === '/profile') {
-      header = { text: 'Perfil', emoji: '👤', showBack: false, poolName: null, poolEmoji: null };
-    } else if (p.startsWith('/pool/') && !p.includes('/bracket')) {
-      // Pool detail — use store values set by the child page
-      const unsub = headerTitle.subscribe(h => { header = { ...header, ...h }; });
-      return unsub;
-    } else if (p.startsWith('/pool/') && p.includes('/bracket')) {
-      header = { text: 'Mi Quiniela', emoji: '⚔️', showBack: true, poolName: null, poolEmoji: null };
-    } else {
-      header = { text: 'Mundial 2026', emoji: '🏆', showBack: false, poolName: null, poolEmoji: null };
-    }
-  });
-
-  // ─── Swipe-to-go-back (iOS edge swipe) ────────────────────────
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let swiping = $state(false);
-  let swipeOffset = $state(0);
-
-  function onTouchStart(e: TouchEvent) {
-    if (e.touches.length !== 1) return;
-    const x = e.touches[0].clientX;
-    if (x > 30) return; // Only trigger from left edge
-    if (window.history.length <= 1) return;
-    // Don't interfere with bracket drag operations
-    const target = e.target as HTMLElement;
-    if (target.closest('[draggable="true"]') || target.closest('.team-btn')) return;
-    touchStartX = x;
-    touchStartY = e.touches[0].clientY;
-  }
-
-  function onTouchMove(e: TouchEvent) {
-    if (touchStartX === 0) return;
-    const dx = e.touches[0].clientX - touchStartX;
-    const dy = e.touches[0].clientY - touchStartY;
-    // Only track rightward swipes
-    if (dx < 0) { touchStartX = 0; swipeOffset = 0; swiping = false; return; }
-    // Require mostly horizontal movement
-    if (Math.abs(dy) > Math.abs(dx) * 1.5) return;
-    swipeOffset = Math.min(dx, 80);
-    swiping = dx > 10;
-    if (dx > 60) {
-      e.preventDefault();
-      window.history.back();
-      touchStartX = 0;
-      swipeOffset = 0;
-      swiping = false;
-    }
-  }
-
-  function onTouchEnd() {
-    touchStartX = 0;
-    swipeOffset = 0;
-    swiping = false;
-  }
 
   function isActive(path) {
     if (path === '/') return currentPath === '/';
@@ -94,30 +25,6 @@
     ...(data?.user?.is_admin ? [{ path: '/admin', label: 'Admin', icon: 'settings' }] : []),
     { path: '/profile', label: 'Perfil', icon: 'user' },
   ];
-
-  // ─── Countdown timer ────────────────────────────────────────────────────────
-  let countdownDays = $state('');
-  let countdownHours = $state('');
-  let countdownLive = $state(false);
-
-  $effect(() => {
-    const kickoff = new Date('2026-06-11T00:00:00Z');
-    function update() {
-      const diff = kickoff.getTime() - Date.now();
-      if (diff <= 0) {
-        countdownDays = '0';
-        countdownHours = '0';
-        countdownLive = true;
-        return;
-      }
-      countdownLive = false;
-      countdownDays = String(Math.floor(diff / (1000 * 60 * 60 * 24)));
-      countdownHours = String(Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
-    }
-    update();
-    const interval = setInterval(update, 60000);
-    return () => clearInterval(interval);
-  });
 </script>
 
 <div class="app-layout" style="height: 100vh; padding-bottom: 0;">
@@ -126,28 +33,20 @@
     <header class="top-bar">
       <div class="top-bar-inner">
         <div class="top-bar-brand">
-          {#if header.showBack}
-            <button onclick={() => history.back()} style="background:none;border:none;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;padding:0;font-size:16px;line-height:1;">←</button>
-          {/if}
-          {#if header.poolEmoji}
-            <span style="font-size:16px;">{header.poolEmoji}</span>
-          {:else}
-            <span style="font-size:16px;">{header.emoji}</span>
-          {/if}
-          {#if header.poolName}
-            <span style="font-size:13px;font-weight:600;">{header.poolName}</span>
-          {:else}
-            <span>{header.text}</span>
-          {/if}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="url(#gold-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e8c96a"/><stop offset="50%" stop-color="#c9a84c"/><stop offset="100%" stop-color="#f0d98c"/></linearGradient></defs><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+          <span>Mundial 2026</span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          {#if countdownDays !== '' && typeof window !== 'undefined'}
-            {#if countdownLive}
-              <div class="countdown live">⚽ En juego</div>
-            {:else}
+          {#if typeof window !== 'undefined'}
+            {@const kickoff = new Date('2026-06-11T00:00:00Z')}
+            {@const now = Date.now()}
+            {@const diff = kickoff.getTime() - now}
+            {#if diff > 0}
               <div class="countdown" title="11 de junio de 2026">
-                {countdownDays} días
+                {Math.ceil(diff / (1000 * 60 * 60 * 24))} días
               </div>
+            {:else if diff > -(1000 * 60 * 60 * 24 * 35)}
+              <div class="countdown live">⚽ En juego</div>
             {/if}
           {/if}
           <a href="/profile" class="top-bar-avatar" title="Perfil">
@@ -216,20 +115,9 @@
   {/if}
 
   <!-- Main Content -->
-  <main
-    class="main-content"
-    style="transform: translateX({swipeOffset}px); touch-action: pan-y;"
-    ontouchstart={onTouchStart}
-    ontouchmove={onTouchMove}
-    ontouchend={onTouchEnd}
-  >
+  <main class="main-content">
     {@render children()}
   </main>
-
-  <!-- Toast -->
-  {#if $toast}
-    <div class="toast">{$toast}</div>
-  {/if}
 
 </div>
 
@@ -238,7 +126,7 @@
 <div class="bottom-nav">
   {#each navItems as item}
     <a href={item.path}>
-      <button class:active={isActive(item.path)} onclick={() => haptic(8)}>
+      <button class:active={isActive(item.path)}>
         <svg class="nav-icon-mobile"><use href="/icon.svg#{item.icon}" /></svg>
         <span class="nav-label">{item.label}</span>
       </button>
