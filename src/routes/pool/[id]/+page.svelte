@@ -4,14 +4,11 @@
   let { data } = $props();
   let tab = data.deadlinePassed ? 'leaderboard' : 'predictions';
   const tabIndexOrder = ['predictions', 'leaderboard', 'members', 'summary', 'results', 'scoring'];
-  let prevTabIndex = tabIndexOrder.indexOf(tab);
-  let slideDir = 'left';
-  function switchTab(newTab: string) {
+      function switchTab(newTab: string) {
     haptic(8);
     const oldIdx = tabIndexOrder.indexOf(tab);
     const newIdx = tabIndexOrder.indexOf(newTab);
     prevTabIndex = newIdx;
-    slideDir = (newIdx > oldIdx ? 'left' : 'right') as 'left' | 'right';
     tab = newTab;
   }
   let copied = $state(false);
@@ -230,8 +227,8 @@
     {/each}
   </div>
 
-  <!-- Tab Content with slide animation -->
-  <div class="tab-content-wrapper slide-{slideDir}" onanimationend={() => slideDir = 'left'}>
+  <!-- Tab Content -->
+  <div>
   <!-- Clasificación -->
   {#if tab === 'leaderboard'}
     {#if data.leaderboard == null}
