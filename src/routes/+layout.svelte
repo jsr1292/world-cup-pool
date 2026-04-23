@@ -4,26 +4,10 @@
   import { toast } from '$lib/toast';
   import '../app.css';
   import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
   import { headerTitle } from '$lib/stores/header';
 
-  // Track previous pathname to detect navigation
-  let prevPath = $state('');
-  let fading = $state(false);
-  let fadeTimer: ReturnType<typeof setTimeout>;
-
-  // React to pathname changes — fires reliably on every navigation
-  $effect(() => {
-    const path = $page.url.pathname;
-    if (prevPath && path !== prevPath) {
-      // Navigation happened
-      fading = true;
-      clearTimeout(fadeTimer);
-      fadeTimer = setTimeout(() => { fading = false; }, 200);
-      if (browser) window.scrollTo(0, 0);
-    }
-    prevPath = path;
-  });
+  // No-op: removed page fade transition that caused blank screens on SPA navigation
+  // Re-enable with proper SvelteKit lifecycle if needed
   let { children, data } = $props();
 
   // Register service worker for PWA
@@ -234,7 +218,7 @@
   <!-- Main Content -->
   <main
     class="main-content"
-    style="transition: opacity 0.15s ease, transform 0.05s ease; opacity: {fading ? 0 : 1}; transform: translateX({swipeOffset}px); touch-action: pan-y;"
+    style="transform: translateX({swipeOffset}px); touch-action: pan-y;"
     ontouchstart={onTouchStart}
     ontouchmove={onTouchMove}
     ontouchend={onTouchEnd}
