@@ -58,6 +58,58 @@
   function qfLabel(mi) { return QF_LABELS[mi] || `QF-${mi + 1}`; }
   function sfLabel(mi) { return SF_LABELS[mi] || `SF-${mi + 1}`; }
 
+  // Map each R32 "3rd from" slot to the groups whose 3rd-place teams feed into it
+  const THIRD_GROUP_MAP = {
+    0: ['A', 'B', 'C', 'D', 'F'],   // E1 vs 3rd(A/B/C/D/F)
+    1: ['C', 'D', 'F', 'G', 'H'],   // I1 vs 3rd(C/D/F/G/H)
+    6: ['B', 'E', 'F', 'I', 'J'],   // D1 vs 3rd(B/E/F/I/J)
+    7: ['A', 'E', 'H', 'I', 'J'],   // G1 vs 3rd(A/E/H/I/J)
+    10: ['C', 'E', 'F', 'H', 'I'],  // A1 vs 3rd(C/E/F/H/I)
+    11: ['E', 'H', 'I', 'J', 'K'],  // L1 vs 3rd(E/H/I/J/K)
+    14: ['E', 'F', 'G', 'I', 'J'],  // B1 vs 3rd(E/F/G/I/J)
+    15: ['D', 'E', 'I', 'J', 'L'],  // K1 vs 3rd(D/E/I/J/L)
+  };
+
+  // Return 3rd-place teams from relevant groups based on user's group predictions
+  function get3rdOptions(mi) {
+    const groups = THIRD_GROUP_MAP[mi];
+    if (!groups) return [];
+    const options = [];
+    for (const g of groups) {
+      const gp = data.groupPredictions?.[g];
+      if (gp?.pos3) {
+        const team = teamMap[gp.pos3];
+        if (team) options.push({ id: team.id, name: team.name, flag_code: team.flag_code, group: g });
+      }
+    }
+    return options;
+  }
+
+  // State for the 3rd-place team selector modal
+  let thirdSelectorOpen = $state(null);
+  function openThirdSelector(mi) { haptic(8); thirdSelectorOpen = mi; }
+  function closeThirdSelector() { thirdSelectorOpen = null; }
+  function pick3rd(mi, teamId) {
+    haptic(8);
+    const match = _teams.r32[mi];
+    const current = match[1]; // currently picked team (or null)
+    animatePick('r32', mi, 1);
+    const exp = _picks.r32[mi];
+    if (current === teamId) {
+      // Undo pick
+      exp[1] = false;
+      match[1] = null;
+    } else {
+      // Set pick
+      exp[1] = true;
+      match[1] = teamId;
+    }
+    recascade();
+    bump();
+    autoSaveBracket();
+    closeThirdSelector();
+  }
+
   const PHASES = ['r32', 'r16', 'qf', 'sf', 'final', '3rd'];
 
   // Use a version counter to force reactivity
@@ -498,6 +550,40 @@
     </div>
   {/if}
 
+  <!-- 3rd-place team selector modal -->
+  {#if thirdSelectorOpen !== null}
+    {@const options = get3rdOptions(thirdSelectorOpen)}
+    {@const pickedTeam = teams.r32?.[thirdSelectorOpen]?.[1]}
+    {@const pickedTeamObj = pickedTeam ? teamMap[pickedTeam] : null}
+    <div class="third-selector-overlay" onclick={closeThirdSelector}>
+      <div class="third-selector-sheet" onclick={(e) => e.stopPropagation()}>
+        <div class="third-selector-header">
+          <span>¿Quién pasa como mejor 3º?</span>
+          <button onclick={closeThirdSelector} style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;">✕</button>
+        </div>
+        <p class="third-selector-sub">Tus terceros de grupo en este cruce:</p>
+        {#if options.length === 0}
+          <div class="third-selector-empty">
+            <span>No has predicho ningún tercero de los grupos de este cruce.</span>
+            <a href="/pool/{data.pool.id}/predict" class="btn-primary" style="display:inline-block;margin-top:12px;font-size:11px;padding:8px 20px;">Predecir grupos →</a>
+          </div>
+        {:else}
+          <div class="third-selector-grid">
+            {#each options as opt}
+              <button class="third-team-btn" class:selected={pickedTeam === opt.id} onclick={() => pick3rd(thirdSelectorOpen, opt.id)}>
+                <span class="team-flag">{flagEmoji(opt.flag_code)}</span>
+                <span class="team-name">{shortName(opt.name)}</span>
+                <span class="third-group-badge">3º {opt.group}</span>
+                {#if pickedTeam === opt.id}<span class="pick-star">★</span>{/if}
+              </button>
+            {/each}
+          </div>
+          <p class="third-selector-hint">Pulsa para elegir quién pasa. Vuelve a pulsar para deseleccionar.</p>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
   <!-- Bracket Grid -->
   <div class="bracket-scroll">
     <!-- Desktop: split bracket layout -->
@@ -515,9 +601,19 @@
                   {@const tid = match[ti]}
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
-                  {@const canClick = !data.isLocked && !isPlaceholder && tid !== null}
-                  <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r32', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
-                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else if isPlaceholder}<span class="team-tbd">TBD</span>{:else}<span class="team-empty">—</span>{/if}
+                  {@const isThirdSlot = ti === 1 && m.t2g === '?'}
+                  {@const canClick = !data.isLocked && (!isPlaceholder || isThirdSlot) && (tid !== null || !isThirdSlot)}
+                  <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => { if (!canClick) return; if (isThirdSlot && tid === null) { openThirdSelector(mi); } else { pickTeam('r32', mi, ti, tid); } }} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { if (tid) hoveredTeam = null; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}
+                    {:else if isThirdSlot}
+                      {@const options = get3rdOptions(mi)}
+                      {#if options.length > 0}
+                        <span class="team-tbd team-tbd-btn" onclick={(e) => { e.stopPropagation(); openThirdSelector(mi); }}>3rd ▾</span>
+                      {:else}
+                        <span class="team-tbd">TBD</span>
+                      {/if}
+                    {:else if isPlaceholder}<span class="team-tbd">TBD</span>
+                    {:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
                 <div class="match-label">{r32Label(mi)}</div>
@@ -686,9 +782,19 @@
                   {@const tid = match[ti]}
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
-                  {@const canClick = !data.isLocked && !isPlaceholder && tid !== null}
-                  <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r32', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
-                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else if isPlaceholder}<span class="team-tbd">TBD</span>{:else}<span class="team-empty">—</span>{/if}
+                  {@const isThirdSlot = ti === 1 && m.t2g === '?'}
+                  {@const canClick = !data.isLocked && (!isPlaceholder || isThirdSlot) && (tid !== null || !isThirdSlot)}
+                  <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => { if (!canClick) return; if (isThirdSlot && tid === null) { openThirdSelector(mi); } else { pickTeam('r32', mi, ti, tid); } }} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { if (tid) hoveredTeam = null; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}
+                    {:else if isThirdSlot}
+                      {@const options = get3rdOptions(mi)}
+                      {#if options.length > 0}
+                        <span class="team-tbd team-tbd-btn" onclick={(e) => { e.stopPropagation(); openThirdSelector(mi); }}>3rd ▾</span>
+                      {:else}
+                        <span class="team-tbd">TBD</span>
+                      {/if}
+                    {:else if isPlaceholder}<span class="team-tbd">TBD</span>
+                    {:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
                 <div class="match-label">{r32Label(mi)}</div>
@@ -712,9 +818,19 @@
                 {@const tid = match[ti]}
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
-                {@const canClick = !data.isLocked && !isPlaceholder && tid !== null}
-                <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r32', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
-                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else if isPlaceholder}<span class="team-tbd">TBD</span>{:else}<span class="team-empty">—</span>{/if}
+                {@const isThirdSlot = ti === 1 && m.t2g === '?'}
+                {@const canClick = !data.isLocked && (!isPlaceholder || isThirdSlot) && (tid !== null || !isThirdSlot)}
+                <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => { if (!canClick) return; if (isThirdSlot && tid === null) { openThirdSelector(mi); } else { pickTeam('r32', mi, ti, tid); } }} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { if (tid) hoveredTeam = null; }}>
+                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}
+                  {:else if isThirdSlot}
+                    {@const options = get3rdOptions(mi)}
+                    {#if options.length > 0}
+                      <span class="team-tbd team-tbd-btn" onclick={(e) => { e.stopPropagation(); openThirdSelector(mi); }}>3rd ▾</span>
+                    {:else}
+                      <span class="team-tbd">TBD</span>
+                    {/if}
+                  {:else if isPlaceholder}<span class="team-tbd">TBD</span>
+                  {:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
               <div class="match-label">{r32Label(mi)}</div>
@@ -1382,4 +1498,54 @@
   :global(.team-pick) {
     animation: pickPulse 0.2s ease;
   }
+
+  /* 3rd-place team selector */
+  .third-selector-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200;
+    display: flex; align-items: flex-end; justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+  .third-selector-sheet {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px 16px 0 0; padding: 20px;
+    width: 100%; max-width: 480px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    max-height: 70vh; overflow-y: auto;
+  }
+  .third-selector-header {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 14px; font-weight: 600; color: var(--gold);
+    margin-bottom: 4px;
+  }
+  .third-selector-sub {
+    font-size: 11px; color: var(--text-muted); margin: 0 0 16px;
+  }
+  .third-selector-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .third-team-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-primary); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; cursor: pointer;
+    transition: all 0.15s; text-align: left;
+    color: var(--text-primary);
+  }
+  .third-team-btn:hover { border-color: var(--gold); background: rgba(201,168,76,0.06); }
+  .third-team-btn.selected { border-color: var(--gold); background: rgba(201,168,76,0.12); }
+  .third-team-btn .team-flag { font-size: 16px; }
+  .third-team-btn .team-name { flex: 1; font-size: 12px; }
+  .third-team-btn .third-group-badge {
+    font-size: 9px; background: rgba(201,168,76,0.15);
+    color: var(--gold); border-radius: 4px; padding: 2px 5px;
+  }
+  .third-team-btn .pick-star { color: var(--gold); font-size: 12px; }
+  .third-selector-empty {
+    text-align: center; padding: 20px 0; font-size: 12px; color: var(--text-muted);
+  }
+  .third-selector-hint {
+    text-align: center; font-size: 10px; color: var(--text-dim);
+    margin: 12px 0 0; padding-top: 8px; border-top: 1px solid var(--border);
+  }
+  .team-tbd-btn { cursor: pointer; color: var(--gold) !important; }
+  .team-tbd-btn:hover { text-decoration: underline; }
 </style>
