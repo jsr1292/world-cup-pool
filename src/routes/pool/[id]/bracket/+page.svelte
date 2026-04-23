@@ -359,8 +359,8 @@
 
   function flagEmoji(code) {
     if (!code) return '';
-    if (code === 'GB-ENG') return '🏴󠁧󠁢󠁥󠁮󠁧󠁿';
-    if (code === 'GB-SCT') return '🏴󠁧󠁢󠁳󠁣󠁴󠁿';
+    if (code === 'ENG') return '🏴󠁧󠁢󠁥󠁮󠁧󠁿';
+    if (code === 'SCT') return '🏴󠁧󠁢󠁳󠁣󠁴󠁿';
     if (code.length !== 2) return '🏳️';
     return code.toUpperCase().split('').map(c => String.fromCodePoint(c.codePointAt(0) + 127397)).join('');
   }
