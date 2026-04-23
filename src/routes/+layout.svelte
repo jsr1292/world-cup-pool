@@ -1,21 +1,28 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { haptic } from '$lib/haptic';
-  import { onNavigate } from '$app/navigation';
   import { toast } from '$lib/toast';
   import '../app.css';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { headerTitle } from '$lib/stores/header';
 
+  // Track previous pathname to detect navigation
+  let prevPath = $state('');
   let fading = $state(false);
   let fadeTimer: ReturnType<typeof setTimeout>;
-  onNavigate(() => {
-    fading = true;
-    clearTimeout(fadeTimer);
-    fadeTimer = setTimeout(() => { fading = false; }, 200);
-    // Scroll to top on navigation
-    if (browser) window.scrollTo(0, 0);
+
+  // React to pathname changes — fires reliably on every navigation
+  $effect(() => {
+    const path = $page.url.pathname;
+    if (prevPath && path !== prevPath) {
+      // Navigation happened
+      fading = true;
+      clearTimeout(fadeTimer);
+      fadeTimer = setTimeout(() => { fading = false; }, 200);
+      if (browser) window.scrollTo(0, 0);
+    }
+    prevPath = path;
   });
   let { children, data } = $props();
 
