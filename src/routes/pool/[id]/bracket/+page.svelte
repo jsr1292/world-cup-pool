@@ -74,23 +74,28 @@
   function get3rdOptions(mi) {
     const groups = THIRD_GROUP_MAP[mi];
     if (!groups) return [];
+    // Collect teams already picked in other 3rd-place slots
+    const alreadyPicked = new Set();
+    for (let i = 0; i < 16; i++) {
+      if (i === mi) continue;
+      const picked = _teams.r32[i]?.[1];
+      if (picked && R32_MAP[i].t2g === '?') alreadyPicked.add(picked);
+    }
     const options = [];
     const seen = new Set();
     for (const g of groups) {
-      // If user has group predictions, use the predicted 3rd place
       const gp = data.groupPredictions?.[g];
       if (gp?.pos3) {
         const team = teamMap[gp.pos3];
-        if (team && !seen.has(team.id)) {
+        if (team && !seen.has(team.id) && !alreadyPicked.has(team.id)) {
           options.push({ id: team.id, name: team.name, flag_code: team.flag_code, group: g });
           seen.add(team.id);
         }
       } else {
-        // No prediction for this group — show all teams from it so user can still pick
         const gTeams = data.teamsByGroup?.[g];
         if (gTeams) {
           for (const t of gTeams) {
-            if (!seen.has(t.id)) {
+            if (!seen.has(t.id) && !alreadyPicked.has(t.id)) {
               options.push({ id: t.id, name: t.name, flag_code: t.flag_code, group: g });
               seen.add(t.id);
             }
@@ -225,7 +230,10 @@
       const m = R32_MAP[i];
       if (m.t1g === '?') continue;
       _teams.r32[i][0] = getGroupTeam(m.t1g, m.t1p);
-      _teams.r32[i][1] = getGroupTeam(m.t2g, m.t2p);
+      // Only auto-fill team2 from group predictions if user hasn't explicitly picked
+      if (!_picks.r32[i][1]) {
+        _teams.r32[i][1] = getGroupTeam(m.t2g, m.t2p);
+      }
     }
 
     // Cascade: R32 → R16 uses special feed-in mapping
