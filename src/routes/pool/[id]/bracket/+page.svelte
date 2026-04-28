@@ -91,16 +91,6 @@
           options.push({ id: team.id, name: team.name, flag_code: team.flag_code, group: g });
           seen.add(team.id);
         }
-      } else {
-        const gTeams = data.teamsByGroup?.[g];
-        if (gTeams) {
-          for (const t of gTeams) {
-            if (!seen.has(t.id) && !alreadyPicked.has(t.id)) {
-              options.push({ id: t.id, name: t.name, flag_code: t.flag_code, group: g });
-              seen.add(t.id);
-            }
-          }
-        }
       }
     }
     return options;
