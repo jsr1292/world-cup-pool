@@ -175,7 +175,7 @@
   {/if}
 
   <!-- Main Content -->
-  <main class="main-content" style="transition: opacity 0.15s ease; opacity: {fading ? 0 : 1};">
+  <main class="main-content" style="transition: opacity 0.18s ease, transform 0.18s ease; opacity: {fading ? 0 : 1}; transform: {fading ? 'translateY(4px)' : 'none'};">
     {@render children()}
   </main>
 

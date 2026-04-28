@@ -1,47 +1,10 @@
 <script lang="ts">
+  import PullToRefresh from '$lib/components/PullToRefresh.svelte';
   let { data } = $props();
   const { leaderboard } = data;
-
-  // Pull-to-refresh
-  let ptrStartY = 0;
-  let ptrPull = $state(0);
-  let ptrRefreshing = $state(false);
-
-  function onPtrTouchStart(e: TouchEvent) {
-    const el = e.currentTarget as HTMLElement;
-    if (el.scrollTop > 0) return;
-    ptrStartY = e.touches[0].clientY;
-  }
-  function onPtrTouchMove(e: TouchEvent) {
-    if (ptrStartY === 0 || ptrRefreshing) return;
-    const dy = e.touches[0].clientY - ptrStartY;
-    if (dy < 0) { ptrStartY = 0; ptrPull = 0; return; }
-    ptrPull = Math.min(dy, 80);
-  }
-  function onPtrTouchEnd() {
-    if (ptrPull >= 50 && !ptrRefreshing) {
-      ptrRefreshing = true;
-      window.location.reload();
-    } else {
-      ptrPull = 0;
-    }
-    ptrStartY = 0;
-  }
 </script>
 
-<div
-  style="overscroll-behavior-y: contain;"
-  ontouchstart={onPtrTouchStart}
-  ontouchmove={onPtrTouchMove}
-  ontouchend={onPtrTouchEnd}
->
-  <!-- Pull-to-refresh indicator -->
-  <div style="position: sticky; top: calc(56px + env(safe-area-inset-top)); z-index: 20; text-align: center; padding: 8px 0; pointer-events: none; transition: opacity 0.2s; opacity: {ptrPull > 10 ? 1 : 0};">
-    <span style="font-size: 12px; color: var(--gold); {ptrRefreshing ? 'display:inline-block;animation:spin 0.8s linear infinite;' : ''}">
-      {ptrRefreshing ? '↻ Refreshing...' : ptrPull >= 50 ? '↻ Suelta para actualizar' : '↻'}
-    </span>
-  </div>
-
+<PullToRefresh onRefresh={async () => { window.location.reload(); }}>
   <div style="margin-bottom: 24px;">
     <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold);">🏆 Clasificación Global</h1>
     <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
@@ -50,7 +13,6 @@
   </div>
 
   {#if data.leaderboard == null}
-    <!-- Skeleton -->
     <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
       <div style="display: grid; grid-template-columns: 40px 1fr 60px 60px; padding: 10px 16px; font-size: 8px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; border-bottom: 1px solid var(--border);">
         <div>#</div><div>Usuario</div><div style="text-align: right;">Pts</div><div style="text-align: right;">Aciertos</div>
@@ -101,13 +63,9 @@
   <div style="margin-top: 16px; text-align: center;">
     <a href="/pools" style="font-size: 10px; color: var(--text-muted);">Ver mis pools →</a>
   </div>
-</div>
+</PullToRefresh>
 
 <style>
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
   .gold { background: rgba(201, 168, 76, 0.06); }
   .silver { background: rgba(192, 192, 192, 0.04); }
   .bronze { background: rgba(205, 127, 50, 0.04); }
