@@ -229,9 +229,13 @@
     // Cascade: R32 → R16 uses special feed-in mapping
     for (let i = 0; i < _teams.r16.length; i++) {
       for (let j = 0; j < 2; j++) {
-        if (!_picks.r16[i][j]) {
-          _teams.r16[i][j] = getWinner('r32', R32_TO_R16[i * 2 + j]);
+        const winner = getWinner('r32', R32_TO_R16[i * 2 + j]);
+        // Invalidate explicit pick if the team is no longer the upstream winner
+        if (_picks.r16[i][j] && _teams.r16[i][j] !== winner) {
+          _picks.r16[i][0] = false;
+          _picks.r16[i][1] = false;
         }
+        _teams.r16[i][j] = _picks.r16[i][j] ? _teams.r16[i][j] : winner;
       }
     }
     // Cascade: R16 → QF → SF → Final (sequential pairs)
@@ -243,9 +247,13 @@
     for (const { from, to } of cascades) {
       for (let i = 0; i < _teams[to].length; i++) {
         for (let j = 0; j < 2; j++) {
-          if (!_picks[to][i][j]) {
-            _teams[to][i][j] = getWinner(from, i * 2 + j);
+          const winner = getWinner(from, i * 2 + j);
+          // Invalidate explicit pick if the team is no longer available
+          if (_picks[to][i][j] && _teams[to][i][j] !== winner) {
+            _picks[to][i][0] = false;
+            _picks[to][i][1] = false;
           }
+          _teams[to][i][j] = _picks[to][i][j] ? _teams[to][i][j] : winner;
         }
       }
     }
