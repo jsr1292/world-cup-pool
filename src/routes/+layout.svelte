@@ -25,6 +25,26 @@
     return currentPath.startsWith(path);
   }
 
+  // Theme toggle
+  let isDark = $state(true);
+  $effect(() => {
+    if (!browser) return;
+    isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  });
+  function toggleTheme() {
+    if (!browser) return;
+    const theme = isDark ? 'light' : '';
+    if (theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    localStorage.setItem('theme', theme);
+    isDark = !isDark;
+    const meta = document.querySelector('meta[name=theme-color]');
+    if (meta) meta.content = isDark ? '#07090f' : '#f5f5f0';
+  }
+
   // Staggered card entrance + animated counters
   onMount(() => {
     if (!browser) return;
@@ -86,6 +106,9 @@
               <div class="countdown live">⚽ En juego</div>
             {/if}
           {/if}
+          <button onclick={toggleTheme} class="theme-toggle" title="Cambiar tema">
+            {isDark ? '☀️' : '🌙'}
+          </button>
           <a href="/profile" class="top-bar-avatar" title="Perfil">
             {data.user.display_name?.charAt(0).toUpperCase() ?? '?'}
           </a>
@@ -221,7 +244,7 @@
     position: sticky;
     top: 0;
     z-index: 50;
-    background: rgba(13,17,32,0.80);
+    background: var(--bg-nav);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid rgba(201, 168, 76, 0.12);
@@ -273,9 +296,9 @@
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: rgba(13, 17, 32, 0.8);
+    background: var(--bg-card);
     border: 2px solid transparent;
-    background-image: linear-gradient(rgba(13, 17, 32, 0.8), rgba(13, 17, 32, 0.8)), linear-gradient(135deg, #e8c96a, #c9a84c, #b8943f);
+    background-image: linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #e8c96a, #c9a84c, #b8943f);
     background-origin: border-box;
     background-clip: padding-box, border-box;
     color: var(--gold);
@@ -292,6 +315,14 @@
   .top-bar-avatar:hover {
     box-shadow: 0 0 8px rgba(201, 168, 76, 0.3);
   }
+
+  .theme-toggle {
+    background: none; border: none; cursor: pointer;
+    font-size: 16px; padding: 4px;
+    opacity: 0.7; transition: opacity 0.15s;
+    line-height: 1;
+  }
+  .theme-toggle:hover { opacity: 1; }
 
   /* Desktop: hide top bar, show sidebar */
   @media (min-width: 768px) {
