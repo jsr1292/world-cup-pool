@@ -31,6 +31,25 @@
     if (!browser) return;
     isDark = document.documentElement.getAttribute('data-theme') !== 'light';
   });
+
+  // Live countdown
+  let countdownText = $state('');
+  $effect(() => {
+    if (!browser) return;
+    const kickoff = new Date('2026-06-11T00:00:00Z').getTime();
+    const update = () => {
+      const diff = kickoff - Date.now();
+      if (diff <= 0) { countdownText = ''; return; }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      countdownText = d > 0 ? `${d}d ${h}h ${m}m ${s}s` : `${h}h ${m}m ${s}s`;
+    };
+    update();
+    const iv = setInterval(update, 1000);
+    return () => clearInterval(iv);
+  });
   function toggleTheme() {
     if (!browser) return;
     const theme = isDark ? 'light' : '';
@@ -94,15 +113,13 @@
           <span>Mundial 2026</span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          {#if typeof window !== 'undefined'}
-            {@const kickoff = new Date('2026-06-11T00:00:00Z')}
-            {@const now = Date.now()}
-            {@const diff = kickoff.getTime() - now}
-            {#if diff > 0}
-              <div class="countdown" title="11 de junio de 2026">
-                {Math.ceil(diff / (1000 * 60 * 60 * 24))} días
-              </div>
-            {:else if diff > -(1000 * 60 * 60 * 24 * 35)}
+          {#if countdownText}
+            <div class="countdown" title="11 de junio de 2026">
+              {countdownText}
+            </div>
+          {:else if typeof window !== 'undefined'}
+            {@const diff = new Date('2026-06-11T00:00:00Z').getTime() - Date.now()}
+            {#if diff > -(1000 * 60 * 60 * 24 * 35)}
               <div class="countdown live">⚽ En juego</div>
             {/if}
           {/if}
@@ -186,7 +203,7 @@
 <div class="bottom-nav">
   {#each navItems as item}
     <a href={item.path}>
-      <button class:active={isActive(item.path)}>
+      <button class:active={isActive(item.path)} onclick={() => { try { navigator.vibrate(5); } catch {} }}>
         <svg class="nav-icon-mobile"><use href="/icon.svg#{item.icon}" /></svg>
         <span class="nav-label">{item.label}</span>
       </button>

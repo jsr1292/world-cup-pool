@@ -1172,11 +1172,20 @@
   .bracket-col:not(:first-child)::before {
     content: '';
     position: absolute;
-    left: 0;
+    left: -4px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(201,168,76,0.1);
+  }
+  .bracket-col:not(:first-child)::after {
+    content: '';
+    position: absolute;
+    left: -4px;
     top: 50%;
-    width: 8px;
+    width: 4px;
     height: 1px;
-    background: rgba(255,255,255,0.08);
+    background: rgba(201,168,76,0.1);
   }
   .bracket-col { position: relative; }
 

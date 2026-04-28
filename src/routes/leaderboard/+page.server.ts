@@ -1,7 +1,8 @@
 import { db } from '$lib/server/db.js';
 import type { PageServerLoad } from './$types.js';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+  const currentUserId = locals.user?.id;
   // Get the actual final match score for tiebreaker closeness
   const finalMatch = db.prepare(`
     SELECT home_score, away_score FROM matches
@@ -52,5 +53,5 @@ export const load: PageServerLoad = async () => {
     total_correct: row.total_correct || 0,
   }));
 
-  return { leaderboard };
+  return { leaderboard, currentUserId };
 };

@@ -45,7 +45,7 @@
         <div style="text-align: right;">Aciertos</div>
       </div>
       {#each leaderboard as entry}
-        <div style="display: grid; grid-template-columns: 40px 1fr 70px 60px; padding: 12px 16px; font-size: 12px; border-bottom: 1px solid var(--border); align-items: center;" class:gold={entry.rank === 1} class:silver={entry.rank === 2} class:bronze={entry.rank === 3}>
+        <div style="display: grid; grid-template-columns: 40px 1fr 70px 60px; padding: 12px 16px; font-size: 12px; border-bottom: 1px solid var(--border); align-items: center; {entry.user_id === data.currentUserId ? 'background: rgba(201,168,76,0.08); border-left: 3px solid var(--gold);' : ''}" class:gold={entry.rank === 1 && entry.user_id !== data.currentUserId} class:silver={entry.rank === 2 && entry.user_id !== data.currentUserId} class:bronze={entry.rank === 3 && entry.user_id !== data.currentUserId} class:me={entry.user_id === data.currentUserId}>
           <div style="width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; {entry.rank === 1 ? 'background: linear-gradient(135deg, #c9a84c, #e8c96a); color: #1a1a2e;' : entry.rank === 2 ? 'background: linear-gradient(135deg, #a0a0a0, #c0c0c0); color: #1a1a2e;' : entry.rank === 3 ? 'background: linear-gradient(135deg, #b87333, #cd7f32); color: #1a1a2e;' : 'background: rgba(255,255,255,0.06); color: var(--text-dim);'}">
             {entry.display_name?.[0]?.toUpperCase() || '?'}
           </div>
