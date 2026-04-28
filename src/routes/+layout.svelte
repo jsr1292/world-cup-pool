@@ -1,6 +1,7 @@
 <script>
   import { browser } from '$app/environment';
   import { onNavigate } from '$app/navigation';
+  import { onMount } from 'svelte';
   import '../app.css';
   import { page } from '$app/stores';
 
@@ -23,6 +24,37 @@
     if (path === '/') return currentPath === '/';
     return currentPath.startsWith(path);
   }
+
+  // Staggered card entrance + animated counters
+  onMount(() => {
+    if (!browser) return;
+    const stagger = () => {
+      let i = 0;
+      document.querySelectorAll('.pool-card:not(.stagger-in), .stat-card:not(.stagger-in)').forEach(el => {
+        el.style.animationDelay = `${i * 60}ms`;
+        el.classList.add('stagger-in');
+        i++;
+      });
+      document.querySelectorAll('.stat-value[data-count]:not(.count-animate)').forEach(el => {
+        const target = parseInt(el.dataset.count);
+        if (isNaN(target)) return;
+        el.classList.add('count-animate');
+        const duration = 600;
+        const start = performance.now();
+        const tick = (now) => {
+          const progress = Math.min((now - start) / duration, 1);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          el.textContent = Math.round(target * eased);
+          if (progress < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+    };
+    stagger();
+    // Re-run stagger on page navigation (not on every DOM mutation)
+    const unsubscribe = page.subscribe(() => setTimeout(stagger, 100));
+    return unsubscribe;
+  });
 
   const navItems = [
     { path: '/', label: 'Inicio', icon: 'home' },
