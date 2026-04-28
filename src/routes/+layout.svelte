@@ -11,10 +11,8 @@
   });
   let { children, data } = $props();
 
-  // Register service worker for PWA
-  if (browser && 'serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  }
+  // PWA service worker disabled during development — re-enable for production builds
+  // if (browser && 'serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(() => {}); }
 
   let currentPath = $state('');
   $effect(() => {

@@ -75,11 +75,27 @@
     const groups = THIRD_GROUP_MAP[mi];
     if (!groups) return [];
     const options = [];
+    const seen = new Set();
     for (const g of groups) {
+      // If user has group predictions, use the predicted 3rd place
       const gp = data.groupPredictions?.[g];
       if (gp?.pos3) {
         const team = teamMap[gp.pos3];
-        if (team) options.push({ id: team.id, name: team.name, flag_code: team.flag_code, group: g });
+        if (team && !seen.has(team.id)) {
+          options.push({ id: team.id, name: team.name, flag_code: team.flag_code, group: g });
+          seen.add(team.id);
+        }
+      } else {
+        // No prediction for this group — show all teams from it so user can still pick
+        const gTeams = data.teamsByGroup?.[g];
+        if (gTeams) {
+          for (const t of gTeams) {
+            if (!seen.has(t.id)) {
+              options.push({ id: t.id, name: t.name, flag_code: t.flag_code, group: g });
+              seen.add(t.id);
+            }
+          }
+        }
       }
     }
     return options;
@@ -564,7 +580,9 @@
         <p class="third-selector-sub">Tus terceros de grupo en este cruce:</p>
         {#if options.length === 0}
           <div class="third-selector-empty">
-            <span>No has predicho ningún tercero de los grupos de este cruce.</span>
+            <span style="font-size:16px;">🤷</span>
+            <span>No hay equipos disponibles para este cruce.</span>
+            <span style="font-size:10px;color:var(--text-dim);margin-top:4px;">Predice los grupos primero para desbloquear los 3ros.</span>
             <a href="/pool/{data.pool.id}/predict" class="btn-primary" style="display:inline-block;margin-top:12px;font-size:11px;padding:8px 20px;">Predecir grupos →</a>
           </div>
         {:else}
@@ -602,13 +620,13 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
                   {@const isThirdSlot = ti === 1 && m.t2g === '?'}
-                  {@const canClick = !data.isLocked && (!isPlaceholder || isThirdSlot) && (tid !== null || !isThirdSlot)}
+                  {@const canClick = !data.isLocked && (tid !== null || isThirdSlot)}
                   <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => { if (!canClick) return; if (isThirdSlot && tid === null) { openThirdSelector(mi); } else { pickTeam('r32', mi, ti, tid); } }} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { if (tid) hoveredTeam = null; }}>
                     {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}
                     {:else if isThirdSlot}
                       {@const options = get3rdOptions(mi)}
                       {#if options.length > 0}
-                        <span class="team-tbd team-tbd-btn" onclick={(e) => { e.stopPropagation(); openThirdSelector(mi); }}>3rd ▾</span>
+                        <span class="team-tbd team-tbd-btn">3rd ▾</span>
                       {:else}
                         <span class="team-tbd">TBD</span>
                       {/if}
@@ -783,13 +801,13 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
                   {@const isThirdSlot = ti === 1 && m.t2g === '?'}
-                  {@const canClick = !data.isLocked && (!isPlaceholder || isThirdSlot) && (tid !== null || !isThirdSlot)}
+                  {@const canClick = !data.isLocked && (tid !== null || isThirdSlot)}
                   <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => { if (!canClick) return; if (isThirdSlot && tid === null) { openThirdSelector(mi); } else { pickTeam('r32', mi, ti, tid); } }} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { if (tid) hoveredTeam = null; }}>
                     {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}
                     {:else if isThirdSlot}
                       {@const options = get3rdOptions(mi)}
                       {#if options.length > 0}
-                        <span class="team-tbd team-tbd-btn" onclick={(e) => { e.stopPropagation(); openThirdSelector(mi); }}>3rd ▾</span>
+                        <span class="team-tbd team-tbd-btn">3rd ▾</span>
                       {:else}
                         <span class="team-tbd">TBD</span>
                       {/if}
@@ -819,13 +837,13 @@
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
                 {@const isThirdSlot = ti === 1 && m.t2g === '?'}
-                {@const canClick = !data.isLocked && (!isPlaceholder || isThirdSlot) && (tid !== null || !isThirdSlot)}
+                {@const canClick = !data.isLocked && (tid !== null || isThirdSlot)}
                 <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => { if (!canClick) return; if (isThirdSlot && tid === null) { openThirdSelector(mi); } else { pickTeam('r32', mi, ti, tid); } }} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { if (tid) hoveredTeam = null; }}>
                   {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}
                   {:else if isThirdSlot}
                     {@const options = get3rdOptions(mi)}
                     {#if options.length > 0}
-                      <span class="team-tbd team-tbd-btn" onclick={(e) => { e.stopPropagation(); openThirdSelector(mi); }}>3rd ▾</span>
+                      <span class="team-tbd team-tbd-btn">3rd ▾</span>
                     {:else}
                       <span class="team-tbd">TBD</span>
                     {/if}
