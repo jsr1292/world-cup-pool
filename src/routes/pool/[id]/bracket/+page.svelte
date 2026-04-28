@@ -33,7 +33,7 @@
   ];
 
   // R32 → R16 feed-in: R16[i] = winner of R32[R32_TO_R16[i*2]] vs R32[R32_TO_R16[i*2+1]]
-  const R32_TO_R16 = [4, 6, 0, 2, 5, 7, 1, 3];
+  const R32_TO_R16 = [4, 6, 5, 7, 0, 2, 1, 3, 8, 10, 9, 11, 12, 14, 13, 15];
 
   // Match labels
   const R32_LABELS = [
