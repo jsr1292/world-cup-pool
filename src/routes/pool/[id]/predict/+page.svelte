@@ -565,7 +565,6 @@
   </div>
 
   <!-- Knockout Match Scores Section -->
-  <div style="font-size:10px;color:red;padding:8px;background:#300;">KNOCKOUT_DEBUG: {JSON.stringify(Object.keys(data.knockoutByPhase || {}))} | hasData: {data.knockoutByPhase ? 'YES' : 'NO'}</div>
   {#if Object.keys(data.knockoutByPhase || {}).length > 0}
     <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border);">
       <div style="margin-bottom: 16px;">
