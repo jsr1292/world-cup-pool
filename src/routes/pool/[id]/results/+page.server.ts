@@ -30,6 +30,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   let userPredictions: any[] = [];
   let userGroupPreds: any[] = [];
   let userBracketPreds: any[] = [];
+  let userMatchPreds: any[] = [];
   let selectedEntryId: number | null = null;
 
   if (locals.user) {
@@ -47,6 +48,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       userBracketPreds = db.prepare(`
         SELECT phase, slot as match_index, team_id, points_earned
         FROM bracket_predictions WHERE prediction_id = ?
+      `).all(selectedEntryId) as any[];
+
+      // Match predictions (knockout + group)
+      userMatchPreds = db.prepare(`
+        SELECT mp.match_id, mp.home_score as pred_home, mp.away_score as pred_away, mp.points_earned,
+          m.home_score as actual_home, m.away_score as actual_away, m.home_team_id, m.away_team_id,
+          m.phase, m.status, m.home_name, m.home_flag, m.away_name, m.away_flag
+        FROM match_predictions mp
+        JOIN matches m ON m.id = mp.match_id
+        WHERE mp.prediction_id = ?
       `).all(selectedEntryId) as any[];
     }
   }
@@ -91,6 +102,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     selectedEntryId,
     userGroupPreds,
     userBracketPreds,
+    userMatchPreds,
     teamCache,
   };
 };

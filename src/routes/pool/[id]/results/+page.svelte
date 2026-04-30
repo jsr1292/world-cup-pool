@@ -65,8 +65,24 @@
 
   let totalUserPoints = $derived(
     data.userGroupPreds.reduce((sum, g) => sum + (g.points_earned || 0), 0) +
-    data.userBracketPreds.reduce((sum, b) => sum + (b.points_earned || 0), 0)
+    data.userBracketPreds.reduce((sum, b) => sum + (b.points_earned || 0), 0) +
+    (data.userMatchPreds || []).reduce((sum, m) => sum + (m.points_earned || 0), 0)
   );
+
+  // Build match predictions lookup: matchId -> { pred_home, pred_away, points_earned }
+  const matchPredLookup: Record<number, { pred_home: number; pred_away: number; points_earned: number }> = {};
+  for (const mp of (data.userMatchPreds || [])) {
+    matchPredLookup[mp.match_id] = { pred_home: mp.pred_home, pred_away: mp.pred_away, points_earned: mp.points_earned };
+  }
+
+  // Determine color coding for match score prediction
+  function getMatchResultClass(matchId) {
+    const mp = matchPredLookup[matchId];
+    if (!mp || mp.points_earned == null) return null;
+    if (mp.points_earned >= 7) return 'exact'; // exact score (outcome + exact)
+    if (mp.points_earned >= 2) return 'outcome'; // correct outcome only
+    return 'wrong';
+  }
 </script>
 
 <svelte:head>
@@ -162,8 +178,10 @@
             {@const isFinished = match.status === 'finished'}
             {@const homeWin = isFinished && match.home_score > match.away_score}
             {@const awayWin = isFinished && match.away_score > match.home_score}
+            {@const mp = matchPredLookup[match.id]}
+            {@const resultClass = isFinished ? getMatchResultClass(match.id) : null}
 
-            <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+            <div style="background: var(--bg-surface); border: 1px solid {resultClass === 'exact' ? 'rgba(0,229,160,0.5)' : resultClass === 'outcome' ? 'rgba(255,200,0,0.4)' : resultClass === 'wrong' ? 'rgba(255,77,106,0.3)' : 'var(--border)'}; border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
               <!-- Home -->
               <span style="flex: 1; text-align: right; font-size: 12px; {homeWin ? 'font-weight: 600; color: var(--text);' : isFinished ? 'color: var(--text-muted);' : 'color: var(--text);'}">
                 {flag(match.home_flag)} {match.home_name ?? 'TBD'}
@@ -186,8 +204,16 @@
               </span>
             </div>
 
-            <!-- Prediction comparison -->
-            {#if pred && isFinished}
+            <!-- Prediction comparison + Match score prediction -->
+            {#if isFinished && mp}
+              {@const ptsLabel = mp.points_earned > 0 ? `+${mp.points_earned}pts` : '0pts'}
+              {@const resultColor = mp.points_earned >= 7 ? 'var(--green)' : mp.points_earned >= 2 ? '#ffc800' : 'var(--red)'}
+              <div style="font-size: 10px; padding: 0 0 8px 0; text-align: center; color: var(--text-muted);">
+                Tu marcador: <strong style="color: var(--text);">{mp.pred_home} - {mp.pred_away}</strong>
+                · <span style="color: {resultColor}; font-weight: 600;">{ptsLabel}</span>
+                · {#if mp.points_earned >= 7}<span style="color: var(--green);">✓ Exact</span>{:else if mp.points_earned >= 2}<span style="color: #ffc800;">✓ Resultado</span>{:else}<span style="color: var(--red);">✗</span>{/if}
+              </div>
+            {:else if pred && isFinished}
               {@const actualWinner = homeWin ? match.home_team_id : awayWin ? match.away_team_id : null}
               {@const correct = actualWinner && pred.team_id === actualWinner}
               <div style="font-size: 9px; padding: 0 0 6px 0; text-align: center;">

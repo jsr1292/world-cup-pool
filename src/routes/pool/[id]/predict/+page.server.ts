@@ -1,4 +1,5 @@
 import { getPoolById, getAllTeams, createPrediction, getUserPredictions, getGroupPredictions } from '$lib/server/queries.js';
+import { db } from '$lib/server/db.js';
 import { redirect, error } from '@sveltejs/kit';
 import type { ServerLoad } from '@sveltejs/kit';
 
@@ -21,7 +22,7 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   // Get ALL user predictions for this pool
   let predictions = getUserPredictions(poolId, locals.user.id) as any[];
 
-  // Check deadline
+  // Check deadline (group deadline for group predictions)
   const deadline = pool.deadline_group ? new Date(pool.deadline_group as string) : null;
   const isLocked = deadline ? new Date() >= deadline : false;
 
@@ -29,6 +30,30 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   const selectedLabel = url.searchParams.get('entry') || '';
   let selectedPrediction = predictions.find(p => p.label === selectedLabel) || predictions[0] || null;
   let selectedId: number | null = null;
+
+  // Load knockout matches with both teams set (available for prediction)
+  const knockoutMatches = db.prepare(`
+    SELECT m.id, m.phase, m.home_team_id, m.away_team_id,
+      ht.name as home_name, ht.flag_code as home_flag,
+      at.name as away_name, at.flag_code as away_flag
+    FROM matches m
+    LEFT JOIN teams ht ON ht.id = m.home_team_id
+    LEFT JOIN teams at ON at.id = m.away_team_id
+    WHERE m.phase IN ('r32','r16','qf','sf','3rd','final')
+      AND m.home_team_id IS NOT NULL
+      AND m.away_team_id IS NOT NULL
+    ORDER BY m.phase, m.id
+  `).all() as any[];
+
+  // Group knockout matches by phase
+  const knockoutByPhase: Record<string, any[]> = {};
+  for (const m of knockoutMatches) {
+    if (!knockoutByPhase[m.phase]) knockoutByPhase[m.phase] = [];
+    knockoutByPhase[m.phase].push(m);
+  }
+
+  // Load existing match predictions
+  const existingMatchPreds: Record<number, { home_score: number; away_score: number }> = {};
 
   // Load group predictions for selected entry
   const existingGroupPreds: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }> = {};
@@ -43,6 +68,14 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
         pos3: row.position_3,
         pos4: row.position_4,
       };
+    }
+    // Load existing match predictions
+    const mpRows = db.prepare(`
+      SELECT match_id, home_score, away_score
+      FROM match_predictions WHERE prediction_id = ?
+    `).all(selectedId) as any[];
+    for (const row of mpRows) {
+      existingMatchPreds[row.match_id] = { home_score: row.home_score, away_score: row.away_score };
     }
   }
 
@@ -61,5 +94,7 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
     selectedLabel: selectedPrediction?.label || '',
     isLocked,
     existingGroupPreds,
+    knockoutByPhase,
+    existingMatchPreds,
   };
 };
