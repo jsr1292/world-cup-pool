@@ -46,11 +46,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const saveAll = db.transaction(() => {
     for (const [matchIdStr, score] of Object.entries(scores)) {
       const matchId = Number(matchIdStr);
-      const homeScore = score.home_score !== null && score.home_score !== undefined ? Number(score.home_score) : null;
-      const awayScore = score.away_score !== null && score.away_score !== undefined ? Number(score.away_score) : null;
+      const homeRaw = score.home_score;
+      const awayRaw = score.away_score;
+      const homeScore = (homeRaw !== null && homeRaw !== undefined) ? Number(homeRaw) : null;
+      const awayScore = (awayRaw !== null && awayRaw !== undefined) ? Number(awayRaw) : null;
 
-      if (homeScore === null || awayScore === null || isNaN(homeScore) || isNaN(awayScore)) {
-        // Delete prediction if scores are null
+      if (homeScore === null || awayScore === null || isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0) {
+        // Delete prediction if scores are null/undefined, NaN, or negative
         deleteStmt.run(prediction_id, matchId);
       } else {
         upsert.run({ prediction_id, match_id: matchId, home_score: homeScore, away_score: awayScore });

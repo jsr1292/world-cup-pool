@@ -74,7 +74,7 @@ export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
   try {
     // FIFA World Cup 2026 competition ID
     const res = await fetch(
-      `${FIFA_BASE}/matches/competitions/254648/status=completed`,
+      `${FIFA_BASE}/matches/competitions/254648?status=completed`,
       { headers: { 'Accept': 'application/json' } }
     );
 
@@ -137,13 +137,15 @@ export async function syncScores(): Promise<{ updated: number; skipped: number; 
 
     if (!dbMatch) {
       // Try matching by team names (fuzzy)
+      // Escape LIKE wildcards % and _ in team names to prevent injection
+      const escapeLike = (s: string) => s.replace(/[%_]/g, '\\$&');
       dbMatch = db.prepare(`
         SELECT m.* FROM matches m
         JOIN teams t1 ON t1.id = m.home_team_id
         JOIN teams t2 ON t2.id = m.away_team_id
-        WHERE (t1.name LIKE ? OR t2.name LIKE ?) AND m.status != 'finished'
+        WHERE (t1.name LIKE ? ESCAPE '\' OR t2.name LIKE ? ESCAPE '\') AND m.status != 'finished'
         LIMIT 1
-      `).get(`%${m.home_team}%`, `%${m.away_team}%`) as any;
+      `).get(`%${escapeLike(m.home_team)}%`, `%${escapeLike(m.away_team)}%`) as any;
     }
 
     if (!dbMatch) { skipped++; continue; }

@@ -8,7 +8,11 @@ export function hashPwd(password: string): string {
 }
 
 export function verifyPwd(password: string, stored: string): boolean {
-  const [salt, hash] = stored.split(':');
+  const parts = stored.split(':');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new Error('Malformed password hash: missing salt/hash separator');
+  }
+  const [salt, hash] = parts;
   const verify = crypto.scryptSync(password, salt, 32).toString('hex');
   return hash === verify;
 }
@@ -71,7 +75,6 @@ export function createPool(name: string, createdBy: number, buyIn = 0, allowMult
       ['knockout_sf', 6],
       ['knockout_final', 6],
       ['knockout_winner', 8],
-      ['final_exact_score', 5],
     ];
     const insertConfig = db.prepare('INSERT INTO scoring_config (pool_id, rule, points) VALUES (?, ?, ?)');
     for (const [rule, pts] of defaults) {
