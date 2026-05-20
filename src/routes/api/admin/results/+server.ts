@@ -16,10 +16,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'Faltan campos' }, { status: 400 });
   }
 
-  // Verify user owns THIS pool
-  const pool = db.prepare('SELECT created_by FROM pools WHERE id = ?').get(pool_id) as any;
-  if (!pool || pool.created_by !== locals.user.id) {
-    return json({ error: 'Prohibido' }, { status: 403 });
+  if (
+    !Number.isInteger(home_score) || !Number.isInteger(away_score) ||
+    home_score < 0 || away_score < 0 ||
+    home_score > 30 || away_score > 30
+  ) {
+    return json({ error: 'Marcador inválido' }, { status: 400 });
+  }
+
+  // Verify user is admin
+  const actor = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(locals.user.id) as any;
+  if (!actor?.is_admin) {
+    return json({ error: 'Solo los administradores pueden modificar resultados' }, { status: 403 });
   }
 
   // Get match

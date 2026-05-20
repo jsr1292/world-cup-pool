@@ -1,16 +1,16 @@
 import { db } from './db.js';
 
 const DEFAULT_RULES: Record<string, number> = {
-  group_position: 3,
-  knockout_r32: 5,
-  knockout_r16: 10,
-  knockout_qf: 20,
-  knockout_sf: 40,
-  knockout_final: 80,
-  knockout_winner: 100,
+  match_outcome: 1,
+  exact_score: 3,
+  group_position: 2,
+  knockout_r32: 2,
+  knockout_r16: 3,
+  knockout_qf: 4,
+  knockout_sf: 6,
+  knockout_final: 6,
+  knockout_winner: 8,
   third_place: 25,
-  match_outcome: 2,
-  exact_score: 5,
 };
 
 export function getScoringRules(poolId: number): Record<string, number> {
@@ -119,12 +119,14 @@ export function calculateBracketScores(poolId: number): void {
   // Determine winners per match
   const phaseWinners: Record<string, Set<number>> = {}; // phase -> set of winner team_ids
   for (const m of matches) {
-    const winner = m.home_score > m.away_score ? m.home_team_id : m.away_score > m.home_score ? m.away_team_id : null;
-    if (winner) {
-      const phase = m.phase;
-      if (!phaseWinners[phase]) phaseWinners[phase] = new Set();
-      phaseWinners[phase].add(winner);
+    if (m.home_score === m.away_score) {
+      console.warn(`[scoring] Knockout match ${m.id} has equal scores — skipping (enter post-penalty result)`);
+      continue;
     }
+    const winner = m.home_score > m.away_score ? m.home_team_id : m.away_team_id;
+    const phase = m.phase;
+    if (!phaseWinners[phase]) phaseWinners[phase] = new Set();
+    phaseWinners[phase].add(winner);
   }
 
   const predictions = db.prepare(
@@ -151,7 +153,10 @@ export function calculateBracketScores(poolId: number): void {
         const winners = phaseWinners[bp.phase];
         if (winners && bp.team_id && winners.has(bp.team_id)) {
           const ruleKey = bp.phase === '3rd' ? 'third_place' : `knockout_${bp.phase}`;
-          const pts = rules[ruleKey] ?? 0;
+          let pts = rules[ruleKey] ?? 0;
+          if (bp.phase === 'final') {
+            pts += rules['knockout_winner'] ?? 0;
+          }
           updateBP.run(pts, pred.id, bp.phase, bp.team_id);
         }
       }

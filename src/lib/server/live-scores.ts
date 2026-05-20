@@ -143,7 +143,8 @@ export async function syncScores(): Promise<{ updated: number; skipped: number; 
         SELECT m.* FROM matches m
         JOIN teams t1 ON t1.id = m.home_team_id
         JOIN teams t2 ON t2.id = m.away_team_id
-        WHERE (t1.name LIKE ? ESCAPE '\' OR t2.name LIKE ? ESCAPE '\') AND m.status != 'finished'
+        WHERE (t1.name LIKE ? ESCAPE '\' AND t2.name LIKE ? ESCAPE '\')
+          AND m.status != 'finished'
         LIMIT 1
       `).get(`%${escapeLike(m.home_team)}%`, `%${escapeLike(m.away_team)}%`) as any;
     }

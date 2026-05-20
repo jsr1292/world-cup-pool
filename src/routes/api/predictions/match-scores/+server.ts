@@ -24,10 +24,28 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
-  // Check deadline (use knockout deadline)
-  const poolCheck = db.prepare('SELECT deadline_knockout FROM pools WHERE id = ?').get(pred.pool_id) as any;
-  if (poolCheck?.deadline_knockout && new Date(poolCheck.deadline_knockout) <= new Date()) {
-    return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
+  // Check deadline (per-phase)
+  const poolCheck = db.prepare(
+    'SELECT deadline_group, deadline_knockout FROM pools WHERE id = ?'
+  ).get(pred.pool_id) as any;
+
+  const matchIds = Object.keys(scores).map(Number);
+  if (matchIds.length > 0) {
+    const placeholders = matchIds.map(() => '?').join(',');
+    const phaseRow = db.prepare(`
+      SELECT
+        MAX(CASE WHEN phase = 'group' THEN 1 ELSE 0 END) AS has_group,
+        MAX(CASE WHEN phase != 'group' THEN 1 ELSE 0 END) AS has_knockout
+      FROM matches WHERE id IN (${placeholders})
+    `).get(...matchIds) as any;
+
+    const now = new Date();
+    if (phaseRow?.has_group && poolCheck?.deadline_group && new Date(poolCheck.deadline_group) <= now) {
+      return json({ error: 'La fecha límite de fase de grupos ha pasado' }, { status: 403 });
+    }
+    if (phaseRow?.has_knockout && poolCheck?.deadline_knockout && new Date(poolCheck.deadline_knockout) <= now) {
+      return json({ error: 'La fecha límite de eliminatorias ha pasado' }, { status: 403 });
+    }
   }
 
   const upsert = db.prepare(`
@@ -64,7 +82,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     saveAll();
 
     // Recalculate scores for this pool
-    calculateMatchScores(pred.pool_id);
     calculateAllScores(pred.pool_id);
 
     return json({ ok: true });

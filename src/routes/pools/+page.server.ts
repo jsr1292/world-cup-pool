@@ -3,6 +3,7 @@ import { db } from '$lib/server/db.js';
 import type { PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
+  if (!locals.user) return { pools: [], canCreate: false };
   const pools = getUserPools(locals.user.id);
 
   // Check if user can create pools

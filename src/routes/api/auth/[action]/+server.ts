@@ -1,8 +1,24 @@
 import { authenticateUser, createUser, createSession } from '$lib/server/queries.js';
 import { json, redirect, type RequestHandler } from '@sveltejs/kit';
 
-export const POST: RequestHandler = async ({ request, cookies, url }) => {
-  const action = url.pathname.split('/').pop(); // 'login', 'register', or 'logout'
+const _attempts = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 10;
+const RATE_WINDOW = 15 * 60 * 1000;
+
+function checkRate(ip: string): boolean {
+  const now = Date.now();
+  const e = _attempts.get(ip);
+  if (!e || now > e.resetAt) { _attempts.set(ip, { count: 1, resetAt: now + RATE_WINDOW }); return true; }
+  if (e.count >= RATE_LIMIT) return false;
+  e.count++;
+  return true;
+}
+
+export const POST: RequestHandler = async ({ request, cookies, params, getClientAddress }) => {
+  const action = params.action; // 'login', 'register', or 'logout'
+  if ((action === 'login' || action === 'register') && !checkRate(getClientAddress())) {
+    return json({ error: 'Demasiados intentos. Espera 15 minutos.' }, { status: 429 });
+  }
 
   if (action === 'logout') {
     const token = cookies.get('session');
@@ -26,10 +42,14 @@ export const POST: RequestHandler = async ({ request, cookies, url }) => {
     if (!/^[a-zA-Z0-9_]+$/.test(username)) return json({ error: 'El usuario solo puede contener letras, números y _' }, { status: 400 });
     if (password.length < 6) return json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 });
 
+    if (display_name && display_name.length > 50) {
+      return json({ error: 'El nombre no puede superar 50 caracteres' }, { status: 400 });
+    }
+
     try {
       const result = createUser(username, password, display_name || username);
       const token = createSession(Number(result.lastInsertRowid));
-      cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: false });
+      cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
       return json({ ok: true });
     } catch (e: any) {
       if (e.message?.includes('UNIQUE constraint')) {
@@ -47,7 +67,7 @@ export const POST: RequestHandler = async ({ request, cookies, url }) => {
     if (!user) return json({ error: 'Credenciales incorrectas' }, { status: 401 });
 
     const token = createSession(user.id);
-    cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: false });
+    cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
     return json({ ok: true });
   }
 

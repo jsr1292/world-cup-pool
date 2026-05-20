@@ -14,6 +14,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const pool = db.prepare('SELECT * FROM pools WHERE id = ?').get(pool_id) as any;
   if (!pool) return json({ error: 'Quiniela no encontrada' }, { status: 404 });
 
+  const member = db
+    .prepare('SELECT 1 FROM pool_members WHERE pool_id = ? AND user_id = ?')
+    .get(pool_id, locals.user.id);
+  if (!member) return json({ error: 'No eres miembro de esta quiniela' }, { status: 403 });
+
   if (!pool.allow_multiple_predictions) {
     // Check if user already has a prediction in this pool
     const existing = db.prepare(
@@ -34,5 +39,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   const result = createPrediction(pool_id, locals.user.id, label);
+  if (!result) return json({ error: 'Ya tienes una predicción en esta quiniela' }, { status: 409 });
   return json({ id: Number(result.lastInsertRowid), label });
 };

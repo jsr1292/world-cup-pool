@@ -77,6 +77,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     }
   }
 
+  // Validate team IDs belong to their declared group
+  for (const [groupName, positions] of Object.entries(groups)) {
+    const filled = [positions.pos1, positions.pos2, positions.pos3, positions.pos4]
+      .filter((v): v is number => v != null);
+    if (filled.length === 0) continue;
+    const placeholders = filled.map(() => '?').join(',');
+    const valid = db.prepare(
+      `SELECT COUNT(*) as cnt FROM teams WHERE group_name = ? AND id IN (${placeholders})`
+    ).get(groupName, ...filled) as any;
+    if (valid.cnt !== filled.length) {
+      return json({ error: `Equipo inválido en grupo ${groupName}` }, { status: 400 });
+    }
+  }
+
   const upsert = db.prepare(`
     INSERT INTO group_predictions (prediction_id, group_name, position_1, position_2, position_3, position_4)
     VALUES (@prediction_id, @group_name, @pos1, @pos2, @pos3, @pos4)

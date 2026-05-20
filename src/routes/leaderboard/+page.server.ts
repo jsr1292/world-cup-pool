@@ -14,8 +14,10 @@ export const load: PageServerLoad = async ({ locals }) => {
   let orderByTiebreaker = '0'; // no-op if no final yet
   if (finalMatch) {
     // Smaller closeness = better: sum of absolute differences
+    const h = Math.trunc(Number(finalMatch.home_score));
+    const a = Math.trunc(Number(finalMatch.away_score));
     orderByTiebreaker = `(
-      COALESCE(ABS(tb.home_score - ${finalMatch.home_score}) + ABS(tb.away_score - ${finalMatch.away_score}), 9999)
+      COALESCE(ABS(tb.home_score - ${h}) + ABS(tb.away_score - ${a}), 9999)
     )`;
   }
 

@@ -1,5 +1,6 @@
 import { redirect, type Handle } from '@sveltejs/kit';
 import { db } from '$lib/server/db.js';
+import { cleanSessions } from '$lib/server/queries.js';
 
 const publicPaths = ['/login', '/register', '/api/auth', '/leaderboard', '/join', '/s/'];
 
@@ -17,7 +18,7 @@ export const handle: Handle = async ({ event, resolve }) => {
       event.locals.user = user;
     } else {
       // Clean expired sessions periodically
-      db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run();
+      if (Math.random() < 0.01) cleanSessions();
     }
   }
 

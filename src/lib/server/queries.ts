@@ -14,7 +14,7 @@ export function verifyPwd(password: string, stored: string): boolean {
   }
   const [salt, hash] = parts;
   const verify = crypto.scryptSync(password, salt, 32).toString('hex');
-  return hash === verify;
+  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(verify, 'hex'));
 }
 
 // Generate unique invite codes
@@ -74,6 +74,7 @@ export function createPool(name: string, createdBy: number, buyIn = 0, allowMult
       ['knockout_qf', 4],
       ['knockout_sf', 6],
       ['knockout_final', 6],
+      ['third_place', 25],
       ['knockout_winner', 8],
     ];
     const insertConfig = db.prepare('INSERT INTO scoring_config (pool_id, rule, points) VALUES (?, ?, ?)');

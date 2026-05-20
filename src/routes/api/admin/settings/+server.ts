@@ -10,6 +10,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const { key, value } = await request.json() as { key: string; value: string };
   if (!key || !value) return json({ error: 'Faltan campos' }, { status: 400 });
 
+  const ALLOWED_SETTINGS = new Set(['can_create_pools']);
+  if (!ALLOWED_SETTINGS.has(key)) return json({ error: 'Clave desconocida' }, { status: 400 });
+
   db.prepare('INSERT OR REPLACE INTO site_settings (key, value) VALUES (?, ?)').run(key, value);
   return json({ ok: true });
 };

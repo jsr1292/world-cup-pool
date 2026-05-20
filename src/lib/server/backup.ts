@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { copyFileSync, mkdirSync, existsSync, readdirSync, unlinkSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { db } from './db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Resolve from project root, not compiled output
@@ -26,7 +27,8 @@ export function createBackup(label = 'manual') {
   db.pragma('wal_checkpoint(TRUNCATE)');
   db.close();
 
-  const backupName = `pool-${getTimestamp()}-${label}.db`;
+  const safeLabel = (label || 'manual').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) || 'manual';
+  const backupName = `pool-${getTimestamp()}-${safeLabel}.db`;
   const backupPath = join(BACKUP_DIR, backupName);
 
   copyFileSync(DB_PATH, backupPath);
@@ -59,16 +61,15 @@ export function restoreBackup(backupName: string) {
   const backupPath = join(BACKUP_DIR, backupName);
   if (!existsSync(backupPath)) throw new Error('Backup not found');
 
-  // Safety: create a pre-restore backup of current state
   createBackup('pre-restore');
 
-  // Copy backup over the live DB
-  copyFileSync(backupPath, DB_PATH);
+  db.pragma('wal_checkpoint(TRUNCATE)');
+  db.close();
 
-  // Remove WAL/SHM so SQLite starts fresh
+  copyFileSync(backupPath, DB_PATH);
   try { unlinkSync(DB_PATH + '-wal'); } catch {}
   try { unlinkSync(DB_PATH + '-shm'); } catch {}
 
   const s = statSync(DB_PATH);
-  return { name: backupName, size: s.size };
+  return { name: backupName, size: s.size, requiresRestart: true };
 }
