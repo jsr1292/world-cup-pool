@@ -7,6 +7,11 @@ const RATE_WINDOW = 15 * 60 * 1000;
 
 function checkRate(ip: string): boolean {
   const now = Date.now();
+  if (_attempts.size > 10_000) {
+    for (const [k, v] of _attempts) {
+      if (now > v.resetAt) _attempts.delete(k);
+    }
+  }
   const e = _attempts.get(ip);
   if (!e || now > e.resetAt) { _attempts.set(ip, { count: 1, resetAt: now + RATE_WINDOW }); return true; }
   if (e.count >= RATE_LIMIT) return false;

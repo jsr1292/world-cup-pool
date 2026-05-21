@@ -1,5 +1,6 @@
 import { db } from '$lib/server/db.js';
 import { calculateMatchScores, calculateAllScores } from '$lib/server/scoring.js';
+import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 
@@ -81,8 +82,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   try {
     saveAll();
 
-    // Recalculate scores for this pool
-    calculateAllScores(pred.pool_id);
+    // Async scoring — respond immediately, score in background
+    const poolId = pred.pool_id;
+    setImmediate(() => {
+      try {
+        calculateAllScores(poolId);
+        invalidateCachedPoolLeaderboard(poolId);
+        invalidateCachedPoolResults(poolId);
+        invalidateGlobalLeaderboard();
+      } catch (e) {
+        console.error('[bg-score] match-scores pool', poolId, e);
+      }
+    });
 
     return json({ ok: true });
   } catch (e) {

@@ -1,5 +1,6 @@
 import { getPoolById, getPoolMembers, getPoolLeaderboard, getScoringConfig, getUserPredictions } from '$lib/server/queries.js';
 import { db } from '$lib/server/db.js';
+import { getTeamsMapCached, getCachedPoolResults, setCachedPoolResults } from '$lib/server/cache.js';
 import type { PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -12,10 +13,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   const scoring = getScoringConfig(poolId);
   const predictions = locals.user ? getUserPredictions(poolId, locals.user.id) : [];
 
-  // Summary data
-  const allTeams = db.prepare('SELECT id, name, flag_code, group_name FROM teams').all() as any[];
-  const teams: Record<number, any> = {};
-  for (const t of allTeams) teams[t.id] = t;
+  // F-15: Use cached teams map instead of querying teams table
+  const teams = getTeamsMapCached();
 
   const groupPreds: Record<number, any[]> = {};
   const bracketPreds: Record<number, any[]> = {};
@@ -39,38 +38,49 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     LIMIT 1
   `).get() as any;
 
-  // Enrich leaderboard with per-phase correct pick counts + tiebreaker closeness
+  // F-06: Bulk-fetch enrichment data to eliminate N+1 queries in leaderboard loop
+  const predIds = leaderboard.map((e: any) => e.id);
+  let groupCorrectMap: Record<number, number> = {};
+  let bracketByPredPhase: Record<number, Record<string, number>> = {};
+  let tiebreakerMap: Record<number, any> = {};
+
+  if (predIds.length > 0) {
+    const ph = predIds.map(() => '?').join(',');
+
+    (db.prepare(`
+      SELECT prediction_id, COUNT(*) as cnt
+      FROM group_predictions
+      WHERE prediction_id IN (${ph}) AND points_earned > 0
+      GROUP BY prediction_id
+    `).all(...predIds) as any[]).forEach(r => { groupCorrectMap[r.prediction_id] = r.cnt; });
+
+    (db.prepare(`
+      SELECT prediction_id, phase, points_earned
+      FROM bracket_predictions WHERE prediction_id IN (${ph})
+    `).all(...predIds) as any[]).forEach(br => {
+      if (br.points_earned > 0) {
+        if (!bracketByPredPhase[br.prediction_id]) bracketByPredPhase[br.prediction_id] = {};
+        bracketByPredPhase[br.prediction_id][br.phase] = (bracketByPredPhase[br.prediction_id][br.phase] || 0) + 1;
+      }
+    });
+
+    (db.prepare(`
+      SELECT prediction_id, home_score, away_score
+      FROM tiebreaker WHERE prediction_id IN (${ph})
+    `).all(...predIds) as any[]).forEach(tb => { tiebreakerMap[tb.prediction_id] = tb; });
+  }
+
   const enrichedLeaderboard = leaderboard.map((entry: any) => {
     const predId = entry.id;
-
-    // Correct group positions
-    const groupCorrect = (db.prepare(`
-      SELECT COUNT(*) as cnt FROM group_predictions
-      WHERE prediction_id = ? AND points_earned > 0
-    `).get(predId) as any).cnt;
-
-    // Correct bracket picks per phase
-    const bracketByPhase: Record<string, number> = {};
-    const bracketRows = db.prepare(`
-      SELECT phase, points_earned FROM bracket_predictions WHERE prediction_id = ?
-    `).all(predId) as any[];
-    for (const br of bracketRows) {
-      if (br.points_earned > 0) {
-        bracketByPhase[br.phase] = (bracketByPhase[br.phase] || 0) + 1;
-      }
-    }
-
-    // Tiebreaker closeness: smaller = better
+    const groupCorrect = groupCorrectMap[predId] ?? 0;
+    const bracketByPhase = bracketByPredPhase[predId] ?? {};
     let tiebreakerClose = 9999;
     if (finalMatch) {
-      const tb = db.prepare(`
-        SELECT home_score, away_score FROM tiebreaker WHERE prediction_id = ?
-      `).get(predId) as any;
-      if (tb && tb.home_score != null && tb.away_score != null) {
+      const tb = tiebreakerMap[predId];
+      if (tb?.home_score != null && tb?.away_score != null) {
         tiebreakerClose = Math.abs(tb.home_score - finalMatch.home_score) + Math.abs(tb.away_score - finalMatch.away_score);
       }
     }
-
     return {
       ...entry,
       group_correct: groupCorrect,
@@ -85,17 +95,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     b.total_score - a.total_score || b.total_correct - a.total_correct || a.tiebreaker_close - b.tiebreaker_close
   );
 
-  return {
-    pool, members, leaderboard: enrichedLeaderboard, scoring, predictions,
-    isAdmin: locals.user ? (pool as any).created_by === locals.user.id : false,
-    userId: locals.user?.id ?? null,
-    teams,
-    groupPreds,
-    bracketPreds,
-    deadlinePassed: !!(pool as any).deadline_group && new Date((pool as any).deadline_group) <= new Date(),
+  // F-20: Cache results data (phases, team cache, group standings)
+  let resultsPhases: Record<string, any[]>;
+  let resultsTeamCache: Record<number, any>;
+  let resultsGroupStandings: Record<string, any[]>;
 
-    // Results data
-    resultsPhases: (() => {
+  const cachedResults = getCachedPoolResults(pool.id);
+  if (cachedResults) {
+    ({ resultsPhases, resultsTeamCache, resultsGroupStandings } = cachedResults);
+  } else {
+    resultsPhases = (() => {
       const matches = db.prepare(`
         SELECT m.*, ht.name as home_name, ht.flag_code as home_flag,
           at.name as away_name, at.flag_code as away_flag
@@ -111,14 +120,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         phases[phase].push(m);
       }
       return phases;
-    })(),
-    resultsTeamCache: (() => {
-      const ts = db.prepare('SELECT id, name, flag_code FROM teams').all() as any[];
-      const cache: Record<number, any> = {};
-      for (const t of ts) cache[t.id] = t;
-      return cache;
-    })(),
-    resultsGroupStandings: (() => {
+    })();
+    resultsTeamCache = getTeamsMapCached();
+    resultsGroupStandings = (() => {
       const groupMatches = db.prepare(`
         SELECT m.*, ht.name as home_name, ht.flag_code as home_flag,
           at.name as away_name, at.flag_code as away_flag
@@ -153,7 +157,21 @@ export const load: PageServerLoad = async ({ params, locals }) => {
           .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
       }
       return result;
-    })(),
+    })();
+    setCachedPoolResults(pool.id, { resultsPhases, resultsTeamCache, resultsGroupStandings });
+  }
+
+  return {
+    pool, members, leaderboard: enrichedLeaderboard, scoring, predictions,
+    isAdmin: locals.user ? (pool as any).created_by === locals.user.id : false,
+    userId: locals.user?.id ?? null,
+    teams,
+    groupPreds,
+    bracketPreds,
+    deadlinePassed: !!(pool as any).deadline_group && new Date((pool as any).deadline_group) <= new Date(),
+    resultsPhases,
+    resultsTeamCache,
+    resultsGroupStandings,
     userGroupPredsFull: predictions.length > 0 ? db.prepare(`
       SELECT group_name, position_1, position_2, position_3, position_4, points_earned
       FROM group_predictions WHERE prediction_id = ?

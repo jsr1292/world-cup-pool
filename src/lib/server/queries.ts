@@ -1,4 +1,5 @@
 import { db } from './db.js';
+import { invalidateCachedSession, getAllTeamsCached } from './cache.js';
 import crypto from 'crypto';
 
 export function hashPwd(password: string): string {
@@ -181,6 +182,7 @@ export function createSession(userId: number): string {
 
 export function deleteSession(token: string) {
   db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+  invalidateCachedSession(token);
 }
 
 export function cleanSessions() {
@@ -189,7 +191,7 @@ export function cleanSessions() {
 
 // Teams
 export function getAllTeams() {
-  return db.prepare('SELECT * FROM teams ORDER BY group_name, fifa_rank').all();
+  return getAllTeamsCached();
 }
 
 export function getGroupPredictions(predictionId: number) {

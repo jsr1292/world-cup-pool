@@ -65,21 +65,29 @@ export function calculateGroupScores(poolId: number): void {
     actualPositions[group] = sorted.map(t => t.id);
   }
 
-  // Get all predictions for this pool
-  const predictions = db.prepare(
-    'SELECT id FROM predictions WHERE pool_id = ?'
-  ).all(poolId) as any[];
+  // Bulk fetch all group predictions for this pool (F-03: eliminate N+1)
+  const allGP = db.prepare(`
+    SELECT gp.prediction_id, gp.group_name, gp.position_1, gp.position_2, gp.position_3, gp.position_4
+    FROM group_predictions gp
+    JOIN predictions p ON p.id = gp.prediction_id
+    WHERE p.pool_id = ?
+  `).all(poolId) as any[];
+
+  if (allGP.length === 0) return;
+
+  const gpByPred: Record<number, any[]> = {};
+  for (const gp of allGP) {
+    if (!gpByPred[gp.prediction_id]) gpByPred[gp.prediction_id] = [];
+    gpByPred[gp.prediction_id].push(gp);
+  }
 
   const updateGP = db.prepare(
     'UPDATE group_predictions SET points_earned = ? WHERE prediction_id = ? AND group_name = ?'
   );
 
   const calcAll = db.transaction(() => {
-    for (const pred of predictions) {
-      const gpRows = db.prepare(
-        'SELECT group_name, position_1, position_2, position_3, position_4 FROM group_predictions WHERE prediction_id = ?'
-      ).all(pred.id) as any[];
-
+    for (const [predIdStr, gpRows] of Object.entries(gpByPred)) {
+      const predId = Number(predIdStr);
       for (const gp of gpRows) {
         const actual = actualPositions[gp.group_name];
         if (!actual) continue;
@@ -91,7 +99,7 @@ export function calculateGroupScores(poolId: number): void {
             earned += ptsPerPosition;
           }
         }
-        updateGP.run(earned, pred.id, gp.group_name);
+        updateGP.run(earned, predId, gp.group_name);
       }
     }
   });
@@ -129,26 +137,35 @@ export function calculateBracketScores(poolId: number): void {
     phaseWinners[phase].add(winner);
   }
 
-  const predictions = db.prepare(
-    'SELECT id FROM predictions WHERE pool_id = ?'
-  ).all(poolId) as any[];
+  // F-04: Bulk reset all bracket predictions for the pool
+  db.prepare(`
+    UPDATE bracket_predictions SET points_earned = 0
+    WHERE prediction_id IN (SELECT id FROM predictions WHERE pool_id = ?)
+  `).run(poolId);
+
+  // F-03: Bulk SELECT all bracket predictions for the pool
+  const allBP = db.prepare(`
+    SELECT bp.prediction_id, bp.phase, bp.team_id
+    FROM bracket_predictions bp
+    JOIN predictions p ON p.id = bp.prediction_id
+    WHERE p.pool_id = ?
+  `).all(poolId) as any[];
+
+  if (allBP.length === 0) return;
+
+  const bpByPred: Record<number, any[]> = {};
+  for (const bp of allBP) {
+    if (!bpByPred[bp.prediction_id]) bpByPred[bp.prediction_id] = [];
+    bpByPred[bp.prediction_id].push(bp);
+  }
 
   const updateBP = db.prepare(
     'UPDATE bracket_predictions SET points_earned = ? WHERE prediction_id = ? AND phase = ? AND team_id = ?'
   );
-  const resetBP = db.prepare(
-    'UPDATE bracket_predictions SET points_earned = 0 WHERE prediction_id = ?'
-  );
 
   const calcAll = db.transaction(() => {
-    for (const pred of predictions) {
-      // Reset all bracket points first
-      resetBP.run(pred.id);
-
-      const bpRows = db.prepare(
-        'SELECT phase, team_id FROM bracket_predictions WHERE prediction_id = ?'
-      ).all(pred.id) as any[];
-
+    for (const [predIdStr, bpRows] of Object.entries(bpByPred)) {
+      const predId = Number(predIdStr);
       for (const bp of bpRows) {
         const winners = phaseWinners[bp.phase];
         if (winners && bp.team_id && winners.has(bp.team_id)) {
@@ -157,7 +174,7 @@ export function calculateBracketScores(poolId: number): void {
           if (bp.phase === 'final') {
             pts += rules['knockout_winner'] ?? 0;
           }
-          updateBP.run(pts, pred.id, bp.phase, bp.team_id);
+          updateBP.run(pts, predId, bp.phase, bp.team_id);
         }
       }
     }
@@ -196,22 +213,28 @@ export function calculateMatchScores(poolId: number): void {
     matchMap[m.id] = { homeScore: m.home_score, awayScore: m.away_score, outcome };
   }
 
-  // Get all predictions in this pool
-  const predictions = db.prepare(
-    'SELECT id FROM predictions WHERE pool_id = ?'
-  ).all(poolId) as any[];
+  // F-03: Bulk SELECT all match predictions for the pool
+  const allMP = db.prepare(`
+    SELECT mp.id, mp.prediction_id, mp.match_id, mp.home_score, mp.away_score
+    FROM match_predictions mp
+    JOIN predictions p ON p.id = mp.prediction_id
+    WHERE p.pool_id = ?
+  `).all(poolId) as any[];
+
+  if (allMP.length === 0) return;
+
+  const mpByPred: Record<number, any[]> = {};
+  for (const mp of allMP) {
+    if (!mpByPred[mp.prediction_id]) mpByPred[mp.prediction_id] = [];
+    mpByPred[mp.prediction_id].push(mp);
+  }
 
   const updateMP = db.prepare(
     'UPDATE match_predictions SET points_earned = ? WHERE id = ?'
   );
 
   const calcAll = db.transaction(() => {
-    for (const pred of predictions) {
-      const mpRows = db.prepare(`
-        SELECT id, match_id, home_score, away_score
-        FROM match_predictions WHERE prediction_id = ?
-      `).all(pred.id) as any[];
-
+    for (const [, mpRows] of Object.entries(mpByPred)) {
       for (const mp of mpRows) {
         const m = matchMap[mp.match_id];
         if (!m) continue;
@@ -250,14 +273,17 @@ export function calculateAllScores(poolId: number): void {
   calculateBracketScores(poolId);
   calculateMatchScores(poolId);
 
-  // Sum up all points per prediction
+  // F-05: Sum up all points per prediction with LEFT JOIN instead of correlated subqueries
   db.prepare(`
-    UPDATE predictions SET total_score = (
-      COALESCE((SELECT SUM(points_earned) FROM group_predictions WHERE prediction_id = predictions.id), 0)
-      + COALESCE((SELECT SUM(points_earned) FROM bracket_predictions WHERE prediction_id = predictions.id), 0)
-      + COALESCE((SELECT SUM(points_earned) FROM match_predictions WHERE prediction_id = predictions.id), 0)
-    ),
-    updated_at = datetime('now')
+    UPDATE predictions SET
+      total_score = (
+        SELECT COALESCE(gp.g, 0) + COALESCE(bp.b, 0) + COALESCE(mp.m, 0)
+        FROM (SELECT 1) x
+        LEFT JOIN (SELECT SUM(points_earned) AS g FROM group_predictions WHERE prediction_id = predictions.id) gp ON 1=1
+        LEFT JOIN (SELECT SUM(points_earned) AS b FROM bracket_predictions WHERE prediction_id = predictions.id) bp ON 1=1
+        LEFT JOIN (SELECT SUM(points_earned) AS m FROM match_predictions WHERE prediction_id = predictions.id) mp ON 1=1
+      ),
+      updated_at = datetime('now')
     WHERE pool_id = ?
   `).run(poolId);
 }

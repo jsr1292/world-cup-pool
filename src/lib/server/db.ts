@@ -13,6 +13,12 @@ export const db = new Database(dbPath);
 // Enable WAL mode for better concurrent reads
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+db.pragma('busy_timeout = 5000');
+db.pragma('cache_size = -64000');
+db.pragma('journal_size_limit = 67108864');
+db.pragma('temp_store = MEMORY');
+db.pragma('mmap_size = 268435456');
+db.pragma('synchronous = NORMAL');
 
 // Initialize schema
 db.exec(`
@@ -158,6 +164,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_match_predictions_pred ON match_predictions(prediction_id);
   CREATE INDEX IF NOT EXISTS idx_group_predictions_pred ON group_predictions(prediction_id);
   CREATE INDEX IF NOT EXISTS idx_matches_phase ON matches(phase);
+  CREATE INDEX IF NOT EXISTS idx_bracket_predictions_pred ON bracket_predictions(prediction_id);
+  CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
+  CREATE INDEX IF NOT EXISTS idx_matches_phase_status ON matches(phase, status);
+  CREATE INDEX IF NOT EXISTS idx_pools_is_active ON pools(is_active);
+  CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 
   -- Site-wide settings
   CREATE TABLE IF NOT EXISTS site_settings (

@@ -3,6 +3,7 @@ import { calculateAllScores } from '$lib/server/scoring.js';
 import { db } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
+import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
 
 // POST /api/admin/sync-scores
 export const POST: RequestHandler = async ({ locals }) => {
@@ -15,16 +16,22 @@ export const POST: RequestHandler = async ({ locals }) => {
 
   const result = await syncScores();
 
-  // If any matches were updated, recalculate scores for all active pools
+  // Async rescoring after sync
   if (result.updated > 0) {
     const pools = db.prepare('SELECT id FROM pools WHERE is_active = 1').all() as any[];
-    for (const pool of pools) {
-      try {
-        calculateAllScores(pool.id);
-      } catch (e) {
-        console.error(`Error calculating scores for pool ${pool.id}:`, e);
+    const poolIds = pools.map(p => p.id);
+    setImmediate(() => {
+      for (const poolId of poolIds) {
+        try {
+          calculateAllScores(poolId);
+          invalidateCachedPoolLeaderboard(poolId);
+          invalidateCachedPoolResults(poolId);
+        } catch (e) {
+          console.error(`[bg-score] sync-scores pool ${poolId}:`, e);
+        }
       }
-    }
+      invalidateGlobalLeaderboard();
+    });
   }
 
   return json({ ok: true, ...result });

@@ -2,6 +2,7 @@ import { db } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
+import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
 
 // POST /api/admin/results
 // Body: { match_id, home_score, away_score }
@@ -39,15 +40,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     "UPDATE matches SET home_score = ?, away_score = ?, status = 'finished' WHERE id = ?"
   ).run(home_score, away_score, match_id);
 
-  // Recalculate scores for all active pools (match results are shared across pools)
+  // Async rescoring — respond immediately, score all pools in background
   const pools = db.prepare('SELECT id FROM pools WHERE is_active = 1').all() as any[];
-  for (const p of pools) {
-    try {
-      calculateAllScores(p.id);
-    } catch (e) {
-      console.error(`Score calc error for pool ${p.id}:`, e);
-    }
-  }
+  const poolIds = pools.map(p => p.id);
 
-  return json({ ok: true });
+  setImmediate(() => {
+    for (const poolId of poolIds) {
+      try {
+        calculateAllScores(poolId);
+        invalidateCachedPoolLeaderboard(poolId);
+        invalidateCachedPoolResults(poolId);
+      } catch (e) {
+        console.error(`[bg-score] admin/results pool ${poolId}:`, e);
+      }
+    }
+    invalidateGlobalLeaderboard();
+  });
+
+  return json({ ok: true, scoring: 'pending' });
 };

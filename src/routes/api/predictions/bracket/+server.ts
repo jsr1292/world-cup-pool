@@ -1,4 +1,5 @@
 import { db } from '$lib/server/db.js';
+import { getTeamsMapCached } from '$lib/server/cache.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 
@@ -71,6 +72,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     r32: 32, r16: 16, qf: 8, sf: 4, final: 2, '3rd': 2,
   };
 
+  // F-09: Collect all team IDs, validate against cache instead of N+1 queries
+  const allTeamIds = new Set<number>();
   for (const [phase, slots] of Object.entries(picks)) {
     const max = MAX_SLOTS[phase] ?? 0;
     for (const [slotStr, teamId] of Object.entries(slots)) {
@@ -78,14 +81,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       if (slot < 1 || slot > max) {
         return json({ error: `Invalid slot ${slot} for phase ${phase}` }, { status: 400 });
       }
-      if (teamId !== null) {
-        // Validate team exists
-        const team = db.prepare('SELECT id FROM teams WHERE id = ?').get(teamId);
-        if (!team) {
-          return json({ error: `Invalid team_id: ${teamId}` }, { status: 400 });
-        }
-      }
+      if (teamId !== null) allTeamIds.add(teamId);
     }
+  }
+  const teamsMap = getTeamsMapCached();
+  for (const id of allTeamIds) {
+    if (!teamsMap[id]) return json({ error: `Invalid team_id: ${id}` }, { status: 400 });
   }
 
   const upsert = db.prepare(`
