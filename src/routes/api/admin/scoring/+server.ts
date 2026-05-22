@@ -2,6 +2,13 @@ import { query } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { getScoringRules } from '$lib/server/scoring.js';
+import { logAudit } from '$lib/server/audit.js';
+
+const VALID_RULES = new Set([
+  'match_outcome', 'exact_score', 'group_position',
+  'knockout_r32', 'knockout_r16', 'knockout_qf', 'knockout_sf',
+  'knockout_final', 'knockout_winner', 'third_place',
+]);
 
 // GET /api/admin/scoring?pool_id=X
 export const GET: RequestHandler = async ({ url, locals }) => {
@@ -42,6 +49,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   // Update scoring rules if provided
   if (rules) {
+    for (const rule of Object.keys(rules)) {
+      if (!VALID_RULES.has(rule)) {
+        return json({ error: `Regla inválida: ${rule}` }, { status: 400 });
+      }
+    }
     for (const [rule, points] of Object.entries(rules)) {
       if (typeof points === 'number' && points >= 0) {
         await query(`
@@ -70,6 +82,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       await query(`UPDATE pools SET ${updates.join(', ')} WHERE id = $${paramIdx}`, values);
     }
   }
+
+  await logAudit('update_scoring', locals.user.id, 'pool', pool_id, null, { rules, deadline_group: body.deadline_group, deadline_knockout: body.deadline_knockout });
 
   return json({ ok: true });
 };

@@ -25,13 +25,21 @@ export const handle: Handle = async ({ event, resolve }) => {
       event.locals.user = user;
     } else {
       const now = Date.now();
-      if (now - _lastClean > 60_000) { _lastClean = now; await cleanSessions(); }
+      if (now - _lastClean > 60_000) { _lastClean = now; cleanSessions().catch(console.error); }
     }
   }
 
   if (publicPaths.some(p => path.startsWith(p))) return resolve(event);
   if (path.startsWith('/_app') || path.includes('.')) return resolve(event);
-  if (!event.locals.user) throw redirect(302, '/login');
+  if (!event.locals.user) {
+    if (event.url.pathname.startsWith('/api/')) {
+      return new Response(JSON.stringify({ error: 'No autorizado' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    throw redirect(302, '/login');
+  }
 
   return resolve(event);
 };

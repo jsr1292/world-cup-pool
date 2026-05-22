@@ -1,3 +1,15 @@
+/**
+ * In-memory TTL cache for session, teams, and pool results.
+ *
+ * ⚠️ CONSTRAINT: All state is module-level (per-process).
+ * This works for single-server deployment but will NOT work
+ * with horizontal scaling (Vercel serverless, Railway replicas, etc.)
+ * — each instance has an isolated cache. After a score sync,
+ * only the instance that handled the request invalidates its cache.
+ * Other instances serve stale data until TTL expires.
+ * If horizontal scaling is needed, migrate to Redis.
+ */
+
 import { query } from './db.js';
 
 // ─── Teams ─────────────────────────────────────────────────────────────────

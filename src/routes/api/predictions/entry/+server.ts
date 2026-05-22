@@ -8,7 +8,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const body = await request.json();
   const { pool_id, label = '' } = body;
 
-  if (!pool_id) return json({ error: 'pool_id required' }, { status: 400 });
+  if (!pool_id) return json({ error: 'Falta pool_id' }, { status: 400 });
 
   // Check allow_multiple
   const { rows: poolRows } = await query('SELECT * FROM pools WHERE id = $1', [pool_id]);

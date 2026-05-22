@@ -21,6 +21,7 @@ interface LiveMatch {
   away_score: number;
   status: 'scheduled' | 'live' | 'finished';
   phase: string;
+  kickoff_time: Date | null;
 }
 
 /**
@@ -57,6 +58,7 @@ export async function fetchFromApiFootball(leagueId = 1, season = 2026): Promise
         away_score: fixture.goals.away ?? 0,
         status: 'finished',
         phase: mapRoundToPhase(fixture.fixture.round),
+        kickoff_time: fixture.fixture.date ? new Date(fixture.fixture.date) : null,
       });
     }
 
@@ -95,6 +97,7 @@ export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
         away_score: m.away?.score ?? 0,
         status: m.matchStatus === 'Completed' ? 'finished' : 'live',
         phase: mapFifaStageToPhase(m.idStage),
+        kickoff_time: m.date ? new Date(m.date) : null,
       });
     }
 
@@ -156,9 +159,10 @@ export async function syncScores(): Promise<{ updated: number; skipped: number; 
     try {
       const result = await query(`
         UPDATE matches 
-        SET home_score = $1, away_score = $2, status = 'finished'
+        SET home_score = $1, away_score = $2, status = 'finished',
+            kickoff_time = COALESCE(kickoff_time, $4)
         WHERE id = $3 AND status != 'finished'
-      `, [m.home_score, m.away_score, dbMatch.id]);
+      `, [m.home_score, m.away_score, dbMatch.id, m.kickoff_time]);
 
       if ((result.rowCount ?? 0) > 0) {
         updated++;

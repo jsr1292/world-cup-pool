@@ -1,21 +1,26 @@
 import { query, getClient } from './db.js';
 import { invalidateCachedSession, getAllTeamsCached } from './cache.js';
+import type { User, Pool, Prediction, GroupPrediction } from './types.js';
 import crypto from 'crypto';
 
-export function hashPwd(password: string): string {
+export async function hashPwd(password: string): Promise<string> {
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 32).toString('hex');
-  return `${salt}:${hash}`;
+  const derived: Buffer = await new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, 64, (err, key) => err ? reject(err) : resolve(key));
+  });
+  return `${salt}:${derived.toString('hex')}`;
 }
 
-export function verifyPwd(password: string, stored: string): boolean {
+export async function verifyPwd(password: string, stored: string): Promise<boolean> {
   const parts = stored.split(':');
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw new Error('Malformed password hash: missing salt/hash separator');
   }
   const [salt, hash] = parts;
-  const verify = crypto.scryptSync(password, salt, 32).toString('hex');
-  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(verify, 'hex'));
+  const derived: Buffer = await new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, 64, (err, key) => err ? reject(err) : resolve(key));
+  });
+  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), derived);
 }
 
 // Generate unique invite codes
@@ -30,7 +35,7 @@ export function generateToken(): string {
 
 // User CRUD
 export async function createUser(username: string, password: string, displayName: string, email?: string) {
-  const hash = hashPwd(password);
+  const hash = await hashPwd(password);
   const result = await query(
     'INSERT INTO users (username, password_hash, display_name, email) VALUES ($1, $2, $3, $4) RETURNING id',
     [username, hash, displayName, email ?? null]
@@ -38,25 +43,30 @@ export async function createUser(username: string, password: string, displayName
   return result;
 }
 
-export async function getUserById(id: number) {
+export async function getUserById(id: number): Promise<User | null> {
   const { rows } = await query('SELECT id, username, display_name, email, is_admin, created_at FROM users WHERE id = $1', [id]);
-  return rows[0] ?? null;
+  return (rows[0] as User) ?? null;
 }
 
-export async function getUserByUsername(username: string) {
-  const { rows } = await query('SELECT * FROM users WHERE username = $1', [username]);
-  return rows[0] ?? null as any;
+export async function getUserForAuth(username: string): Promise<(User & { password_hash: string }) | null> {
+  const { rows } = await query('SELECT id, username, password_hash, display_name, is_admin FROM users WHERE username = $1', [username]);
+  return (rows[0] as (User & { password_hash: string })) ?? null;
+}
+
+export async function getUserByUsername(username: string): Promise<User | null> {
+  const { rows } = await query('SELECT id, username, display_name, is_admin, created_at FROM users WHERE username = $1', [username]);
+  return (rows[0] as User) ?? null;
 }
 
 export async function authenticateUser(username: string, password: string) {
-  const user = await getUserByUsername(username);
+  const user = await getUserForAuth(username);
   if (!user) return null;
-  if (!verifyPwd(password, user.password_hash)) return null;
+  if (!await verifyPwd(password, user.password_hash)) return null;
   return { id: user.id, username: user.username, display_name: user.display_name, is_admin: user.is_admin };
 }
 
 // Pool CRUD
-export async function createPool(name: string, createdBy: number, buyIn = 0, allowMultiple = 0, currency = 'EUR') {
+export async function createPool(name: string, createdBy: number, buyIn = 0, allowMultiple = false, currency = 'EUR') {
   const inviteCode = generateInviteCode();
 
   const client = await getClient();
@@ -83,7 +93,7 @@ export async function createPool(name: string, createdBy: number, buyIn = 0, all
       ['knockout_qf', 4],
       ['knockout_sf', 6],
       ['knockout_final', 6],
-      ['third_place', 25],
+      ['third_place', 6],
       ['knockout_winner', 8],
     ];
     for (const [rule, pts] of defaults) {
@@ -100,14 +110,14 @@ export async function createPool(name: string, createdBy: number, buyIn = 0, all
   }
 }
 
-export async function getPoolByInvite(code: string) {
+export async function getPoolByInvite(code: string): Promise<Pool | null> {
   const { rows } = await query('SELECT * FROM pools WHERE invite_code = $1', [code]);
-  return rows[0] ?? null;
+  return (rows[0] as Pool) ?? null;
 }
 
-export async function getPoolById(id: number) {
+export async function getPoolById(id: number): Promise<Pool | null> {
   const { rows } = await query('SELECT * FROM pools WHERE id = $1', [id]);
-  return rows[0] ?? null;
+  return (rows[0] as Pool) ?? null;
 }
 
 export async function getUserPools(userId: number) {
@@ -157,21 +167,16 @@ export async function getPoolMembers(poolId: number) {
 
 // Predictions
 export async function createPrediction(poolId: number, userId: number, label = '') {
-  try {
-    const result = await query(
-      'INSERT INTO predictions (pool_id, user_id, label, has_paid) VALUES ($1, $2, $3, FALSE) RETURNING id',
-      [poolId, userId, label]
-    );
-    return result;
-  } catch (e: any) {
-    if (e.code === '23505') return null; // duplicate
-    throw e;
-  }
+  const { rows } = await query(
+    `INSERT INTO predictions (user_id, pool_id, label, total_score) VALUES ($1, $2, $3, 0) ON CONFLICT (user_id, pool_id, label) DO UPDATE SET label = EXCLUDED.label RETURNING id`,
+    [userId, poolId, label]
+  );
+  return { rows };
 }
 
-export async function getUserPredictions(poolId: number, userId: number) {
+export async function getUserPredictions(poolId: number, userId: number): Promise<Prediction[]> {
   const { rows } = await query('SELECT * FROM predictions WHERE pool_id = $1 AND user_id = $2', [poolId, userId]);
-  return rows;
+  return rows as Prediction[];
 }
 
 export async function getPoolLeaderboard(poolId: number) {
@@ -217,12 +222,12 @@ export function getAllTeams() {
   return getAllTeamsCached();
 }
 
-export async function getGroupPredictions(predictionId: number) {
+export async function getGroupPredictions(predictionId: number): Promise<GroupPrediction[]> {
   const { rows } = await query(
     `SELECT group_name, position_1, position_2, position_3, position_4
     FROM group_predictions
     WHERE prediction_id = $1`,
     [predictionId]
   );
-  return rows as any[];
+  return rows as GroupPrediction[];
 }

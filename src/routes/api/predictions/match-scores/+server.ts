@@ -1,5 +1,5 @@
 import { query } from '$lib/server/db.js';
-import { calculateMatchScores, calculateAllScores } from '$lib/server/scoring.js';
+import { calculateAllScores } from '$lib/server/scoring.js';
 import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
@@ -19,11 +19,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'Falta prediction_id o scores' }, { status: 400 });
   }
 
+  if (Object.keys(scores).length > 200) {
+    return json({ error: 'Demasiados partidos' }, { status: 400 });
+  }
+
   // Verify ownership
   const { rows: predRows } = await query('SELECT user_id, pool_id FROM predictions WHERE id = $1', [prediction_id]);
   const pred = predRows[0] ?? null;
   if (!pred || pred.user_id !== locals.user.id) {
     return json({ error: 'No es tu predicción' }, { status: 403 });
+  }
+
+  // Verify pool membership
+  const { rows: membership } = await query(
+    'SELECT 1 FROM pool_members WHERE pool_id = $1 AND user_id = $2',
+    [pred.pool_id, locals.user.id]
+  );
+  if (membership.length === 0) {
+    return json({ error: 'No eres miembro de este pool' }, { status: 403 });
   }
 
   // Check deadline (per-phase)
@@ -35,13 +48,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   const matchIds = Object.keys(scores).map(Number);
   if (matchIds.length > 0) {
-    const placeholders = matchIds.map((_, i) => `$${i + 1}`).join(',');
+    // Per-match kickoff deadline: reject if any match has already started
+    const { rows: started } = await query(
+      'SELECT id FROM matches WHERE id = ANY($1::int[]) AND kickoff_time IS NOT NULL AND kickoff_time <= NOW()',
+      [matchIds]
+    );
+    if (started.length > 0) {
+      return json({ error: 'Algunos partidos ya comenzaron' }, { status: 400 });
+    }
+
+    // Also check pool-level phase deadlines
     const { rows: phaseRows } = await query(`
       SELECT
         MAX(CASE WHEN phase = 'group' THEN 1 ELSE 0 END) AS has_group,
         MAX(CASE WHEN phase != 'group' THEN 1 ELSE 0 END) AS has_knockout
-      FROM matches WHERE id IN (${placeholders})
-    `, matchIds);
+      FROM matches WHERE id = ANY($1::int[])
+    `, [matchIds]);
     const phaseRow = phaseRows[0] ?? null;
 
     const now = new Date();

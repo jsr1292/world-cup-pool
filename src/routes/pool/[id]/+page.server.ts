@@ -18,19 +18,34 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
   const groupPreds: Record<number, any[]> = {};
   const bracketPreds: Record<number, any[]> = {};
-  for (const entry of predictions) {
-    const { rows: gpRows } = await query(`
-      SELECT group_name, position_1, position_2, position_3, position_4
-      FROM group_predictions WHERE prediction_id = $1
+
+  if (predictions.length > 0) {
+    const predIds = predictions.map((e: any) => e.id);
+    const { rows: allGP } = await query(`
+      SELECT prediction_id, group_name, position_1, position_2, position_3, position_4
+      FROM group_predictions WHERE prediction_id = ANY($1::int[])
       ORDER BY group_name
-    `, [entry.id]);
-    groupPreds[entry.id] = gpRows;
-    const { rows: bpRows } = await query(`
-      SELECT phase, slot as match_index, team_id
-      FROM bracket_predictions WHERE prediction_id = $1
+    `, [predIds]);
+    for (const gp of allGP) {
+      if (!groupPreds[gp.prediction_id]) groupPreds[gp.prediction_id] = [];
+      groupPreds[gp.prediction_id].push(gp);
+    }
+
+    const { rows: allBP } = await query(`
+      SELECT prediction_id, phase, slot as match_index, team_id
+      FROM bracket_predictions WHERE prediction_id = ANY($1::int[])
       ORDER BY phase, slot
-    `, [entry.id]);
-    bracketPreds[entry.id] = bpRows;
+    `, [predIds]);
+    for (const bp of allBP) {
+      if (!bracketPreds[bp.prediction_id]) bracketPreds[bp.prediction_id] = [];
+      bracketPreds[bp.prediction_id].push(bp);
+    }
+
+    // Fill empty arrays for predictions with no group/bracket data
+    for (const entry of predictions) {
+      if (!groupPreds[entry.id]) groupPreds[entry.id] = [];
+      if (!bracketPreds[entry.id]) bracketPreds[entry.id] = [];
+    }
   }
 
   // Get actual final match score for tiebreaker closeness
@@ -48,21 +63,19 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   let tiebreakerMap: Record<number, any> = {};
 
   if (predIds.length > 0) {
-    const ph = predIds.map((_, i) => `$${i + 1}`).join(',');
-
     const { rows: gcRows } = await query(`
       SELECT prediction_id, COUNT(*) as cnt
       FROM group_predictions
-      WHERE prediction_id IN (${ph}) AND points_earned > 0
+      WHERE prediction_id = ANY($1::int[]) AND points_earned > 0
       GROUP BY prediction_id
-    `, predIds);
-    gcRows.forEach(r => { groupCorrectMap[r.prediction_id] = r.cnt; });
+    `, [predIds]);
+    gcRows.forEach((r: any) => { groupCorrectMap[r.prediction_id] = r.cnt; });
 
     const { rows: brRows } = await query(`
       SELECT prediction_id, phase, points_earned
-      FROM bracket_predictions WHERE prediction_id IN (${ph})
-    `, predIds);
-    brRows.forEach(br => {
+      FROM bracket_predictions WHERE prediction_id = ANY($1::int[])
+    `, [predIds]);
+    brRows.forEach((br: any) => {
       if (br.points_earned > 0) {
         if (!bracketByPredPhase[br.prediction_id]) bracketByPredPhase[br.prediction_id] = {};
         bracketByPredPhase[br.prediction_id][br.phase] = (bracketByPredPhase[br.prediction_id][br.phase] || 0) + 1;
@@ -71,9 +84,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
     const { rows: tbRows } = await query(`
       SELECT prediction_id, home_score, away_score
-      FROM tiebreaker WHERE prediction_id IN (${ph})
-    `, predIds);
-    tbRows.forEach(tb => { tiebreakerMap[tb.prediction_id] = tb; });
+      FROM tiebreaker WHERE prediction_id = ANY($1::int[])
+    `, [predIds]);
+    tbRows.forEach((tb: any) => { tiebreakerMap[tb.prediction_id] = tb; });
   }
 
   const enrichedLeaderboard = leaderboard.map((entry: any) => {
@@ -191,7 +204,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     teams,
     groupPreds,
     bracketPreds,
-    deadlinePassed: !!(pool as any).deadline_group && new Date((pool as any).deadline_group) <= new Date(),
+    deadlinePassed: (!!((pool as any).deadline_group) && new Date((pool as any).deadline_group) <= new Date()) ||
+                    (!!((pool as any).deadline_knockout) && new Date((pool as any).deadline_knockout) <= new Date()),
     resultsPhases,
     resultsTeamCache,
     resultsGroupStandings,

@@ -1,4 +1,5 @@
 import { query, getClient } from './db.js';
+import type { PoolClient } from 'pg';
 
 const DEFAULT_RULES: Record<string, number> = {
   match_outcome: 1,
@@ -10,7 +11,7 @@ const DEFAULT_RULES: Record<string, number> = {
   knockout_sf: 6,
   knockout_final: 6,
   knockout_winner: 8,
-  third_place: 25,
+  third_place: 6,
 };
 
 export async function getScoringRules(poolId: number): Promise<Record<string, number>> {
@@ -24,13 +25,17 @@ export async function getScoringRules(poolId: number): Promise<Record<string, nu
 /**
  * Calculate group stage scores for all predictions in a pool.
  * Compares each user's predicted group positions against actual match results.
+ * Uses bulk unnest() UPDATE instead of per-row loops.
  */
-export async function calculateGroupScores(poolId: number): Promise<void> {
-  const rules = await getScoringRules(poolId);
+export async function calculateGroupScores(
+  poolId: number,
+  rules: Record<string, number>,
+  client: PoolClient
+): Promise<void> {
   const ptsPerPosition = rules.group_position ?? 3;
 
   // Get all finished group matches
-  const { rows: matches } = await query(`
+  const { rows: matches } = await client.query(`
     SELECT group_name, home_team_id, away_team_id, home_score, away_score
     FROM matches WHERE phase = 'group' AND status = 'finished' AND home_score IS NOT NULL
   `);
@@ -65,8 +70,8 @@ export async function calculateGroupScores(poolId: number): Promise<void> {
     actualPositions[group] = sorted.map(t => t.id);
   }
 
-  // Bulk fetch all group predictions for this pool (F-03: eliminate N+1)
-  const { rows: allGP } = await query(`
+  // Bulk fetch all group predictions for this pool
+  const { rows: allGP } = await client.query(`
     SELECT gp.prediction_id, gp.group_name, gp.position_1, gp.position_2, gp.position_3, gp.position_4
     FROM group_predictions gp
     JOIN predictions p ON p.id = gp.prediction_id
@@ -75,52 +80,49 @@ export async function calculateGroupScores(poolId: number): Promise<void> {
 
   if (allGP.length === 0) return;
 
-  const gpByPred: Record<number, any[]> = {};
+  // Collect (prediction_id, group_name, points) for bulk unnest UPDATE
+  const predIds: number[] = [];
+  const groupNames: string[] = [];
+  const ptsArray: number[] = [];
+
   for (const gp of allGP) {
-    if (!gpByPred[gp.prediction_id]) gpByPred[gp.prediction_id] = [];
-    gpByPred[gp.prediction_id].push(gp);
-  }
+    const actual = actualPositions[gp.group_name];
+    if (!actual) continue;
 
-  const client = await getClient();
-  try {
-    await client.query('BEGIN');
-    for (const [predIdStr, gpRows] of Object.entries(gpByPred)) {
-      const predId = Number(predIdStr);
-      for (const gp of gpRows) {
-        const actual = actualPositions[gp.group_name];
-        if (!actual) continue;
-
-        let earned = 0;
-        const predicted = [gp.position_1, gp.position_2, gp.position_3, gp.position_4];
-        for (let i = 0; i < 4; i++) {
-          if (predicted[i] && actual[i] === predicted[i]) {
-            earned += ptsPerPosition;
-          }
-        }
-        await client.query(
-          'UPDATE group_predictions SET points_earned = $1 WHERE prediction_id = $2 AND group_name = $3',
-          [earned, predId, gp.group_name]
-        );
+    let earned = 0;
+    const predicted = [gp.position_1, gp.position_2, gp.position_3, gp.position_4];
+    for (let i = 0; i < 4; i++) {
+      if (predicted[i] && actual[i] === predicted[i]) {
+        earned += ptsPerPosition;
       }
     }
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
+    predIds.push(gp.prediction_id);
+    groupNames.push(gp.group_name);
+    ptsArray.push(earned);
   }
+
+  if (predIds.length === 0) return;
+
+  // M3: Single bulk UPDATE via unnest instead of N individual UPDATEs
+  await client.query(`
+    UPDATE group_predictions gp SET points_earned = v.pts
+    FROM unnest($1::int[], $2::text[], $3::int[]) AS v(pred_id, grp_name, pts)
+    WHERE gp.prediction_id = v.pred_id AND gp.group_name = v.grp_name
+  `, [predIds, groupNames, ptsArray]);
 }
 
 /**
  * Calculate knockout bracket scores for all predictions in a pool.
  * Compares predicted bracket picks against actual match winners.
+ * Uses bulk unnest() UPDATE — sets ALL rows (0 for wrong/empty, earned for correct).
  */
-export async function calculateBracketScores(poolId: number): Promise<void> {
-  const rules = await getScoringRules(poolId);
-
+export async function calculateBracketScores(
+  poolId: number,
+  rules: Record<string, number>,
+  client: PoolClient
+): Promise<void> {
   // Get all finished knockout matches
-  const { rows: matches } = await query(`
+  const { rows: matches } = await client.query(`
     SELECT id, phase, home_team_id, away_team_id, home_score, away_score
     FROM matches
     WHERE phase IN ('r32','r16','qf','sf','final','3rd')
@@ -142,14 +144,8 @@ export async function calculateBracketScores(poolId: number): Promise<void> {
     phaseWinners[phase].add(winner);
   }
 
-  // F-04: Bulk reset all bracket predictions for the pool
-  await query(`
-    UPDATE bracket_predictions SET points_earned = 0
-    WHERE prediction_id IN (SELECT id FROM predictions WHERE pool_id = $1)
-  `, [poolId]);
-
-  // F-03: Bulk SELECT all bracket predictions for the pool
-  const { rows: allBP } = await query(`
+  // Bulk SELECT all bracket predictions for the pool
+  const { rows: allBP } = await client.query(`
     SELECT bp.prediction_id, bp.phase, bp.team_id
     FROM bracket_predictions bp
     JOIN predictions p ON p.id = bp.prediction_id
@@ -158,39 +154,35 @@ export async function calculateBracketScores(poolId: number): Promise<void> {
 
   if (allBP.length === 0) return;
 
-  const bpByPred: Record<number, any[]> = {};
-  for (const bp of allBP) {
-    if (!bpByPred[bp.prediction_id]) bpByPred[bp.prediction_id] = [];
-    bpByPred[bp.prediction_id].push(bp);
-  }
+  // Collect ALL bracket predictions with computed points (0 for wrong, earned for correct)
+  const predIds: number[] = [];
+  const phases: string[] = [];
+  const teamIds: (number | null)[] = [];
+  const ptsArray: number[] = [];
 
-  const client = await getClient();
-  try {
-    await client.query('BEGIN');
-    for (const [predIdStr, bpRows] of Object.entries(bpByPred)) {
-      const predId = Number(predIdStr);
-      for (const bp of bpRows) {
-        const winners = phaseWinners[bp.phase];
-        if (winners && bp.team_id && winners.has(bp.team_id)) {
-          const ruleKey = bp.phase === '3rd' ? 'third_place' : `knockout_${bp.phase}`;
-          let pts = rules[ruleKey] ?? 0;
-          if (bp.phase === 'final') {
-            pts += rules['knockout_winner'] ?? 0;
-          }
-          await client.query(
-            'UPDATE bracket_predictions SET points_earned = $1 WHERE prediction_id = $2 AND phase = $3 AND team_id = $4',
-            [pts, predId, bp.phase, bp.team_id]
-          );
-        }
+  for (const bp of allBP) {
+    const winners = phaseWinners[bp.phase];
+    let pts = 0;
+    if (winners && bp.team_id && winners.has(bp.team_id)) {
+      const ruleKey = bp.phase === '3rd' ? 'third_place' : `knockout_${bp.phase}`;
+      pts = rules[ruleKey] ?? 0;
+      if (bp.phase === 'final') {
+        pts += rules['knockout_winner'] ?? 0;
       }
     }
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
+    predIds.push(bp.prediction_id);
+    phases.push(bp.phase);
+    teamIds.push(bp.team_id);
+    ptsArray.push(pts);
   }
+
+  // M3: Single bulk UPDATE via unnest — replaces the old reset-all + per-row-update pattern
+  await client.query(`
+    UPDATE bracket_predictions bp SET points_earned = v.pts
+    FROM unnest($1::int[], $2::text[], $3::int[], $4::int[]) AS v(pred_id, phase, team_id, pts)
+    WHERE bp.prediction_id = v.pred_id AND bp.phase = v.phase
+      AND bp.team_id IS NOT DISTINCT FROM v.team_id
+  `, [predIds, phases, teamIds, ptsArray]);
 }
 
 /**
@@ -198,14 +190,18 @@ export async function calculateBracketScores(poolId: number): Promise<void> {
  * Awards points_earned on match_predictions rows:
  *   - match_outcome points for correct 1/X/2
  *   - exact_score points on top for exact scoreline
+ * Uses bulk unnest() UPDATE instead of per-row loops.
  */
-export async function calculateMatchScores(poolId: number): Promise<void> {
-  const rules = await getScoringRules(poolId);
+export async function calculateMatchScores(
+  poolId: number,
+  rules: Record<string, number>,
+  client: PoolClient
+): Promise<void> {
   const outcomePts = rules.match_outcome ?? 2;
   const exactPts = rules.exact_score ?? 5;
 
   // Get all finished matches (group or knockout) with scores
-  const { rows: matches } = await query(`
+  const { rows: matches } = await client.query(`
     SELECT id, home_team_id, away_team_id, home_score, away_score
     FROM matches
     WHERE status = 'finished' AND home_score IS NOT NULL AND away_score IS NOT NULL
@@ -223,8 +219,8 @@ export async function calculateMatchScores(poolId: number): Promise<void> {
     matchMap[m.id] = { homeScore: m.home_score, awayScore: m.away_score, outcome };
   }
 
-  // F-03: Bulk SELECT all match predictions for the pool
-  const { rows: allMP } = await query(`
+  // Bulk SELECT all match predictions for the pool
+  const { rows: allMP } = await client.query(`
     SELECT mp.id, mp.prediction_id, mp.match_id, mp.home_score, mp.away_score
     FROM match_predictions mp
     JOIN predictions p ON p.id = mp.prediction_id
@@ -233,72 +229,99 @@ export async function calculateMatchScores(poolId: number): Promise<void> {
 
   if (allMP.length === 0) return;
 
-  const mpByPred: Record<number, any[]> = {};
+  // Collect (id, points) for bulk unnest UPDATE
+  const ids: number[] = [];
+  const ptsArray: number[] = [];
+
   for (const mp of allMP) {
-    if (!mpByPred[mp.prediction_id]) mpByPred[mp.prediction_id] = [];
-    mpByPred[mp.prediction_id].push(mp);
-  }
+    const m = matchMap[mp.match_id];
+    if (!m) continue;
 
-  const client = await getClient();
-  try {
-    await client.query('BEGIN');
-    for (const [, mpRows] of Object.entries(mpByPred)) {
-      for (const mp of mpRows) {
-        const m = matchMap[mp.match_id];
-        if (!m) continue;
+    let pts = 0;
 
-        let pts = 0;
+    // Determine predicted outcome
+    let predOutcome: string;
+    if (mp.home_score > mp.away_score) predOutcome = '1';
+    else if (mp.home_score < mp.away_score) predOutcome = '2';
+    else predOutcome = 'X';
 
-        // Determine predicted outcome
-        let predOutcome: string;
-        if (mp.home_score > mp.away_score) predOutcome = '1';
-        else if (mp.home_score < mp.away_score) predOutcome = '2';
-        else predOutcome = 'X';
-
-        // Correct outcome?
-        if (predOutcome === m.outcome) {
-          pts += outcomePts;
-        }
-
-        // Exact score?
-        if (mp.home_score === m.homeScore && mp.away_score === m.awayScore) {
-          pts += exactPts;
-        }
-
-        await client.query(
-          'UPDATE match_predictions SET points_earned = $1 WHERE id = $2',
-          [pts, mp.id]
-        );
-      }
+    // Correct outcome?
+    if (predOutcome === m.outcome) {
+      pts += outcomePts;
     }
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
+
+    // Exact score?
+    if (mp.home_score === m.homeScore && mp.away_score === m.awayScore) {
+      pts += exactPts;
+    }
+
+    ids.push(mp.id);
+    ptsArray.push(pts);
   }
+
+  if (ids.length === 0) return;
+
+  // M3: Single bulk UPDATE via unnest instead of N individual UPDATEs
+  await client.query(`
+    UPDATE match_predictions mp SET points_earned = v.pts
+    FROM unnest($1::int[], $2::int[]) AS v(id, pts)
+    WHERE mp.id = v.id
+  `, [ids, ptsArray]);
 }
 
 /**
  * Run all score calculations and update total_score in predictions table.
+ *
+ * M4: Fetches scoring rules ONCE and passes them to all sub-functions.
+ * M5: Runs ALL phases + total_score update in a single transaction.
  */
 export async function calculateAllScores(poolId: number): Promise<void> {
-  await calculateGroupScores(poolId);
-  await calculateBracketScores(poolId);
-  await calculateMatchScores(poolId);
+  // M4: Fetch rules once — sub-functions receive them as a parameter
+  const rules = await getScoringRules(poolId);
 
-  // F-05: Sum up all points per prediction with LEFT JOIN instead of correlated subqueries
-  await query(`
-    UPDATE predictions SET
-      total_score = (
-        SELECT COALESCE(gp.g, 0) + COALESCE(bp.b, 0) + COALESCE(mp.m, 0)
-        FROM (SELECT 1) x
-        LEFT JOIN (SELECT SUM(points_earned) AS g FROM group_predictions WHERE prediction_id = predictions.id) gp ON 1=1
-        LEFT JOIN (SELECT SUM(points_earned) AS b FROM bracket_predictions WHERE prediction_id = predictions.id) bp ON 1=1
-        LEFT JOIN (SELECT SUM(points_earned) AS m FROM match_predictions WHERE prediction_id = predictions.id) mp ON 1=1
-      ),
-      updated_at = NOW()
-    WHERE pool_id = $1
-  `, [poolId]);
+  // M5: Single transaction for all phases + total_score update
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    await calculateGroupScores(poolId, rules, client);
+    await calculateBracketScores(poolId, rules, client);
+    await calculateMatchScores(poolId, rules, client);
+
+    // Update total_score for all predictions in the pool (inside the same transaction)
+    await client.query(`
+      UPDATE predictions p SET
+        total_score = sub.total,
+        updated_at = NOW()
+      FROM (
+        SELECT pred.id,
+          COALESCE((SELECT SUM(gp.points_earned) FROM group_predictions gp WHERE gp.prediction_id = pred.id), 0) +
+          COALESCE((SELECT SUM(bp.points_earned) FROM bracket_predictions bp WHERE bp.prediction_id = pred.id), 0) +
+          COALESCE((SELECT SUM(mp.points_earned) FROM match_predictions mp WHERE mp.prediction_id = pred.id), 0) as total
+        FROM predictions pred
+        WHERE pred.pool_id = $1
+      ) sub
+      WHERE p.id = sub.id
+    `, [poolId]);
+
+    await client.query('COMMIT');
+
+    // Track successful scoring
+    await query(
+      'UPDATE pools SET last_scored_at = NOW(), last_score_error = NULL WHERE id = $1',
+      [poolId]
+    );
+  } catch (err) {
+    await client.query('ROLLBACK');
+
+    // Track scoring failure
+    await query(
+      'UPDATE pools SET last_score_error = $2 WHERE id = $1',
+      [poolId, (err as Error).message ?? String(err)]
+    ).catch(() => {}); // don't let tracking failure mask the original error
+
+    throw err;
+  } finally {
+    client.release();
+  }
 }

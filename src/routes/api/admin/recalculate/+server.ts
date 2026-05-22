@@ -2,6 +2,7 @@ import { query } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
+import { logAudit } from '$lib/server/audit.js';
 
 // POST /api/admin/recalculate
 // Body: { pool_id }
@@ -19,6 +20,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   try {
     await calculateAllScores(pool_id);
+    await logAudit('recalculate', locals.user.id, 'pool', pool_id, null, null);
     return json({ ok: true });
   } catch (e) {
     console.error('Recalculate error:', e);

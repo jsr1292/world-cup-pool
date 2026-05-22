@@ -3,14 +3,15 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
 import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
+import { logAudit } from '$lib/server/audit.js';
 
 // POST /api/admin/results
 // Body: { match_id, home_score, away_score }
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
-  const { pool_id, match_id, home_score, away_score } = await request.json() as {
-    pool_id: number; match_id: number; home_score: number; away_score: number;
+  const { match_id, home_score, away_score } = await request.json() as {
+    match_id: number; home_score: number; away_score: number;
   };
 
   if (match_id == null || home_score == null || away_score == null) {
@@ -42,6 +43,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     "UPDATE matches SET home_score = $1, away_score = $2, status = 'finished' WHERE id = $3",
     [home_score, away_score, match_id]
   );
+
+  await logAudit('update_result', locals.user.id, 'match', match_id, { home_score: match.home_score, away_score: match.away_score }, { home_score, away_score });
 
   // Async rescoring — respond immediately, score all pools in background
   const { rows: pools } = await query('SELECT id FROM pools WHERE is_active = true');

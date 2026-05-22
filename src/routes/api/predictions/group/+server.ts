@@ -50,6 +50,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'Falta prediction_id o grupos' }, { status: 400 });
   }
 
+  if (Object.keys(groups).length > 32) {
+    return json({ error: 'Demasiados grupos' }, { status: 400 });
+  }
+
   // Verify ownership
   const { rows: predRows } = await query('SELECT user_id, pool_id FROM predictions WHERE id = $1', [prediction_id]);
   const pred = predRows[0] ?? null;
@@ -57,11 +61,32 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
+  // Verify pool membership
+  const { rows: membership } = await query(
+    'SELECT 1 FROM pool_members WHERE pool_id = $1 AND user_id = $2',
+    [pred.pool_id, locals.user.id]
+  );
+  if (membership.length === 0) {
+    return json({ error: 'No eres miembro de este pool' }, { status: 403 });
+  }
+
   // Check deadline
   const { rows: poolRows } = await query('SELECT deadline_group FROM pools WHERE id = $1', [pred.pool_id]);
   const pool = poolRows[0] ?? null;
   if (pool?.deadline_group && new Date(pool.deadline_group) <= new Date()) {
     return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
+  }
+
+  // Per-match kickoff deadline: reject if any match in these groups has already started
+  const groupNames = Object.keys(groups);
+  if (groupNames.length > 0) {
+    const { rows: started } = await query(
+      `SELECT 1 FROM matches WHERE group_name = ANY($1::text[]) AND kickoff_time IS NOT NULL AND kickoff_time <= NOW() LIMIT 1`,
+      [groupNames]
+    );
+    if (started.length > 0) {
+      return json({ error: 'Algunos partidos ya comenzaron' }, { status: 400 });
+    }
   }
 
   // Validate group names
@@ -85,10 +110,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     const filled = [positions.pos1, positions.pos2, positions.pos3, positions.pos4]
       .filter((v): v is number => v != null);
     if (filled.length === 0) continue;
-    const placeholders = filled.map((_, i) => `$${i + 2}`).join(',');
     const { rows: validRows } = await query(
-      `SELECT COUNT(*) as cnt FROM teams WHERE group_name = $1 AND id IN (${placeholders})`,
-      [groupName, ...filled]
+      `SELECT COUNT(*) as cnt FROM teams WHERE group_name = $1 AND id = ANY($2::int[])`,
+      [groupName, filled]
     );
     if (validRows[0].cnt !== filled.length) {
       return json({ error: `Equipo inválido en grupo ${groupName}` }, { status: 400 });

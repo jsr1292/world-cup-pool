@@ -50,6 +50,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
+  // Verify pool membership
+  const { rows: membership } = await query(
+    'SELECT 1 FROM pool_members WHERE pool_id = $1 AND user_id = $2',
+    [pred.pool_id, locals.user.id]
+  );
+  if (membership.length === 0) {
+    return json({ error: 'No eres miembro de este pool' }, { status: 403 });
+  }
+
   // Check deadline
   const { rows: poolRows } = await query('SELECT deadline_knockout FROM pools WHERE id = $1', [pred.pool_id]);
   const pool = poolRows[0] ?? null;
