@@ -1,4 +1,4 @@
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 
@@ -9,13 +9,14 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   const predictionId = Number(url.searchParams.get('prediction_id'));
   if (!predictionId) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
-  const pred = db.prepare('SELECT user_id FROM predictions WHERE id = ?').get(predictionId) as any;
+  const { rows: predRows } = await query('SELECT user_id FROM predictions WHERE id = $1', [predictionId]);
+  const pred = predRows[0] ?? null;
   if (!pred || pred.user_id !== locals.user.id) {
     return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
-  const row = db.prepare('SELECT home_score, away_score FROM tiebreaker WHERE prediction_id = ?').get(predictionId) as any;
-  return json(row || { home_score: null, away_score: null });
+  const { rows } = await query('SELECT home_score, away_score FROM tiebreaker WHERE prediction_id = $1', [predictionId]);
+  return json(rows[0] ?? { home_score: null, away_score: null });
 };
 
 // POST /api/predictions/tiebreaker
@@ -43,26 +44,28 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   // Verify ownership
-  const pred = db.prepare('SELECT user_id, pool_id FROM predictions WHERE id = ?').get(prediction_id) as any;
+  const { rows: predRows } = await query('SELECT user_id, pool_id FROM predictions WHERE id = $1', [prediction_id]);
+  const pred = predRows[0] ?? null;
   if (!pred || pred.user_id !== locals.user.id) {
     return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
   // Check deadline
-  const pool = db.prepare('SELECT deadline_knockout FROM pools WHERE id = ?').get(pred.pool_id) as any;
+  const { rows: poolRows } = await query('SELECT deadline_knockout FROM pools WHERE id = $1', [pred.pool_id]);
+  const pool = poolRows[0] ?? null;
   if (pool?.deadline_knockout && new Date(pool.deadline_knockout) <= new Date()) {
     return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
   }
 
   // Upsert
   if (home_score !== null && away_score !== null) {
-    db.prepare(`
+    await query(`
       INSERT INTO tiebreaker (prediction_id, home_score, away_score)
-      VALUES (?, ?, ?)
-      ON CONFLICT(prediction_id) DO UPDATE SET home_score = ?, away_score = ?
-    `).run(prediction_id, home_score, away_score, home_score, away_score);
+      VALUES ($1, $2, $3)
+      ON CONFLICT(prediction_id) DO UPDATE SET home_score = $2, away_score = $3
+    `, [prediction_id, home_score, away_score]);
   } else {
-    db.prepare('DELETE FROM tiebreaker WHERE prediction_id = ?').run(prediction_id);
+    await query('DELETE FROM tiebreaker WHERE prediction_id = $1', [prediction_id]);
   }
 
   return json({ ok: true });

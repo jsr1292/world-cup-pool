@@ -1,11 +1,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { createBackup, listBackups, restoreBackup } from '$lib/server/backup.js';
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
-  const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(locals.user.id) as any;
+  const { rows: userRows } = await query('SELECT is_admin FROM users WHERE id = $1', [locals.user.id]);
+  const user = userRows[0] ?? null;
   if (!user?.is_admin) return json({ error: 'Prohibido' }, { status: 403 });
 
   const { label = 'manual' } = await request.json() as { label?: string };
@@ -15,7 +16,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 export const GET: RequestHandler = async ({ locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
-  const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(locals.user.id) as any;
+  const { rows: userRows } = await query('SELECT is_admin FROM users WHERE id = $1', [locals.user.id]);
+  const user = userRows[0] ?? null;
   if (!user?.is_admin) return json({ error: 'Prohibido' }, { status: 403 });
 
   return json(listBackups());
@@ -24,7 +26,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 // PUT /api/admin/backup — restore from a backup
 export const PUT: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
-  const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(locals.user.id) as any;
+  const { rows: userRows } = await query('SELECT is_admin FROM users WHERE id = $1', [locals.user.id]);
+  const user = userRows[0] ?? null;
   if (!user?.is_admin) return json({ error: 'Prohibido' }, { status: 403 });
 
   const { name } = await request.json() as { name: string };

@@ -1,4 +1,4 @@
-import { db } from './db.js';
+import { query, getClient } from './db.js';
 
 const DEFAULT_RULES: Record<string, number> = {
   match_outcome: 1,
@@ -13,8 +13,8 @@ const DEFAULT_RULES: Record<string, number> = {
   third_place: 25,
 };
 
-export function getScoringRules(poolId: number): Record<string, number> {
-  const rows = db.prepare('SELECT rule, points FROM scoring_config WHERE pool_id = ?').all(poolId) as any[];
+export async function getScoringRules(poolId: number): Promise<Record<string, number>> {
+  const { rows } = await query('SELECT rule, points FROM scoring_config WHERE pool_id = $1', [poolId]);
   if (rows.length === 0) return { ...DEFAULT_RULES };
   const config: Record<string, number> = {};
   for (const row of rows) config[row.rule] = row.points;
@@ -25,15 +25,15 @@ export function getScoringRules(poolId: number): Record<string, number> {
  * Calculate group stage scores for all predictions in a pool.
  * Compares each user's predicted group positions against actual match results.
  */
-export function calculateGroupScores(poolId: number): void {
-  const rules = getScoringRules(poolId);
+export async function calculateGroupScores(poolId: number): Promise<void> {
+  const rules = await getScoringRules(poolId);
   const ptsPerPosition = rules.group_position ?? 3;
 
   // Get all finished group matches
-  const matches = db.prepare(`
+  const { rows: matches } = await query(`
     SELECT group_name, home_team_id, away_team_id, home_score, away_score
     FROM matches WHERE phase = 'group' AND status = 'finished' AND home_score IS NOT NULL
-  `).all() as any[];
+  `);
 
   if (matches.length === 0) return;
 
@@ -66,12 +66,12 @@ export function calculateGroupScores(poolId: number): void {
   }
 
   // Bulk fetch all group predictions for this pool (F-03: eliminate N+1)
-  const allGP = db.prepare(`
+  const { rows: allGP } = await query(`
     SELECT gp.prediction_id, gp.group_name, gp.position_1, gp.position_2, gp.position_3, gp.position_4
     FROM group_predictions gp
     JOIN predictions p ON p.id = gp.prediction_id
-    WHERE p.pool_id = ?
-  `).all(poolId) as any[];
+    WHERE p.pool_id = $1
+  `, [poolId]);
 
   if (allGP.length === 0) return;
 
@@ -81,11 +81,9 @@ export function calculateGroupScores(poolId: number): void {
     gpByPred[gp.prediction_id].push(gp);
   }
 
-  const updateGP = db.prepare(
-    'UPDATE group_predictions SET points_earned = ? WHERE prediction_id = ? AND group_name = ?'
-  );
-
-  const calcAll = db.transaction(() => {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
     for (const [predIdStr, gpRows] of Object.entries(gpByPred)) {
       const predId = Number(predIdStr);
       for (const gp of gpRows) {
@@ -99,28 +97,35 @@ export function calculateGroupScores(poolId: number): void {
             earned += ptsPerPosition;
           }
         }
-        updateGP.run(earned, predId, gp.group_name);
+        await client.query(
+          'UPDATE group_predictions SET points_earned = $1 WHERE prediction_id = $2 AND group_name = $3',
+          [earned, predId, gp.group_name]
+        );
       }
     }
-  });
-
-  calcAll();
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**
  * Calculate knockout bracket scores for all predictions in a pool.
  * Compares predicted bracket picks against actual match winners.
  */
-export function calculateBracketScores(poolId: number): void {
-  const rules = getScoringRules(poolId);
+export async function calculateBracketScores(poolId: number): Promise<void> {
+  const rules = await getScoringRules(poolId);
 
   // Get all finished knockout matches
-  const matches = db.prepare(`
+  const { rows: matches } = await query(`
     SELECT id, phase, home_team_id, away_team_id, home_score, away_score
     FROM matches
     WHERE phase IN ('r32','r16','qf','sf','final','3rd')
       AND status = 'finished' AND home_score IS NOT NULL AND away_score IS NOT NULL
-  `).all() as any[];
+  `);
 
   if (matches.length === 0) return;
 
@@ -138,18 +143,18 @@ export function calculateBracketScores(poolId: number): void {
   }
 
   // F-04: Bulk reset all bracket predictions for the pool
-  db.prepare(`
+  await query(`
     UPDATE bracket_predictions SET points_earned = 0
-    WHERE prediction_id IN (SELECT id FROM predictions WHERE pool_id = ?)
-  `).run(poolId);
+    WHERE prediction_id IN (SELECT id FROM predictions WHERE pool_id = $1)
+  `, [poolId]);
 
   // F-03: Bulk SELECT all bracket predictions for the pool
-  const allBP = db.prepare(`
+  const { rows: allBP } = await query(`
     SELECT bp.prediction_id, bp.phase, bp.team_id
     FROM bracket_predictions bp
     JOIN predictions p ON p.id = bp.prediction_id
-    WHERE p.pool_id = ?
-  `).all(poolId) as any[];
+    WHERE p.pool_id = $1
+  `, [poolId]);
 
   if (allBP.length === 0) return;
 
@@ -159,11 +164,9 @@ export function calculateBracketScores(poolId: number): void {
     bpByPred[bp.prediction_id].push(bp);
   }
 
-  const updateBP = db.prepare(
-    'UPDATE bracket_predictions SET points_earned = ? WHERE prediction_id = ? AND phase = ? AND team_id = ?'
-  );
-
-  const calcAll = db.transaction(() => {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
     for (const [predIdStr, bpRows] of Object.entries(bpByPred)) {
       const predId = Number(predIdStr);
       for (const bp of bpRows) {
@@ -174,13 +177,20 @@ export function calculateBracketScores(poolId: number): void {
           if (bp.phase === 'final') {
             pts += rules['knockout_winner'] ?? 0;
           }
-          updateBP.run(pts, predId, bp.phase, bp.team_id);
+          await client.query(
+            'UPDATE bracket_predictions SET points_earned = $1 WHERE prediction_id = $2 AND phase = $3 AND team_id = $4',
+            [pts, predId, bp.phase, bp.team_id]
+          );
         }
       }
     }
-  });
-
-  calcAll();
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -189,17 +199,17 @@ export function calculateBracketScores(poolId: number): void {
  *   - match_outcome points for correct 1/X/2
  *   - exact_score points on top for exact scoreline
  */
-export function calculateMatchScores(poolId: number): void {
-  const rules = getScoringRules(poolId);
+export async function calculateMatchScores(poolId: number): Promise<void> {
+  const rules = await getScoringRules(poolId);
   const outcomePts = rules.match_outcome ?? 2;
   const exactPts = rules.exact_score ?? 5;
 
   // Get all finished matches (group or knockout) with scores
-  const matches = db.prepare(`
+  const { rows: matches } = await query(`
     SELECT id, home_team_id, away_team_id, home_score, away_score
     FROM matches
     WHERE status = 'finished' AND home_score IS NOT NULL AND away_score IS NOT NULL
-  `).all() as any[];
+  `);
 
   if (matches.length === 0) return;
 
@@ -214,12 +224,12 @@ export function calculateMatchScores(poolId: number): void {
   }
 
   // F-03: Bulk SELECT all match predictions for the pool
-  const allMP = db.prepare(`
+  const { rows: allMP } = await query(`
     SELECT mp.id, mp.prediction_id, mp.match_id, mp.home_score, mp.away_score
     FROM match_predictions mp
     JOIN predictions p ON p.id = mp.prediction_id
-    WHERE p.pool_id = ?
-  `).all(poolId) as any[];
+    WHERE p.pool_id = $1
+  `, [poolId]);
 
   if (allMP.length === 0) return;
 
@@ -229,11 +239,9 @@ export function calculateMatchScores(poolId: number): void {
     mpByPred[mp.prediction_id].push(mp);
   }
 
-  const updateMP = db.prepare(
-    'UPDATE match_predictions SET points_earned = ? WHERE id = ?'
-  );
-
-  const calcAll = db.transaction(() => {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
     for (const [, mpRows] of Object.entries(mpByPred)) {
       for (const mp of mpRows) {
         const m = matchMap[mp.match_id];
@@ -257,24 +265,31 @@ export function calculateMatchScores(poolId: number): void {
           pts += exactPts;
         }
 
-        updateMP.run(pts, mp.id);
+        await client.query(
+          'UPDATE match_predictions SET points_earned = $1 WHERE id = $2',
+          [pts, mp.id]
+        );
       }
     }
-  });
-
-  calcAll();
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**
  * Run all score calculations and update total_score in predictions table.
  */
-export function calculateAllScores(poolId: number): void {
-  calculateGroupScores(poolId);
-  calculateBracketScores(poolId);
-  calculateMatchScores(poolId);
+export async function calculateAllScores(poolId: number): Promise<void> {
+  await calculateGroupScores(poolId);
+  await calculateBracketScores(poolId);
+  await calculateMatchScores(poolId);
 
   // F-05: Sum up all points per prediction with LEFT JOIN instead of correlated subqueries
-  db.prepare(`
+  await query(`
     UPDATE predictions SET
       total_score = (
         SELECT COALESCE(gp.g, 0) + COALESCE(bp.b, 0) + COALESCE(mp.m, 0)
@@ -283,7 +298,7 @@ export function calculateAllScores(poolId: number): void {
         LEFT JOIN (SELECT SUM(points_earned) AS b FROM bracket_predictions WHERE prediction_id = predictions.id) bp ON 1=1
         LEFT JOIN (SELECT SUM(points_earned) AS m FROM match_predictions WHERE prediction_id = predictions.id) mp ON 1=1
       ),
-      updated_at = datetime('now')
-    WHERE pool_id = ?
-  `).run(poolId);
+      updated_at = NOW()
+    WHERE pool_id = $1
+  `, [poolId]);
 }

@@ -3,7 +3,7 @@ import type { PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
   const userId = locals.user?.id;
-  const pools = userId ? getUserPools(userId) : [];
+  const pools = userId ? await getUserPools(userId) : [];
 
   // Days until World Cup 2026 kick-off (June 11, 2026)
   const kickoff = new Date('2026-06-11T00:00:00Z');

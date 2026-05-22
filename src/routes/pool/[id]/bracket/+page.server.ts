@@ -1,4 +1,5 @@
 import { getPoolById, getUserPredictions, getGroupPredictions, getAllTeams } from '$lib/server/queries.js';
+import { query } from '$lib/server/db.js';
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
@@ -6,11 +7,11 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   if (!locals.user) throw redirect(302, '/login');
 
   const poolId = Number(params.id);
-  const pool = getPoolById(poolId) as any;
+  const pool = await getPoolById(poolId) as any;
   if (!pool) throw error(404, 'Quiniela no encontrada');
 
   // Get ALL user predictions for this pool
-  const predictions = getUserPredictions(poolId, locals.user.id) as any[];
+  const predictions = await getUserPredictions(poolId, locals.user.id) as any[];
 
   // Get selected entry from query param
   const selectedLabel = url.searchParams.get('entry') || '';
@@ -18,7 +19,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   const predictionId = selectedPrediction ? Number(selectedPrediction.id) : null;
 
   // Load group predictions
-  const groupRows = predictionId ? getGroupPredictions(predictionId) as any[] : [];
+  const groupRows = predictionId ? await getGroupPredictions(predictionId) as any[] : [];
   const groupPredictions: Record<string, { pos1: number; pos2: number; pos3: number; pos4: number }> = {};
   for (const row of groupRows) {
     groupPredictions[row.group_name] = {
@@ -30,10 +31,11 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   }
 
   // Load existing bracket predictions
-  const { db } = await import('$lib/server/db.js');
-  const bracketRows = predictionId
-    ? db.prepare(`SELECT phase, slot, team_id FROM bracket_predictions WHERE prediction_id = ? ORDER BY phase, slot`).all(predictionId) as any[]
-    : [];
+  let bracketRows: any[] = [];
+  if (predictionId) {
+    const { rows } = await query('SELECT phase, slot, team_id FROM bracket_predictions WHERE prediction_id = $1 ORDER BY phase, slot', [predictionId]);
+    bracketRows = rows;
+  }
 
   const existingBracket: Record<string, Record<number, number>> = {};
   for (const row of bracketRows) {
@@ -42,7 +44,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   }
 
   // Load all teams
-  const teams = getAllTeams() as any[];
+  const teams = await getAllTeams() as any[];
   const teamsByGroup: Record<string, any[]> = {};
   for (const team of teams) {
     if (!teamsByGroup[team.group_name]) teamsByGroup[team.group_name] = [];

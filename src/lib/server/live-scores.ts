@@ -8,7 +8,7 @@
  * Config: Set API_FOOTBALL_KEY env var or store in .env
  */
 
-import { db } from './db.js';
+import { query } from './db.js';
 
 const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
 const FIFA_BASE = 'https://api.fifa.com/api/v3';
@@ -132,33 +132,35 @@ export async function syncScores(): Promise<{ updated: number; skipped: number; 
     let dbMatch: any = null;
 
     if (m.fifa_id) {
-      dbMatch = db.prepare('SELECT * FROM matches WHERE fifa_id = ?').get(m.fifa_id) as any;
+      const res = await query('SELECT * FROM matches WHERE fifa_id = $1', [m.fifa_id]);
+      dbMatch = res.rows[0] ?? null;
     }
 
     if (!dbMatch) {
       // Try matching by team names (fuzzy)
       // Escape LIKE wildcards % and _ in team names to prevent injection
       const escapeLike = (s: string) => s.replace(/[%_]/g, '\\$&');
-      dbMatch = db.prepare(`
+      const res = await query(`
         SELECT m.* FROM matches m
         JOIN teams t1 ON t1.id = m.home_team_id
         JOIN teams t2 ON t2.id = m.away_team_id
-        WHERE (t1.name LIKE ? ESCAPE '\' AND t2.name LIKE ? ESCAPE '\')
+        WHERE (t1.name LIKE $1 ESCAPE '\\' AND t2.name LIKE $2 ESCAPE '\\')
           AND m.status != 'finished'
         LIMIT 1
-      `).get(`%${escapeLike(m.home_team)}%`, `%${escapeLike(m.away_team)}%`) as any;
+      `, [`%${escapeLike(m.home_team)}%`, `%${escapeLike(m.away_team)}%`]);
+      dbMatch = res.rows[0] ?? null;
     }
 
     if (!dbMatch) { skipped++; continue; }
 
     try {
-      db.prepare(`
+      const result = await query(`
         UPDATE matches 
-        SET home_score = ?, away_score = ?, status = 'finished'
-        WHERE id = ? AND status != 'finished'
-      `).run(m.home_score, m.away_score, dbMatch.id);
+        SET home_score = $1, away_score = $2, status = 'finished'
+        WHERE id = $3 AND status != 'finished'
+      `, [m.home_score, m.away_score, dbMatch.id]);
 
-      if (db.prepare('SELECT changes() as c').get().c > 0) {
+      if ((result.rowCount ?? 0) > 0) {
         updated++;
       } else {
         skipped++;

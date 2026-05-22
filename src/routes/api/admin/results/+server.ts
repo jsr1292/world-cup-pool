@@ -1,4 +1,4 @@
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
@@ -26,28 +26,31 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   // Verify user is admin
-  const actor = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(locals.user.id) as any;
+  const { rows: actorRows } = await query('SELECT is_admin FROM users WHERE id = $1', [locals.user.id]);
+  const actor = actorRows[0] ?? null;
   if (!actor?.is_admin) {
     return json({ error: 'Solo los administradores pueden modificar resultados' }, { status: 403 });
   }
 
   // Get match
-  const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(match_id) as any;
+  const { rows: matchRows } = await query('SELECT * FROM matches WHERE id = $1', [match_id]);
+  const match = matchRows[0] ?? null;
   if (!match) return json({ error: 'Partido no encontrado' }, { status: 404 });
   
   // Update match result
-  db.prepare(
-    "UPDATE matches SET home_score = ?, away_score = ?, status = 'finished' WHERE id = ?"
-  ).run(home_score, away_score, match_id);
+  await query(
+    "UPDATE matches SET home_score = $1, away_score = $2, status = 'finished' WHERE id = $3",
+    [home_score, away_score, match_id]
+  );
 
   // Async rescoring — respond immediately, score all pools in background
-  const pools = db.prepare('SELECT id FROM pools WHERE is_active = 1').all() as any[];
-  const poolIds = pools.map(p => p.id);
+  const { rows: pools } = await query('SELECT id FROM pools WHERE is_active = true');
+  const poolIds = pools.map((p: any) => p.id);
 
-  setImmediate(() => {
+  setImmediate(async () => {
     for (const poolId of poolIds) {
       try {
-        calculateAllScores(poolId);
+        await calculateAllScores(poolId);
         invalidateCachedPoolLeaderboard(poolId);
         invalidateCachedPoolResults(poolId);
       } catch (e) {

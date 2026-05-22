@@ -1,4 +1,4 @@
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import { getTeamsMapCached } from '$lib/server/cache.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
@@ -13,16 +13,17 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   if (!predictionId) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
   // Verify ownership
-  const pred = db.prepare('SELECT user_id FROM predictions WHERE id = ?').get(predictionId) as any;
+  const { rows: predRows } = await query('SELECT user_id FROM predictions WHERE id = $1', [predictionId]);
+  const pred = predRows[0] ?? null;
   if (!pred || pred.user_id !== locals.user.id) {
     return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
-  const rows = db.prepare(`
+  const { rows } = await query(`
     SELECT phase, slot, team_id FROM bracket_predictions
-    WHERE prediction_id = ?
+    WHERE prediction_id = $1
     ORDER BY phase, slot
-  `).all(predictionId) as any[];
+  `, [predictionId]);
 
   const result: Record<string, Record<number, number>> = {};
   for (const row of rows) {
@@ -49,13 +50,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   // Verify ownership
-  const pred = db.prepare('SELECT user_id, pool_id FROM predictions WHERE id = ?').get(prediction_id) as any;
+  const { rows: predRows } = await query('SELECT user_id, pool_id FROM predictions WHERE id = $1', [prediction_id]);
+  const pred = predRows[0] ?? null;
   if (!pred || pred.user_id !== locals.user.id) {
     return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
   // Check deadline
-  const poolCheck = db.prepare('SELECT deadline_knockout FROM pools WHERE id = ?').get(pred.pool_id) as any;
+  const { rows: poolRows } = await query('SELECT deadline_knockout FROM pools WHERE id = $1', [pred.pool_id]);
+  const poolCheck = poolRows[0] ?? null;
   if (poolCheck?.deadline_knockout && new Date(poolCheck.deadline_knockout) <= new Date()) {
     return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
   }
@@ -84,37 +87,27 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       if (teamId !== null) allTeamIds.add(teamId);
     }
   }
-  const teamsMap = getTeamsMapCached();
+  const teamsMap = await getTeamsMapCached();
   for (const id of allTeamIds) {
     if (!teamsMap[id]) return json({ error: `Invalid team_id: ${id}` }, { status: 400 });
   }
 
-  const upsert = db.prepare(`
-    INSERT INTO bracket_predictions (prediction_id, phase, slot, team_id)
-    VALUES (@prediction_id, @phase, @slot, @team_id)
-    ON CONFLICT(prediction_id, phase, slot) DO UPDATE SET team_id = @team_id
-  `);
-
-  const deleteStmt = db.prepare(`
-    DELETE FROM bracket_predictions WHERE prediction_id = ? AND phase = ? AND slot = ?
-  `);
-
-  const saveAll = db.transaction(() => {
+  try {
     for (const [phase, slots] of Object.entries(picks)) {
       for (const [slotStr, teamId] of Object.entries(slots)) {
         const slot = Number(slotStr);
         if (teamId === null) {
           // Null means clear the slot
-          deleteStmt.run(prediction_id, phase, slot);
+          await query('DELETE FROM bracket_predictions WHERE prediction_id = $1 AND phase = $2 AND slot = $3', [prediction_id, phase, slot]);
         } else {
-          upsert.run({ prediction_id, phase, slot, team_id: teamId });
+          await query(`
+            INSERT INTO bracket_predictions (prediction_id, phase, slot, team_id)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT(prediction_id, phase, slot) DO UPDATE SET team_id = $4
+          `, [prediction_id, phase, slot, teamId]);
         }
       }
     }
-  });
-
-  try {
-    saveAll();
     return json({ ok: true });
   } catch (e) {
     console.error(e);

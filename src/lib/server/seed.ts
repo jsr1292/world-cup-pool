@@ -1,4 +1,4 @@
-import { db } from './db.js';
+import { query, getClient } from './db.js';
 
 // 48 confirmed qualified teams for FIFA World Cup 2026 (April 2026)
 // Groups based on December 2025 draw results from Wikipedia
@@ -90,18 +90,35 @@ for (const [g, c] of Object.entries(groups)) {
   if (c !== 4) throw new Error(`Group ${g} has ${c} teams, expected 4`);
 }
 
-db.prepare('DELETE FROM teams').run();
-
-const insert = db.prepare(`
+const insertSql = `
   INSERT INTO teams (name, flag_code, group_name, fifa_rank)
-  VALUES (@name, @flag_code, @group_name, @fifa_rank)
-`);
+  VALUES ($1, $2, $3, $4)
+`;
 
-const insertMany = db.transaction((rows: typeof teams) => {
-  for (const row of rows) insert.run(row);
+async function seed() {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    await client.query('DELETE FROM teams');
+
+    for (const row of teams) {
+      await client.query(insertSql, [row.name, row.flag_code, row.group_name, row.fifa_rank]);
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  const result = await query('SELECT COUNT(*) as c FROM teams') as { rows: { c: number }[] };
+  console.log(`✓ Seeded ${result.rows[0].c} teams in ${Object.keys(groups).length} groups`);
+}
+
+seed().catch((err) => {
+  console.error('Seed failed:', err);
+  process.exit(1);
 });
-
-insertMany(teams);
-
-const count = (db.prepare('SELECT COUNT(*) as c FROM teams').get() as { c: number }).c;
-console.log(`✓ Seeded ${count} teams in ${Object.keys(groups).length} groups`);

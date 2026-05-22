@@ -1,4 +1,4 @@
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { getScoringRules } from '$lib/server/scoring.js';
@@ -10,12 +10,13 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   const poolId = Number(url.searchParams.get('pool_id'));
   if (!poolId) return json({ error: 'Falta pool_id' }, { status: 400 });
 
-  const pool = db.prepare('SELECT created_by FROM pools WHERE id = ?').get(poolId) as any;
+  const { rows: poolRows } = await query('SELECT created_by FROM pools WHERE id = $1', [poolId]);
+  const pool = poolRows[0] ?? null;
   if (!pool || pool.created_by !== locals.user.id) {
     return json({ error: 'Prohibido' }, { status: 403 });
   }
 
-  return json(getScoringRules(poolId));
+  return json(await getScoringRules(poolId));
 };
 
 // POST /api/admin/scoring
@@ -33,43 +34,40 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   if (!pool_id) return json({ error: 'Falta pool_id' }, { status: 400 });
 
-  const pool = db.prepare('SELECT created_by FROM pools WHERE id = ?').get(pool_id) as any;
+  const { rows: poolRows } = await query('SELECT created_by FROM pools WHERE id = $1', [pool_id]);
+  const pool = poolRows[0] ?? null;
   if (!pool || pool.created_by !== locals.user.id) {
     return json({ error: 'Prohibido' }, { status: 403 });
   }
 
   // Update scoring rules if provided
   if (rules) {
-    const upsert = db.prepare(`
-      INSERT INTO scoring_config (pool_id, rule, points) VALUES (?, ?, ?)
-      ON CONFLICT(pool_id, rule) DO UPDATE SET points = ?
-    `);
-
-    const saveAll = db.transaction(() => {
-      for (const [rule, points] of Object.entries(rules)) {
-        if (typeof points === 'number' && points >= 0) {
-          upsert.run(pool_id, rule, points, points);
-        }
+    for (const [rule, points] of Object.entries(rules)) {
+      if (typeof points === 'number' && points >= 0) {
+        await query(`
+          INSERT INTO scoring_config (pool_id, rule, points) VALUES ($1, $2, $3)
+          ON CONFLICT(pool_id, rule) DO UPDATE SET points = $3
+        `, [pool_id, rule, points]);
       }
-    });
-    saveAll();
+    }
   }
 
   // Update deadlines if provided
   if (body.deadline_group !== undefined || body.deadline_knockout !== undefined) {
     const updates: string[] = [];
     const values: any[] = [];
+    let paramIdx = 1;
     if (body.deadline_group !== undefined) {
-      updates.push('deadline_group = ?');
+      updates.push(`deadline_group = $${paramIdx++}`);
       values.push(body.deadline_group || null);
     }
     if (body.deadline_knockout !== undefined) {
-      updates.push('deadline_knockout = ?');
+      updates.push(`deadline_knockout = $${paramIdx++}`);
       values.push(body.deadline_knockout || null);
     }
     if (updates.length > 0) {
       values.push(pool_id);
-      db.prepare(`UPDATE pools SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+      await query(`UPDATE pools SET ${updates.join(', ')} WHERE id = $${paramIdx}`, values);
     }
   }
 

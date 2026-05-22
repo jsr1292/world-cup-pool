@@ -1,5 +1,5 @@
 import { getPoolById, getAllTeams, createPrediction, getUserPredictions, getGroupPredictions } from '$lib/server/queries.js';
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import { redirect, error } from '@sveltejs/kit';
 import type { ServerLoad } from '@sveltejs/kit';
 
@@ -7,10 +7,10 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   if (!locals.user) throw redirect(302, '/login');
 
   const poolId = Number(params.id);
-  const pool = getPoolById(poolId) as any;
+  const pool = await getPoolById(poolId) as any;
   if (!pool) throw error(404, 'Quiniela no encontrada');
 
-  const teams = getAllTeams() as any[];
+  const teams = await getAllTeams() as any[];
 
   // Group teams by group_name
   const teamsByGroup: Record<string, any[]> = {};
@@ -20,7 +20,7 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   }
 
   // Get ALL user predictions for this pool
-  let predictions = getUserPredictions(poolId, locals.user.id) as any[];
+  let predictions = await getUserPredictions(poolId, locals.user.id) as any[];
 
   // Check deadline (group deadline for group predictions)
   const deadline = pool.deadline_group ? new Date(pool.deadline_group as string) : null;
@@ -32,7 +32,7 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   let selectedId: number | null = null;
 
   // Load knockout matches with both teams set (available for prediction)
-  const knockoutMatches = db.prepare(`
+  const { rows: knockoutMatches } = await query(`
     SELECT m.id, m.phase, m.home_team_id, m.away_team_id,
       ht.name as home_name, ht.flag_code as home_flag,
       at.name as away_name, at.flag_code as away_flag
@@ -43,7 +43,7 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
       AND m.home_team_id IS NOT NULL
       AND m.away_team_id IS NOT NULL
     ORDER BY m.phase, m.id
-  `).all() as any[];
+  `);
 
   // Group knockout matches by phase
   const knockoutByPhase: Record<string, any[]> = {};
@@ -60,7 +60,7 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
 
   if (selectedPrediction) {
     selectedId = Number(selectedPrediction.id);
-    const rows = getGroupPredictions(selectedId) as any[];
+    const rows = await getGroupPredictions(selectedId) as any[];
     for (const row of rows) {
       existingGroupPreds[row.group_name] = {
         pos1: row.position_1,
@@ -70,10 +70,10 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
       };
     }
     // Load existing match predictions
-    const mpRows = db.prepare(`
+    const { rows: mpRows } = await query(`
       SELECT match_id, home_score, away_score
-      FROM match_predictions WHERE prediction_id = ?
-    `).all(selectedId) as any[];
+      FROM match_predictions WHERE prediction_id = $1
+    `, [selectedId]);
     for (const row of mpRows) {
       existingMatchPreds[row.match_id] = { home_score: row.home_score, away_score: row.away_score };
     }

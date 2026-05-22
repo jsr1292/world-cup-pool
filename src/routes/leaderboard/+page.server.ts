@@ -1,4 +1,4 @@
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import type { PageServerLoad } from './$types.js';
 import { getCachedGlobalLeaderboard, setCachedGlobalLeaderboard } from '$lib/server/cache.js';
 
@@ -9,11 +9,12 @@ export const load: PageServerLoad = async ({ locals }) => {
   if (cached) return { leaderboard: cached, currentUserId };
 
   // Get the actual final match score for tiebreaker closeness
-  const finalMatch = db.prepare(`
+  const { rows: fmRows } = await query(`
     SELECT home_score, away_score FROM matches
     WHERE phase = 'final' AND status = 'finished' AND home_score IS NOT NULL
     LIMIT 1
-  `).get() as any;
+  `);
+  const finalMatch = fmRows[0] ?? null;
 
   // Build tiebreaker expression for ORDER BY
   let orderByTiebreaker = '0'; // no-op if no final yet
@@ -27,7 +28,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   }
 
   // Get top 100 scorers across all pools, using pre-aggregated CTEs (F-10)
-  const rows = db.prepare(`
+  const { rows } = await query(`
     WITH tiebreaker_close AS (
       SELECT prediction_id, ${orderByTiebreaker} as closeness
       FROM tiebreaker tb
@@ -65,7 +66,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     GROUP BY u.id
     ORDER BY total_score DESC, exact_score_hits DESC, total_correct DESC, tc.closeness ASC
     LIMIT 100
-  `).all() as any[];
+  `);
 
   const leaderboard = rows.map((row, i) => ({
     rank: i + 1,

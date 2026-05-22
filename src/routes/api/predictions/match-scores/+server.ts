@@ -1,4 +1,4 @@
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import { calculateMatchScores, calculateAllScores } from '$lib/server/scoring.js';
 import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
 import type { RequestHandler } from '@sveltejs/kit';
@@ -20,25 +20,29 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   // Verify ownership
-  const pred = db.prepare('SELECT user_id, pool_id FROM predictions WHERE id = ?').get(prediction_id) as any;
+  const { rows: predRows } = await query('SELECT user_id, pool_id FROM predictions WHERE id = $1', [prediction_id]);
+  const pred = predRows[0] ?? null;
   if (!pred || pred.user_id !== locals.user.id) {
     return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
   // Check deadline (per-phase)
-  const poolCheck = db.prepare(
-    'SELECT deadline_group, deadline_knockout FROM pools WHERE id = ?'
-  ).get(pred.pool_id) as any;
+  const { rows: poolRows } = await query(
+    'SELECT deadline_group, deadline_knockout FROM pools WHERE id = $1',
+    [pred.pool_id]
+  );
+  const poolCheck = poolRows[0] ?? null;
 
   const matchIds = Object.keys(scores).map(Number);
   if (matchIds.length > 0) {
-    const placeholders = matchIds.map(() => '?').join(',');
-    const phaseRow = db.prepare(`
+    const placeholders = matchIds.map((_, i) => `$${i + 1}`).join(',');
+    const { rows: phaseRows } = await query(`
       SELECT
         MAX(CASE WHEN phase = 'group' THEN 1 ELSE 0 END) AS has_group,
         MAX(CASE WHEN phase != 'group' THEN 1 ELSE 0 END) AS has_knockout
       FROM matches WHERE id IN (${placeholders})
-    `).get(...matchIds) as any;
+    `, matchIds);
+    const phaseRow = phaseRows[0] ?? null;
 
     const now = new Date();
     if (phaseRow?.has_group && poolCheck?.deadline_group && new Date(poolCheck.deadline_group) <= now) {
@@ -49,20 +53,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     }
   }
 
-  const upsert = db.prepare(`
-    INSERT INTO match_predictions (prediction_id, match_id, home_score, away_score)
-    VALUES (@prediction_id, @match_id, @home_score, @away_score)
-    ON CONFLICT(prediction_id, match_id) DO UPDATE SET
-      home_score = @home_score,
-      away_score = @away_score,
-      points_earned = 0
-  `);
-
-  const deleteStmt = db.prepare(`
-    DELETE FROM match_predictions WHERE prediction_id = ? AND match_id = ?
-  `);
-
-  const saveAll = db.transaction(() => {
+  try {
     for (const [matchIdStr, score] of Object.entries(scores)) {
       const matchId = Number(matchIdStr);
       const homeRaw = score.home_score;
@@ -72,21 +63,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
       if (homeScore === null || awayScore === null || isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0) {
         // Delete prediction if scores are null/undefined, NaN, or negative
-        deleteStmt.run(prediction_id, matchId);
+        await query('DELETE FROM match_predictions WHERE prediction_id = $1 AND match_id = $2', [prediction_id, matchId]);
       } else {
-        upsert.run({ prediction_id, match_id: matchId, home_score: homeScore, away_score: awayScore });
+        await query(`
+          INSERT INTO match_predictions (prediction_id, match_id, home_score, away_score)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT(prediction_id, match_id) DO UPDATE SET
+            home_score = $3,
+            away_score = $4,
+            points_earned = 0
+        `, [prediction_id, matchId, homeScore, awayScore]);
       }
     }
-  });
-
-  try {
-    saveAll();
 
     // Async scoring — respond immediately, score in background
     const poolId = pred.pool_id;
-    setImmediate(() => {
+    setImmediate(async () => {
       try {
-        calculateAllScores(poolId);
+        await calculateAllScores(poolId);
         invalidateCachedPoolLeaderboard(poolId);
         invalidateCachedPoolResults(poolId);
         invalidateGlobalLeaderboard();

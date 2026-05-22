@@ -1,4 +1,4 @@
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import { getPoolById } from '$lib/server/queries.js';
 import { json, type RequestHandler } from '@sveltejs/kit';
 
@@ -10,11 +10,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   if (!pool_id) return json({ error: 'pool_id required' }, { status: 400 });
 
-  const pool = getPoolById(pool_id) as any;
+  const pool = (await getPoolById(pool_id)) as any;
   if (!pool) return json({ error: 'Quiniela no encontrada' }, { status: 404 });
   if (pool.created_by !== locals.user.id) return json({ error: 'Prohibido' }, { status: 403 });
 
-  db.prepare('UPDATE pools SET allow_multiple_predictions = ? WHERE id = ?').run(allow_multiple_predictions ? 1 : 0, pool_id);
+  await query('UPDATE pools SET allow_multiple_predictions = $1 WHERE id = $2', [allow_multiple_predictions ? true : false, pool_id]);
 
   return json({ ok: true });
 };

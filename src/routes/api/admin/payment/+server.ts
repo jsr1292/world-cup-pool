@@ -1,4 +1,4 @@
-import { db } from '$lib/server/db.js';
+import { query, getClient } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 
@@ -14,32 +14,39 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   if (!pool_id) return json({ error: 'Falta pool_id' }, { status: 400 });
 
-  const pool = db.prepare('SELECT created_by FROM pools WHERE id = ?').get(pool_id) as any;
+  const { rows: poolRows } = await query('SELECT created_by FROM pools WHERE id = $1', [pool_id]);
+  const pool = poolRows[0] ?? null;
   if (!pool || pool.created_by !== locals.user.id) {
     return json({ error: 'Prohibido' }, { status: 403 });
   }
 
-  const val = has_paid ? 1 : 0;
+  const val = has_paid ? true : false;
 
-  const updatePayment = db.transaction(() => {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
     if (entry_id) {
       // Single entry — also get user_id for pool_members update
-      const entry = db.prepare('SELECT user_id FROM predictions WHERE id = ? AND pool_id = ?').get(entry_id, pool_id) as any;
-      db.prepare('UPDATE predictions SET has_paid = ? WHERE id = ? AND pool_id = ?')
-        .run(val, entry_id, pool_id);
+      const { rows: entryRows } = await client.query('SELECT user_id FROM predictions WHERE id = $1 AND pool_id = $2', [entry_id, pool_id]);
+      const entry = entryRows[0] ?? null;
+      await client.query('UPDATE predictions SET has_paid = $1 WHERE id = $2 AND pool_id = $3', [val, entry_id, pool_id]);
       if (entry?.user_id) {
-        db.prepare('UPDATE pool_members SET has_paid = ? WHERE pool_id = ? AND user_id = ?')
-          .run(val, pool_id, entry.user_id);
+        await client.query('UPDATE pool_members SET has_paid = $1 WHERE pool_id = $2 AND user_id = $3', [val, pool_id, entry.user_id]);
       }
     } else if (user_id) {
       // All entries for this user in this pool
-      db.prepare('UPDATE predictions SET has_paid = ? WHERE pool_id = ? AND user_id = ?')
-        .run(val, pool_id, user_id);
-      db.prepare('UPDATE pool_members SET has_paid = ? WHERE pool_id = ? AND user_id = ?')
-        .run(val, pool_id, user_id);
+      await client.query('UPDATE predictions SET has_paid = $1 WHERE pool_id = $2 AND user_id = $3', [val, pool_id, user_id]);
+      await client.query('UPDATE pool_members SET has_paid = $1 WHERE pool_id = $2 AND user_id = $3', [val, pool_id, user_id]);
     }
-  });
 
-  updatePayment();
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+
   return json({ ok: true });
 };

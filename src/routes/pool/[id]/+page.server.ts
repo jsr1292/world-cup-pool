@@ -1,42 +1,45 @@
 import { getPoolById, getPoolMembers, getPoolLeaderboard, getScoringConfig, getUserPredictions } from '$lib/server/queries.js';
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import { getTeamsMapCached, getCachedPoolResults, setCachedPoolResults } from '$lib/server/cache.js';
 import type { PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   const poolId = Number(params.id);
-  const pool = getPoolById(poolId);
+  const pool = await getPoolById(poolId);
   if (!pool) throw new Error('Quiniela no encontrada');
 
-  const members = getPoolMembers(poolId);
-  const leaderboard = getPoolLeaderboard(poolId);
-  const scoring = getScoringConfig(poolId);
-  const predictions = locals.user ? getUserPredictions(poolId, locals.user.id) : [];
+  const members = await getPoolMembers(poolId);
+  const leaderboard = await getPoolLeaderboard(poolId);
+  const scoring = await getScoringConfig(poolId);
+  const predictions = locals.user ? await getUserPredictions(poolId, locals.user.id) : [];
 
   // F-15: Use cached teams map instead of querying teams table
-  const teams = getTeamsMapCached();
+  const teams = await getTeamsMapCached();
 
   const groupPreds: Record<number, any[]> = {};
   const bracketPreds: Record<number, any[]> = {};
   for (const entry of predictions) {
-    groupPreds[entry.id] = db.prepare(`
+    const { rows: gpRows } = await query(`
       SELECT group_name, position_1, position_2, position_3, position_4
-      FROM group_predictions WHERE prediction_id = ?
+      FROM group_predictions WHERE prediction_id = $1
       ORDER BY group_name
-    `).all(entry.id) as any[];
-    bracketPreds[entry.id] = db.prepare(`
+    `, [entry.id]);
+    groupPreds[entry.id] = gpRows;
+    const { rows: bpRows } = await query(`
       SELECT phase, slot as match_index, team_id
-      FROM bracket_predictions WHERE prediction_id = ?
+      FROM bracket_predictions WHERE prediction_id = $1
       ORDER BY phase, slot
-    `).all(entry.id) as any[];
+    `, [entry.id]);
+    bracketPreds[entry.id] = bpRows;
   }
 
   // Get actual final match score for tiebreaker closeness
-  const finalMatch = db.prepare(`
+  const { rows: fmRows } = await query(`
     SELECT home_score, away_score FROM matches
     WHERE phase = 'final' AND status = 'finished' AND home_score IS NOT NULL
     LIMIT 1
-  `).get() as any;
+  `);
+  const finalMatch = fmRows[0] ?? null;
 
   // F-06: Bulk-fetch enrichment data to eliminate N+1 queries in leaderboard loop
   const predIds = leaderboard.map((e: any) => e.id);
@@ -45,29 +48,32 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   let tiebreakerMap: Record<number, any> = {};
 
   if (predIds.length > 0) {
-    const ph = predIds.map(() => '?').join(',');
+    const ph = predIds.map((_, i) => `$${i + 1}`).join(',');
 
-    (db.prepare(`
+    const { rows: gcRows } = await query(`
       SELECT prediction_id, COUNT(*) as cnt
       FROM group_predictions
       WHERE prediction_id IN (${ph}) AND points_earned > 0
       GROUP BY prediction_id
-    `).all(...predIds) as any[]).forEach(r => { groupCorrectMap[r.prediction_id] = r.cnt; });
+    `, predIds);
+    gcRows.forEach(r => { groupCorrectMap[r.prediction_id] = r.cnt; });
 
-    (db.prepare(`
+    const { rows: brRows } = await query(`
       SELECT prediction_id, phase, points_earned
       FROM bracket_predictions WHERE prediction_id IN (${ph})
-    `).all(...predIds) as any[]).forEach(br => {
+    `, predIds);
+    brRows.forEach(br => {
       if (br.points_earned > 0) {
         if (!bracketByPredPhase[br.prediction_id]) bracketByPredPhase[br.prediction_id] = {};
         bracketByPredPhase[br.prediction_id][br.phase] = (bracketByPredPhase[br.prediction_id][br.phase] || 0) + 1;
       }
     });
 
-    (db.prepare(`
+    const { rows: tbRows } = await query(`
       SELECT prediction_id, home_score, away_score
       FROM tiebreaker WHERE prediction_id IN (${ph})
-    `).all(...predIds) as any[]).forEach(tb => { tiebreakerMap[tb.prediction_id] = tb; });
+    `, predIds);
+    tbRows.forEach(tb => { tiebreakerMap[tb.prediction_id] = tb; });
   }
 
   const enrichedLeaderboard = leaderboard.map((entry: any) => {
@@ -104,40 +110,40 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   if (cachedResults) {
     ({ resultsPhases, resultsTeamCache, resultsGroupStandings } = cachedResults);
   } else {
+    const { rows: matchRows } = await query(`
+      SELECT m.*, ht.name as home_name, ht.flag_code as home_flag,
+        at.name as away_name, at.flag_code as away_flag
+      FROM matches m
+      LEFT JOIN teams ht ON ht.id = m.home_team_id
+      LEFT JOIN teams at ON at.id = m.away_team_id
+      ORDER BY m.sort_order, m.kickoff
+    `);
     resultsPhases = (() => {
-      const matches = db.prepare(`
-        SELECT m.*, ht.name as home_name, ht.flag_code as home_flag,
-          at.name as away_name, at.flag_code as away_flag
-        FROM matches m
-        LEFT JOIN teams ht ON ht.id = m.home_team_id
-        LEFT JOIN teams at ON at.id = m.away_team_id
-        ORDER BY m.sort_order, m.kickoff
-      `).all() as any[];
       const phases: Record<string, any[]> = {};
-      for (const m of matches) {
+      for (const m of matchRows) {
         const phase = m.phase || 'other';
         if (!phases[phase]) phases[phase] = [];
         phases[phase].push(m);
       }
       return phases;
     })();
-    resultsTeamCache = getTeamsMapCached();
+    resultsTeamCache = await getTeamsMapCached();
+    const { rows: groupMatchRows } = await query(`
+      SELECT m.*, ht.name as home_name, ht.flag_code as home_flag,
+        at.name as away_name, at.flag_code as away_flag
+      FROM matches m
+      LEFT JOIN teams ht ON ht.id = m.home_team_id
+      LEFT JOIN teams at ON at.id = m.away_team_id
+      WHERE m.phase = 'group'
+    `);
     resultsGroupStandings = (() => {
-      const groupMatches = db.prepare(`
-        SELECT m.*, ht.name as home_name, ht.flag_code as home_flag,
-          at.name as away_name, at.flag_code as away_flag
-        FROM matches m
-        LEFT JOIN teams ht ON ht.id = m.home_team_id
-        LEFT JOIN teams at ON at.id = m.away_team_id
-        WHERE m.phase = 'group'
-      `).all() as any[];
       const standings: Record<string, Record<number, { pts: number; gf: number; ga: number }>> = {};
       const cache: Record<number, any> = {};
-      for (const m of groupMatches) {
+      for (const m of groupMatchRows) {
         if (m.home_team_id) cache[m.home_team_id] = { name: m.home_name, flag_code: m.home_flag };
         if (m.away_team_id) cache[m.away_team_id] = { name: m.away_name, flag_code: m.away_flag };
       }
-      for (const m of groupMatches) {
+      for (const m of groupMatchRows) {
         if (m.status !== 'finished' || m.home_score == null || !m.group_name) continue;
         if (!standings[m.group_name]) standings[m.group_name] = {};
         const gs = standings[m.group_name];
@@ -161,6 +167,23 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     setCachedPoolResults(pool.id, { resultsPhases, resultsTeamCache, resultsGroupStandings });
   }
 
+  // User full predictions
+  let userGroupPredsFull: any[] = [];
+  let userBracketPredsFull: any[] = [];
+  if (predictions.length > 0) {
+    const { rows: ugpRows } = await query(`
+      SELECT group_name, position_1, position_2, position_3, position_4, points_earned
+      FROM group_predictions WHERE prediction_id = $1
+    `, [predictions[0].id]);
+    userGroupPredsFull = ugpRows;
+
+    const { rows: ubpRows } = await query(`
+      SELECT phase, slot as match_index, team_id, points_earned
+      FROM bracket_predictions WHERE prediction_id = $1
+    `, [predictions[0].id]);
+    userBracketPredsFull = ubpRows;
+  }
+
   return {
     pool, members, leaderboard: enrichedLeaderboard, scoring, predictions,
     isAdmin: locals.user ? (pool as any).created_by === locals.user.id : false,
@@ -172,13 +195,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     resultsPhases,
     resultsTeamCache,
     resultsGroupStandings,
-    userGroupPredsFull: predictions.length > 0 ? db.prepare(`
-      SELECT group_name, position_1, position_2, position_3, position_4, points_earned
-      FROM group_predictions WHERE prediction_id = ?
-    `).all(predictions[0].id) as any[] : [],
-    userBracketPredsFull: predictions.length > 0 ? db.prepare(`
-      SELECT phase, slot as match_index, team_id, points_earned
-      FROM bracket_predictions WHERE prediction_id = ?
-    `).all(predictions[0].id) as any[] : [],
+    userGroupPredsFull,
+    userBracketPredsFull,
   };
 };

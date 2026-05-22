@@ -1,21 +1,22 @@
-import { db } from './db.js';
+import { query } from './db.js';
 
 // ─── Teams ─────────────────────────────────────────────────────────────────
 // Teams are static during a tournament. Load once per process.
 let _teams: any[] | null = null;
 let _teamsMap: Record<number, any> | null = null;
 
-export function getAllTeamsCached(): any[] {
+export async function getAllTeamsCached(): Promise<any[]> {
 	if (!_teams) {
-		_teams = db.prepare('SELECT * FROM teams ORDER BY group_name, fifa_rank').all() as any[];
+		const result = await query('SELECT * FROM teams ORDER BY group_name, fifa_rank');
+		_teams = result.rows as any[];
 	}
 	return _teams;
 }
 
-export function getTeamsMapCached(): Record<number, any> {
+export async function getTeamsMapCached(): Promise<Record<number, any>> {
 	if (!_teamsMap) {
 		_teamsMap = {};
-		for (const t of getAllTeamsCached()) _teamsMap[t.id] = t;
+		for (const t of await getAllTeamsCached()) _teamsMap[t.id] = t;
 	}
 	return _teamsMap;
 }

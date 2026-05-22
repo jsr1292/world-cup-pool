@@ -1,4 +1,4 @@
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
@@ -11,13 +11,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const { pool_id } = await request.json() as { pool_id: number };
 
   // Verify user owns this pool
-  const pool = db.prepare('SELECT created_by FROM pools WHERE id = ?').get(pool_id) as any;
+  const { rows: poolRows } = await query('SELECT created_by FROM pools WHERE id = $1', [pool_id]);
+  const pool = poolRows[0] ?? null;
   if (!pool || pool.created_by !== locals.user.id) {
     return json({ error: 'Prohibido' }, { status: 403 });
   }
 
   try {
-    calculateAllScores(pool_id);
+    await calculateAllScores(pool_id);
     return json({ ok: true });
   } catch (e) {
     console.error('Recalculate error:', e);

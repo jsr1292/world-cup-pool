@@ -1,16 +1,17 @@
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import { getPoolLeaderboard, getScoringConfig } from '$lib/server/queries.js';
 import type { PageServerLoad } from './$types.js';
 import { getCachedPoolLeaderboard, setCachedPoolLeaderboard } from '$lib/server/cache.js';
 
 export const load: PageServerLoad = async ({ params }) => {
-  const pool = db.prepare('SELECT * FROM pools WHERE invite_code = ?').get(params.code) as any;
+  const { rows: poolRows } = await query('SELECT * FROM pools WHERE invite_code = $1', [params.code]);
+  const pool = poolRows[0] ?? null;
   if (!pool) throw new Error('Quiniela no encontrada');
 
   const cached = getCachedPoolLeaderboard(pool.id);
   if (cached) return cached;
 
-  const leaderboard = getPoolLeaderboard(pool.id);
+  const leaderboard = await getPoolLeaderboard(pool.id);
 
   // F-19: Bulk-fetch enrichment data to eliminate N+1 queries
   const predIds = leaderboard.map((e: any) => e.id);
@@ -18,19 +19,21 @@ export const load: PageServerLoad = async ({ params }) => {
   let bracketByPredPhase: Record<number, Record<string, number>> = {};
 
   if (predIds.length > 0) {
-    const ph = predIds.map(() => '?').join(',');
+    const ph = predIds.map((_, i) => `$${i + 1}`).join(',');
 
-    (db.prepare(`
+    const { rows: gcRows } = await query(`
       SELECT prediction_id, COUNT(*) as cnt
       FROM group_predictions
       WHERE prediction_id IN (${ph}) AND points_earned > 0
       GROUP BY prediction_id
-    `).all(...predIds) as any[]).forEach(r => { groupCorrectMap[r.prediction_id] = r.cnt; });
+    `, predIds);
+    gcRows.forEach(r => { groupCorrectMap[r.prediction_id] = r.cnt; });
 
-    (db.prepare(`
+    const { rows: brRows } = await query(`
       SELECT prediction_id, phase, points_earned
       FROM bracket_predictions WHERE prediction_id IN (${ph})
-    `).all(...predIds) as any[]).forEach(br => {
+    `, predIds);
+    brRows.forEach(br => {
       if (br.points_earned > 0) {
         if (!bracketByPredPhase[br.prediction_id]) bracketByPredPhase[br.prediction_id] = {};
         bracketByPredPhase[br.prediction_id][br.phase] = (bracketByPredPhase[br.prediction_id][br.phase] || 0) + 1;
@@ -52,7 +55,8 @@ export const load: PageServerLoad = async ({ params }) => {
 
   enriched.sort((a: any, b: any) => b.total_score - a.total_score || b.total_correct - a.total_correct);
 
-  const memberCount = db.prepare('SELECT COUNT(*) as cnt FROM pool_members WHERE pool_id = ?').get(pool.id) as any;
+  const { rows: mcRows } = await query('SELECT COUNT(*) as cnt FROM pool_members WHERE pool_id = $1', [pool.id]);
+  const memberCount = mcRows[0];
 
   const result = {
     pool: { id: pool.id, name: pool.name, buy_in: pool.buy_in },

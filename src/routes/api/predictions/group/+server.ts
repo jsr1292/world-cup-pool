@@ -1,4 +1,4 @@
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 
@@ -12,16 +12,17 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   if (!predictionId) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
   // Verify ownership
-  const pred = db.prepare('SELECT user_id FROM predictions WHERE id = ?').get(predictionId) as any;
+  const { rows: predRows } = await query('SELECT user_id FROM predictions WHERE id = $1', [predictionId]);
+  const pred = predRows[0] ?? null;
   if (!pred || pred.user_id !== locals.user.id) {
     return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
-  const rows = db.prepare(`
+  const { rows } = await query(`
     SELECT group_name, position_1, position_2, position_3, position_4
     FROM group_predictions
-    WHERE prediction_id = ?
-  `).all(predictionId) as any[];
+    WHERE prediction_id = $1
+  `, [predictionId]);
 
   const result: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }> = {};
   for (const row of rows) {
@@ -50,13 +51,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   // Verify ownership
-  const pred = db.prepare('SELECT user_id, pool_id FROM predictions WHERE id = ?').get(prediction_id) as any;
+  const { rows: predRows } = await query('SELECT user_id, pool_id FROM predictions WHERE id = $1', [prediction_id]);
+  const pred = predRows[0] ?? null;
   if (!pred || pred.user_id !== locals.user.id) {
     return json({ error: 'No es tu predicción' }, { status: 403 });
   }
 
   // Check deadline
-  const pool = db.prepare('SELECT deadline_group FROM pools WHERE id = ?').get(pred.pool_id) as any;
+  const { rows: poolRows } = await query('SELECT deadline_group FROM pools WHERE id = $1', [pred.pool_id]);
+  const pool = poolRows[0] ?? null;
   if (pool?.deadline_group && new Date(pool.deadline_group) <= new Date()) {
     return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
   }
@@ -82,26 +85,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     const filled = [positions.pos1, positions.pos2, positions.pos3, positions.pos4]
       .filter((v): v is number => v != null);
     if (filled.length === 0) continue;
-    const placeholders = filled.map(() => '?').join(',');
-    const valid = db.prepare(
-      `SELECT COUNT(*) as cnt FROM teams WHERE group_name = ? AND id IN (${placeholders})`
-    ).get(groupName, ...filled) as any;
-    if (valid.cnt !== filled.length) {
+    const placeholders = filled.map((_, i) => `$${i + 2}`).join(',');
+    const { rows: validRows } = await query(
+      `SELECT COUNT(*) as cnt FROM teams WHERE group_name = $1 AND id IN (${placeholders})`,
+      [groupName, ...filled]
+    );
+    if (validRows[0].cnt !== filled.length) {
       return json({ error: `Equipo inválido en grupo ${groupName}` }, { status: 400 });
     }
   }
 
-  const upsert = db.prepare(`
-    INSERT INTO group_predictions (prediction_id, group_name, position_1, position_2, position_3, position_4)
-    VALUES (@prediction_id, @group_name, @pos1, @pos2, @pos3, @pos4)
-    ON CONFLICT(prediction_id, group_name) DO UPDATE SET
-      position_1 = @pos1,
-      position_2 = @pos2,
-      position_3 = @pos3,
-      position_4 = @pos4
-  `);
-
-  const saveAll = db.transaction(() => {
+  try {
     for (const [groupName, positions] of Object.entries(groups)) {
       // Always save — even if all null, it means user cleared the group
       // Delete row if all null to keep DB clean, otherwise upsert
@@ -109,22 +103,26 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
       if (!hasData) {
         // User cleared this group — delete from DB
-        db.prepare('DELETE FROM group_predictions WHERE prediction_id = ? AND group_name = ?').run(prediction_id, groupName);
+        await query('DELETE FROM group_predictions WHERE prediction_id = $1 AND group_name = $2', [prediction_id, groupName]);
       } else {
-        upsert.run({
+        await query(`
+          INSERT INTO group_predictions (prediction_id, group_name, position_1, position_2, position_3, position_4)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          ON CONFLICT(prediction_id, group_name) DO UPDATE SET
+            position_1 = $3,
+            position_2 = $4,
+            position_3 = $5,
+            position_4 = $6
+        `, [
           prediction_id,
-          group_name: groupName,
-          pos1: positions.pos1 ?? null,
-          pos2: positions.pos2 ?? null,
-          pos3: positions.pos3 ?? null,
-          pos4: positions.pos4 ?? null,
-        });
+          groupName,
+          positions.pos1 ?? null,
+          positions.pos2 ?? null,
+          positions.pos3 ?? null,
+          positions.pos4 ?? null,
+        ]);
       }
     }
-  });
-
-  try {
-    saveAll();
     return json({ ok: true });
   } catch (e) {
     console.error(e);

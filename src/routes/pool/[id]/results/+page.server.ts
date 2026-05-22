@@ -1,14 +1,14 @@
 import { getPoolById, getUserPredictions } from '$lib/server/queries.js';
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import type { PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   const poolId = Number(params.id);
-  const pool = getPoolById(poolId);
+  const pool = await getPoolById(poolId);
   if (!pool) throw new Error('Quiniela no encontrada');
 
   // Get all matches with team names
-  const matches = db.prepare(`
+  const { rows: matches } = await query(`
     SELECT m.*, 
       ht.name as home_name, ht.flag_code as home_flag, 
       at.name as away_name, at.flag_code as away_flag
@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     LEFT JOIN teams ht ON ht.id = m.home_team_id
     LEFT JOIN teams at ON at.id = m.away_team_id
     ORDER BY m.sort_order, m.kickoff
-  `).all() as any[];
+  `);
 
   // Group matches by phase
   const phases: Record<string, any[]> = {};
@@ -34,31 +34,34 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   let selectedEntryId: number | null = null;
 
   if (locals.user) {
-    userPredictions = getUserPredictions(poolId, locals.user.id) as any[];
+    userPredictions = await getUserPredictions(poolId, locals.user.id) as any[];
     if (userPredictions.length > 0) {
       selectedEntryId = userPredictions[0].id;
 
       // Group predictions
-      userGroupPreds = db.prepare(`
+      const { rows: gpRows } = await query(`
         SELECT group_name, position_1, position_2, position_3, position_4, points_earned
-        FROM group_predictions WHERE prediction_id = ?
-      `).all(selectedEntryId) as any[];
+        FROM group_predictions WHERE prediction_id = $1
+      `, [selectedEntryId]);
+      userGroupPreds = gpRows;
 
       // Bracket predictions
-      userBracketPreds = db.prepare(`
+      const { rows: bpRows } = await query(`
         SELECT phase, slot as match_index, team_id, points_earned
-        FROM bracket_predictions WHERE prediction_id = ?
-      `).all(selectedEntryId) as any[];
+        FROM bracket_predictions WHERE prediction_id = $1
+      `, [selectedEntryId]);
+      userBracketPreds = bpRows;
 
       // Match predictions (knockout + group)
-      userMatchPreds = db.prepare(`
+      const { rows: mpRows } = await query(`
         SELECT mp.match_id, mp.home_score as pred_home, mp.away_score as pred_away, mp.points_earned,
           m.home_score as actual_home, m.away_score as actual_away, m.home_team_id, m.away_team_id,
           m.phase, m.status, m.home_name, m.home_flag, m.away_name, m.away_flag
         FROM match_predictions mp
         JOIN matches m ON m.id = mp.match_id
-        WHERE mp.prediction_id = ?
-      `).all(selectedEntryId) as any[];
+        WHERE mp.prediction_id = $1
+      `, [selectedEntryId]);
+      userMatchPreds = mpRows;
     }
   }
 

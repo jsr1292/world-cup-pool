@@ -1,6 +1,6 @@
 import { syncScores } from '$lib/server/live-scores.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
-import { db } from '$lib/server/db.js';
+import { query } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
@@ -18,12 +18,12 @@ export const POST: RequestHandler = async ({ locals }) => {
 
   // Async rescoring after sync
   if (result.updated > 0) {
-    const pools = db.prepare('SELECT id FROM pools WHERE is_active = 1').all() as any[];
-    const poolIds = pools.map(p => p.id);
-    setImmediate(() => {
+    const { rows: pools } = await query('SELECT id FROM pools WHERE is_active = true');
+    const poolIds = pools.map((p: any) => p.id);
+    setImmediate(async () => {
       for (const poolId of poolIds) {
         try {
-          calculateAllScores(poolId);
+          await calculateAllScores(poolId);
           invalidateCachedPoolLeaderboard(poolId);
           invalidateCachedPoolResults(poolId);
         } catch (e) {
