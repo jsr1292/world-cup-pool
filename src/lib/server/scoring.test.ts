@@ -149,12 +149,13 @@ describe('calculateGroupScores', () => {
 					}
 				]
 			})
-			.mockResolvedValueOnce({ rowCount: 1 });
+			.mockResolvedValueOnce({ rowCount: 1 }) // B6-5: reset points to 0
+			.mockResolvedValueOnce({ rowCount: 1 }); // bulk unnest update
 
 		const client = { query: clientQuery, release: vi.fn() } as unknown as PoolClient;
 		await calculateGroupScores(1, DEFAULT_RULES, client);
 
-		const updateCall = clientQuery.mock.calls[2];
+		const updateCall = clientQuery.mock.calls[3];
 		const params = updateCall[1] as any[];
 		// unnest($1::int[], $2::text[], $3::int[]) — last array is points
 		expect(params[params.length - 1]).toEqual([4 * DEFAULT_RULES.group_position]); // [8]
@@ -180,12 +181,13 @@ describe('calculateGroupScores', () => {
 					}
 				]
 			})
-			.mockResolvedValueOnce({ rowCount: 1 });
+			.mockResolvedValueOnce({ rowCount: 1 }) // B6-5: reset points to 0
+			.mockResolvedValueOnce({ rowCount: 1 }); // bulk unnest update
 
 		const client = { query: clientQuery, release: vi.fn() } as unknown as PoolClient;
 		await calculateGroupScores(1, DEFAULT_RULES, client);
 
-		const updateCall = clientQuery.mock.calls[2];
+		const updateCall = clientQuery.mock.calls[3];
 		const params = updateCall[1] as any[];
 		expect(params[params.length - 1]).toEqual([1 * DEFAULT_RULES.group_position]); // [2]
 	});
@@ -314,9 +316,10 @@ describe('calculateAllScores', () => {
 		// getScoringRules returns empty → uses DEFAULT_RULES
 		mockQuery.mockResolvedValueOnce({ rows: [] });
 
-		// client.query calls: BEGIN, group-matches, bracket-matches, match-matches, total-update, COMMIT
+		// client.query calls: BEGIN, advisory lock, group-matches, bracket-matches, match-matches, total-update, COMMIT
 		clientQuery
 			.mockResolvedValueOnce({ rows: [] }) // BEGIN
+			.mockResolvedValueOnce({ rows: [{ acquired: true }] }) // B6-3: advisory lock
 			.mockResolvedValueOnce({ rows: [] }) // group matches (empty → early return)
 			.mockResolvedValueOnce({ rows: [] }) // bracket matches (empty → early return)
 			.mockResolvedValueOnce({ rows: [] }) // match matches (empty → early return)
@@ -328,9 +331,10 @@ describe('calculateAllScores', () => {
 
 		await calculateAllScores(1);
 
-		expect(clientQuery).toHaveBeenCalledTimes(6);
+		expect(clientQuery).toHaveBeenCalledTimes(7);
 		expect(clientQuery.mock.calls[0][0]).toContain('BEGIN');
-		expect(clientQuery.mock.calls[5][0]).toContain('COMMIT');
+		expect(clientQuery.mock.calls[1][0]).toContain('pg_try_advisory_xact_lock');
+		expect(clientQuery.mock.calls[6][0]).toContain('COMMIT');
 		expect(clientRelease).toHaveBeenCalled();
 	});
 
@@ -341,6 +345,7 @@ describe('calculateAllScores', () => {
 
 		clientQuery
 			.mockResolvedValueOnce({ rows: [] }) // BEGIN
+			.mockResolvedValueOnce({ rows: [{ acquired: true }] }) // B6-3: advisory lock
 			.mockRejectedValueOnce(new Error('DB connection lost')); // group matches → throws
 
 		await expect(calculateAllScores(1)).rejects.toThrow('DB connection lost');
