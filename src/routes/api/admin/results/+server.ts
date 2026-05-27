@@ -10,9 +10,9 @@ import { logAudit } from '$lib/server/audit.js';
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
-  const { match_id, home_score, away_score } = await request.json() as {
-    match_id: number; home_score: number; away_score: number;
-  };
+	const { match_id, home_score, away_score, penalty_winner_id = null } = await request.json() as {
+		match_id: number; home_score: number; away_score: number; penalty_winner_id?: number | null;
+	};
 
   if (match_id == null || home_score == null || away_score == null) {
     return json({ error: 'Faltan campos' }, { status: 400 });
@@ -38,11 +38,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const match = matchRows[0] ?? null;
   if (!match) return json({ error: 'Partido no encontrado' }, { status: 404 });
   
-  // Update match result
-  await query(
-    "UPDATE matches SET home_score = $1, away_score = $2, status = 'finished' WHERE id = $3",
-    [home_score, away_score, match_id]
-  );
+	// Update match result (penalty_winner_id is NULL for normal wins, set for penalty shootout deciders)
+	await query(
+		"UPDATE matches SET home_score = $1, away_score = $2, status = 'finished', penalty_winner_id = $4 WHERE id = $3",
+		[home_score, away_score, match_id, penalty_winner_id]
+	);
 
   await logAudit('update_result', locals.user.id, 'match', match_id, { home_score: match.home_score, away_score: match.away_score }, { home_score, away_score });
 

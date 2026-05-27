@@ -15,11 +15,11 @@ const DEFAULT_RULES: Record<string, number> = {
 };
 
 export async function getScoringRules(poolId: number): Promise<Record<string, number>> {
-  const { rows } = await query('SELECT rule, points FROM scoring_config WHERE pool_id = $1', [poolId]);
-  if (rows.length === 0) return { ...DEFAULT_RULES };
-  const config: Record<string, number> = {};
-  for (const row of rows) config[row.rule] = row.points;
-  return config;
+	const { rows } = await query('SELECT rule, points FROM scoring_config WHERE pool_id = $1', [poolId]);
+	// Always start with defaults; DB rows override them — never leaves a key undefined
+	const config: Record<string, number> = { ...DEFAULT_RULES };
+	for (const row of rows) config[row.rule] = row.points;
+	return config;
 }
 
 /**
@@ -32,7 +32,7 @@ export async function calculateGroupScores(
   rules: Record<string, number>,
   client: PoolClient
 ): Promise<void> {
-  const ptsPerPosition = rules.group_position ?? 3;
+	const ptsPerPosition = rules.group_position;
 
   // Get all finished group matches
   const { rows: matches } = await client.query(`
@@ -122,27 +122,32 @@ export async function calculateBracketScores(
   client: PoolClient
 ): Promise<void> {
   // Get all finished knockout matches
-  const { rows: matches } = await client.query(`
-    SELECT id, phase, home_team_id, away_team_id, home_score, away_score
-    FROM matches
-    WHERE phase IN ('r32','r16','qf','sf','final','3rd')
-      AND status = 'finished' AND home_score IS NOT NULL AND away_score IS NOT NULL
-  `);
+	const { rows: matches } = await client.query(`
+		SELECT id, phase, home_team_id, away_team_id, home_score, away_score, penalty_winner_id
+		FROM matches
+		WHERE phase IN ('r32','r16','qf','sf','final','3rd')
+		  AND status = 'finished' AND home_score IS NOT NULL AND away_score IS NOT NULL
+	`);
 
   if (matches.length === 0) return;
 
   // Determine winners per match
   const phaseWinners: Record<string, Set<number>> = {}; // phase -> set of winner team_ids
-  for (const m of matches) {
-    if (m.home_score === m.away_score) {
-      console.warn(`[scoring] Knockout match ${m.id} has equal scores — skipping (enter post-penalty result)`);
-      continue;
-    }
-    const winner = m.home_score > m.away_score ? m.home_team_id : m.away_team_id;
-    const phase = m.phase;
-    if (!phaseWinners[phase]) phaseWinners[phase] = new Set();
-    phaseWinners[phase].add(winner);
-  }
+	for (const m of matches) {
+		const winner =
+			m.home_score > m.away_score ? m.home_team_id :
+			m.home_score < m.away_score ? m.away_team_id :
+			m.penalty_winner_id         ? m.penalty_winner_id :
+			null; // still undecided — no penalty winner recorded yet
+
+		if (winner === null) {
+			// Match result not yet determinable — skip without warning
+			continue;
+		}
+		const phase = m.phase;
+		if (!phaseWinners[phase]) phaseWinners[phase] = new Set();
+		phaseWinners[phase].add(winner);
+	}
 
   // Bulk SELECT all bracket predictions for the pool
   const { rows: allBP } = await client.query(`
@@ -197,8 +202,8 @@ export async function calculateMatchScores(
   rules: Record<string, number>,
   client: PoolClient
 ): Promise<void> {
-  const outcomePts = rules.match_outcome ?? 2;
-  const exactPts = rules.exact_score ?? 5;
+	const outcomePts = rules.match_outcome;
+	const exactPts = rules.exact_score;
 
   // Get all finished matches (group or knockout) with scores
   const { rows: matches } = await client.query(`
@@ -233,17 +238,20 @@ export async function calculateMatchScores(
   const ids: number[] = [];
   const ptsArray: number[] = [];
 
-  for (const mp of allMP) {
-    const m = matchMap[mp.match_id];
-    if (!m) continue;
+	for (const mp of allMP) {
+		const m = matchMap[mp.match_id];
+		if (!m) continue;
 
-    let pts = 0;
+		// Skip predictions with no score entered — null comparisons silently fall to 'X' (draw)
+		if (mp.home_score === null || mp.away_score === null) continue;
 
-    // Determine predicted outcome
-    let predOutcome: string;
-    if (mp.home_score > mp.away_score) predOutcome = '1';
-    else if (mp.home_score < mp.away_score) predOutcome = '2';
-    else predOutcome = 'X';
+		let pts = 0;
+
+		// Determine predicted outcome
+		let predOutcome: string;
+		if (mp.home_score > mp.away_score) predOutcome = '1';
+		else if (mp.home_score < mp.away_score) predOutcome = '2';
+		else predOutcome = 'X';
 
     // Correct outcome?
     if (predOutcome === m.outcome) {

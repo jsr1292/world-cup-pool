@@ -16,4 +16,3 @@ pool.on('error', (err, _client) => {
 
 export const query = (text: string, params?: unknown[]) => pool.query(text, params);
 export const getClient = () => pool.connect();
-export const getClient = () => pool.connect();

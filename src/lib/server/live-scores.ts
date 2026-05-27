@@ -73,22 +73,29 @@ export async function fetchFromApiFootball(leagueId = 1, season = 2026): Promise
  * Fetch from FIFA's public API (no key required, but may be rate-limited)
  */
 export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
-  try {
-    // FIFA World Cup 2026 competition ID
-    const res = await fetch(
-      `${FIFA_BASE}/matches/competitions/254648?status=completed`,
-      { headers: { 'Accept': 'application/json' } }
-    );
+	try {
+		// FIFA World Cup 2026 competition ID — verify this before the tournament starts
+		// TODO: update '254648' once FIFA publishes 2026 WC official API endpoints
+		const res = await fetch(
+			`${FIFA_BASE}/matches/competitions/254648?status=completed`,
+			{ headers: { 'Accept': 'application/json' } }
+		);
 
-    if (!res.ok) {
-      console.error(`[live-scores] FIFA API error: ${res.status}`);
-      return [];
-    }
+		if (!res.ok) {
+			const body = await res.text().catch(() => '(unreadable)');
+			console.error(`[live-scores] FIFA API error: ${res.status} ${res.statusText} — ${body.slice(0, 300)}`);
+			return [];
+		}
 
-    const data = await res.json();
-    const matches: LiveMatch[] = [];
+		const data = await res.json();
+		if (!data.results || !Array.isArray(data.results)) {
+			console.warn('[live-scores] FIFA API unexpected response shape:', JSON.stringify(data).slice(0, 200));
+			return [];
+		}
 
-    for (const m of (data.results || [])) {
+		const matches: LiveMatch[] = [];
+
+		for (const m of data.results) {
       matches.push({
         fifa_id: String(m.idMatch),
         home_team: m.home?.teamName ?? '',
@@ -191,16 +198,22 @@ function mapRoundToPhase(round: string): string {
   return 'group';
 }
 
+// FIFA World Cup 2026 numeric stage IDs — verify against live API before tournament starts
+const FIFA_STAGE_MAP: Record<string, string> = {
+	'285063': 'group',  // Group Stage
+	'285064': 'r32',    // Round of 32
+	'285065': 'r16',    // Round of 16
+	'285066': 'qf',     // Quarter-finals
+	'285067': 'sf',     // Semi-finals
+	'285068': '3rd',    // Third Place
+	'285069': 'final',  // Final
+};
+
 function mapFifaStageToPhase(stageId: string): string {
-  // FIFA stage IDs mapping (approximate)
-  const map: Record<string, string> = {
-    'group': 'group',
-    'r32': 'r32',
-    'r16': 'r16',
-    'qf': 'qf',
-    'sf': 'sf',
-    '3rd': '3rd',
-    'final': 'final',
-  };
-  return map[stageId] ?? 'group';
+	const phase = FIFA_STAGE_MAP[stageId];
+	if (!phase) {
+		console.warn(`[live-scores] Unknown FIFA stage ID: ${stageId} — defaulting to 'unknown'`);
+		return 'unknown';
+	}
+	return phase;
 }
