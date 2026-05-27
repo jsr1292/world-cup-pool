@@ -34,7 +34,7 @@ const mockInvResults = _mockInvResults as unknown as ReturnType<typeof vi.fn>;
 const mockInvGlobal = _mockInvGlobal as unknown as ReturnType<typeof vi.fn>;
 const mockRateLimit = _mockRateLimit as unknown as ReturnType<typeof vi.fn>;
 
-import { POST } from './+server.js';
+import { POST } from '../../routes/api/predictions/match-scores/+server.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 

@@ -37,7 +37,7 @@ const mockInvalidatePLB = _mockInvalidatePLB as unknown as ReturnType<typeof vi.
 const mockInvalidatePR = _mockInvalidatePR as unknown as ReturnType<typeof vi.fn>;
 const mockInvalidateGL = _mockInvalidateGL as unknown as ReturnType<typeof vi.fn>;
 
-import { POST } from './+server.js';
+import { POST } from '../../routes/api/admin/sync-scores/+server.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 

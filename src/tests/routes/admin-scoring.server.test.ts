@@ -4,7 +4,7 @@ vi.mock('$lib/server/db.js', () => ({ query: vi.fn(), getClient: vi.fn() }));
 vi.mock('$lib/server/scoring.js', () => ({ getScoringRules: vi.fn() }));
 vi.mock('$lib/server/audit.js', () => ({ logAudit: vi.fn() }));
 
-import { GET, POST } from './+server.js';
+import { GET, POST } from '../../routes/api/admin/scoring/+server.js';
 import { query } from '$lib/server/db.js';
 import { getScoringRules } from '$lib/server/scoring.js';
 import { logAudit } from '$lib/server/audit.js';

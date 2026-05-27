@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { POST } from './+server.ts';
+import { POST } from '../../routes/api/auth/change-password/+server.ts';
 
 // --- Hoisted mocks ---
 vi.mock('$lib/server/db.js', () => ({

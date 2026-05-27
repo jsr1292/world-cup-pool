@@ -25,7 +25,7 @@ import { createPool as _mockCreatePool } from '$lib/server/queries.js';
 const mockQuery = _mockQuery as unknown as ReturnType<typeof vi.fn>;
 const mockCreatePool = _mockCreatePool as unknown as ReturnType<typeof vi.fn>;
 
-import { POST } from './+server.js';
+import { POST } from '../../routes/api/pools/+server.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 

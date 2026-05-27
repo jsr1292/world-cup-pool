@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { load } from './+page.server.ts';
+import { load } from '../../routes/pool/[id]/predict/+page.server.ts';
 
 vi.mock('$lib/server/queries.js', () => ({
 	getPoolById: vi.fn(),

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GET, POST } from './+server.ts';
+import { GET, POST } from '../../routes/api/predictions/tiebreaker/+server.ts';
 
 vi.mock('$lib/server/db.js', () => ({
 	query: vi.fn(),

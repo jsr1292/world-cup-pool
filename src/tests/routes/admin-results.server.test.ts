@@ -27,7 +27,7 @@ const mockRequest = (body: any) => ({ json: vi.fn().mockResolvedValue(body) });
 const mockLocals = (userId: number) => ({ user: { id: userId } });
 
 // Import the handler after mocks are set up
-import { POST } from './+server.js';
+import { POST } from '../../routes/api/admin/results/+server.js';
 
 describe('POST /api/admin/results', () => {
 	beforeEach(() => {
