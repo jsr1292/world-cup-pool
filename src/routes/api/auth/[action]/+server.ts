@@ -1,6 +1,12 @@
 import { authenticateUser, createUser, createSession } from '$lib/server/queries.js';
 import { json, redirect, type RequestHandler } from '@sveltejs/kit';
 
+// NOTA (B1-3): Este Map reside en la memoria del proceso. Con múltiples instancias del
+// servidor (réplicas de Railway, funciones serverless de Vercel) cada instancia lleva su
+// propio contador y el límite de 10 intentos puede eludirse rotando entre instancias.
+// Para un límite compartido entre procesos se necesitaría Redis o una tabla PostgreSQL
+// (p. ej. auth_rate_limits). Asumimos una sola instancia; si se escala horizontalmente,
+// este limitador deberá migrarse a un almacén compartido.
 const _attempts = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 10;
 const RATE_WINDOW = 15 * 60 * 1000;

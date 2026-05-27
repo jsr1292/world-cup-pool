@@ -8,11 +8,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'Inicia sesión' }, { status: 401 });
 
   try {
-    const { code } = await request.json();
-    if (!code) return json({ error: 'Código requerido' }, { status: 400 });
+		const { code } = await request.json();
+		if (!code || typeof code !== 'string') return json({ error: 'Código requerido' }, { status: 400 });
+		// B3-3: Validar formato del código antes de consultar la BD (16 chars base64url)
+		if (!/^[A-Za-z0-9_-]{16}$/.test(code)) {
+			return json({ error: 'Código de invitación inválido' }, { status: 400 });
+		}
 
-    const pool = await getPoolByInvite(code.toUpperCase());
+		const pool = await getPoolByInvite(code.toUpperCase());
     if (!pool) return json({ error: 'Código de invitación inválido' }, { status: 404 });
+    // B3-5: Impedir unirse a quinielas desactivadas
+    if (pool.is_active === false) {
+      return json({ error: 'Esta quiniela ya no está activa' }, { status: 403 });
+    }
 
     // B3-1: Enforce member cap before joining
     const { rows: countRows } = await query(

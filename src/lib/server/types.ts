@@ -16,6 +16,7 @@ export interface Pool {
   created_by: number;
   buy_in: number;
   allow_multiple: boolean;
+  is_active: boolean;          // B3-5: campo presente en la BD pero faltaba en el tipo
   deadline_group: Date | null;
   deadline_knockout: Date | null;
   status: string;

@@ -168,7 +168,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     }
 
     await client.query('COMMIT');
-    return json({ ok: true });
+
+    // B4-6: Detectar grupos guardados con posiciones incompletas (1-3 de 4)
+    const partialGroups = Object.entries(groups)
+      .filter(([, positions]) => {
+        const filled = [positions.pos1, positions.pos2, positions.pos3, positions.pos4]
+          .filter((v) => v != null);
+        return filled.length > 0 && filled.length < 4;
+      })
+      .map(([g]) => g);
+
+    return json({
+      ok: true,
+      ...(partialGroups.length > 0
+        ? { advertencia: `Grupos con predicción incompleta: ${partialGroups.join(', ')}` }
+        : {}),
+    });
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;

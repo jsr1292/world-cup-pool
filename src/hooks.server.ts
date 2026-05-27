@@ -32,7 +32,12 @@ export const handle: Handle = async ({ event, resolve }) => {
     } else {
       const now = Date.now();
       if (now - _lastClean > 60_000) { _lastClean = now; cleanSessions().catch(console.error); }
-    }
+	}
+  }
+
+  // B1-2: Si el usuario ya está autenticado y visita /login, redirigir al inicio
+  if (event.locals.user && path === '/login') {
+    throw redirect(302, '/');
   }
 
   if (publicPaths.some(p => path.startsWith(p))) return resolve(event);

@@ -18,7 +18,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     const { rows: poolRows } = await query('SELECT created_by FROM pools WHERE id = $1', [pool_id]);
     const pool = poolRows[0] ?? null;
-    if (!pool || pool.created_by !== locals.user.id) {
+    // B7-3: El creador de la quiniela O el admin del sitio pueden gestionar pagos
+    if (!pool || (pool.created_by !== locals.user.id && !locals.user.is_admin)) {
       return json({ error: 'Prohibido' }, { status: 403 });
     }
 

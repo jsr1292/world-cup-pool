@@ -64,6 +64,10 @@ export async function calculateGroupScores(
   // Rank teams per group (by points, then GD, then GF)
   const actualPositions: Record<string, number[]> = {}; // group -> [pos1_teamId, pos2, pos3, pos4]
   for (const [group, teams] of Object.entries(standings)) {
+    // TODO (B6-6): La clasificación usa puntos → dif. de goles → goles a favor.
+    // El desempate oficial de la FIFA incluye resultados directos entre los equipos empatados
+    // antes de aplicar las diferencias globales. Implementar desempate H2H requiere
+    // una PR dedicada con casos de prueba para ciclos de 3/4 equipos.
     const sorted = Object.entries(teams)
       .map(([id, s]) => ({ id: Number(id), ...s, gd: s.gf - s.ga }))
       .sort((a, b) => b.points - a.points || b.gd - a.gd || b.gf - a.gf);
@@ -84,6 +88,16 @@ export async function calculateGroupScores(
   const predIds: number[] = [];
   const groupNames: string[] = [];
   const ptsArray: number[] = [];
+
+  // B6-5: Poner a cero todos los puntos de grupo antes de recalcular para que la función
+  // sea idempotente aunque un resultado se revierta de 'finished' a 'scheduled'.
+  await client.query(`
+    UPDATE group_predictions gp
+    SET points_earned = 0
+    FROM predictions p
+    WHERE p.id = gp.prediction_id
+      AND p.pool_id = $1
+  `, [poolId]);
 
   for (const gp of allGP) {
     const actual = actualPositions[gp.group_name];

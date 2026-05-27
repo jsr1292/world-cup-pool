@@ -149,9 +149,8 @@
       const id = [gp.pos1, gp.pos2, gp.pos3, gp.pos4][pos - 1];
       if (id) return id;
     }
-    // Fallback: use default team order from teamsByGroup
-    const gTeams = data.teamsByGroup?.[group];
-    if (gTeams && gTeams.length >= pos) return gTeams[pos - 1].id;
+    // B5-4: Sin relleno automático — devolver null para que el hueco aparezca como TBD
+    // y no confundir al usuario con equipos aleatorios.
     return null;
   }
 
@@ -590,7 +589,7 @@
   <!-- Warning: incomplete groups -->
   {#if groupsPredicted < 12}
     <div class="incomplete-banner">
-      <span>⚠️ Grupos incompletos ({groupsPredicted}/12) — usando orden por defecto para los no rellenados.</span>
+      <span>⚠️ Grupos incompletos ({groupsPredicted}/12) — los cruces sin predicción de grupo aparecerán como TBD.</span>
       <a href="/pool/{data.pool.id}/predict" style="color: var(--gold); text-decoration: underline; font-size: 10px;">Rellenar grupos →</a>
     </div>
   {/if}
