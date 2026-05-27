@@ -68,15 +68,16 @@ export async function authenticateUser(username: string, password: string) {
 // Pool CRUD
 export async function createPool(name: string, createdBy: number, buyIn = 0, allowMultiple = false, currency = 'EUR') {
   const inviteCode = generateInviteCode();
+  const shareToken = crypto.randomUUID();
 
   const client = await getClient();
   try {
     await client.query('BEGIN');
 
     const insertResult = await client.query(
-      `INSERT INTO pools (name, invite_code, created_by, buy_in, allow_multiple_predictions, currency)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [name, inviteCode, createdBy, buyIn, allowMultiple, currency]
+      `INSERT INTO pools (name, invite_code, share_token, created_by, buy_in, allow_multiple_predictions, currency)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [name, inviteCode, shareToken, createdBy, buyIn, allowMultiple, currency]
     );
     const poolId = Number(insertResult.rows[0].id);
 
@@ -112,6 +113,11 @@ export async function createPool(name: string, createdBy: number, buyIn = 0, all
 
 export async function getPoolByInvite(code: string): Promise<Pool | null> {
   const { rows } = await query('SELECT * FROM pools WHERE invite_code = $1', [code]);
+  return (rows[0] as Pool) ?? null;
+}
+
+export async function getPoolByShareToken(token: string): Promise<Pool | null> {
+  const { rows } = await query('SELECT * FROM pools WHERE share_token = $1', [token]);
   return (rows[0] as Pool) ?? null;
 }
 
@@ -151,7 +157,7 @@ export async function getPoolMembers(poolId: number) {
   // Return all pool members + their prediction entries (one row per entry if exists)
   // Members without predictions still show (just no entry_id)
   const { rows } = await query(
-    `SELECT u.id as od_user_id, u.username, u.display_name,
+    `SELECT u.id as user_id, u.username, u.display_name,
       pr.id as entry_id, pr.label as entry_label, pr.total_score,
       COALESCE(pr.has_paid, pm.has_paid, FALSE) as has_paid,
       pm.joined_at

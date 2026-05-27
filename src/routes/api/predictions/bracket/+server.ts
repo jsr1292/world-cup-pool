@@ -2,6 +2,7 @@ import { query, getClient } from '$lib/server/db.js';
 import { getTeamsMapCached } from '$lib/server/cache.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
+import { checkPredictionRate } from '$lib/server/rate-limit.js';
 
 const VALID_PHASES = new Set(['r32', 'r16', 'qf', 'sf', 'final', '3rd']);
 
@@ -44,11 +45,16 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
+  if (!checkPredictionRate(locals.user.id)) {
+    return json({ error: 'Demasiadas peticiones. Espera un momento.' }, { status: 429 });
+  }
+
   const body = await request.json();
-  const { prediction_id, picks } = body as {
+  const { prediction_id, picks: rawPicks } = body as {
     prediction_id: number;
     picks: Record<string, Record<number, number | null>>;
   };
+  const picks = { ...rawPicks }; // mutable copy so we can delete started phases
 
   if (!prediction_id || !picks) {
     return json({ error: 'Falta prediction_id o selecciones' }, { status: 400 });
@@ -86,15 +92,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
   }
 
-  // Per-match kickoff deadline: reject if any knockout match in the relevant phases has started
+  // B5-2: Per-phase kickoff deadline — only filter out started phases, don't block entire save
   const phases = Object.keys(picks);
   if (phases.length > 0) {
-    const { rows: started } = await query(
-      `SELECT 1 FROM matches WHERE phase = ANY($1::text[]) AND kickoff_time IS NOT NULL AND kickoff_time <= NOW() LIMIT 1`,
+    const { rows: startedRows } = await query(
+      `SELECT DISTINCT phase FROM matches
+       WHERE phase = ANY($1::text[])
+         AND kickoff_time IS NOT NULL AND kickoff_time <= NOW()`,
       [phases]
     );
-    if (started.length > 0) {
-      return json({ error: 'Algunos partidos ya comenzaron' }, { status: 400 });
+    const startedPhaseSet = new Set(startedRows.map((r: any) => r.phase));
+    for (const p of startedPhaseSet) {
+      delete (picks as Record<string, unknown>)[p];
     }
   }
 
@@ -125,6 +134,39 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const teamsMap = await getTeamsMapCached();
   for (const id of allTeamIds) {
     if (!teamsMap[id]) return json({ error: `Equipo inválido (id: ${id})` }, { status: 400 });
+  }
+
+  // B5-3: Cross-phase consistency check.
+  // Any team picked in a later phase must also appear in the immediately preceding phase.
+  const PHASE_PROGRESSION: Record<string, string> = {
+    r16: 'r32',
+    qf: 'r16',
+    sf: 'qf',
+    final: 'sf',
+    '3rd': 'sf',
+  };
+
+  for (const [phase, slots] of Object.entries(picks)) {
+    const precedingPhase = PHASE_PROGRESSION[phase];
+    if (!precedingPhase) continue;
+
+    const teamsInThisPhase = new Set(
+      Object.values(slots).filter((id): id is number => id !== null)
+    );
+    const precedingPicks = picks[precedingPhase] ?? {};
+    const teamsInPrecedingPhase = new Set(
+      Object.values(precedingPicks).filter((id): id is number => id !== null)
+    );
+
+    if (teamsInPrecedingPhase.size > 0) {
+      for (const teamId of teamsInThisPhase) {
+        if (!teamsInPrecedingPhase.has(teamId)) {
+          return json({
+            error: `Equipo ${teamId} no fue seleccionado en la fase previa (${precedingPhase})`,
+          }, { status: 400 });
+        }
+      }
+    }
   }
 
   const client = await getClient();

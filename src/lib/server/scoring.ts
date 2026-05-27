@@ -292,6 +292,19 @@ export async function calculateAllScores(poolId: number): Promise<void> {
   try {
     await client.query('BEGIN');
 
+    // WCP-12/B6-3: Acquire a per-pool advisory lock (xact-scoped, released on COMMIT/ROLLBACK).
+    // pg_try_advisory_xact_lock returns false immediately if already held — no blocking.
+    // This serializes concurrent scoring runs for the same pool without queue contention.
+    const { rows: lockRows } = await client.query(
+      'SELECT pg_try_advisory_xact_lock($1) AS acquired',
+      [poolId]
+    );
+    if (!lockRows[0].acquired) {
+      // Another scoring run is already in progress for this pool — skip gracefully.
+      await client.query('ROLLBACK');
+      return;
+    }
+
     await calculateGroupScores(poolId, rules, client);
     await calculateBracketScores(poolId, rules, client);
     await calculateMatchScores(poolId, rules, client);

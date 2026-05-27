@@ -12,6 +12,7 @@ export interface Pool {
   id: number;
   name: string;
   invite_code: string;
+  share_token: string;
   created_by: number;
   buy_in: number;
   allow_multiple: boolean;

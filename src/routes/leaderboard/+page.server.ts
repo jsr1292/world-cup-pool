@@ -19,12 +19,18 @@ export const load: PageServerLoad = async ({ locals }) => {
   // Build tiebreaker expression for ORDER BY
   let orderByTiebreaker = '0'; // no-op if no final yet
   if (finalMatch) {
-    // Smaller closeness = better: sum of absolute differences
-    const h = Math.trunc(Number(finalMatch.home_score));
-    const a = Math.trunc(Number(finalMatch.away_score));
-    orderByTiebreaker = `(
-      COALESCE(ABS(tb.home_score - ${h}) + ABS(tb.away_score - ${a}), 9999)
-    )`;
+    // Guard: only interpolate if both scores are valid integers.
+    // Math.trunc(Number(undefined)) = NaN, which produces invalid SQL.
+    const hRaw = Math.trunc(Number(finalMatch.home_score));
+    const aRaw = Math.trunc(Number(finalMatch.away_score));
+    if (Number.isInteger(hRaw) && Number.isInteger(aRaw)) {
+      // Safe to interpolate: both values are confirmed integers from our own DB.
+      orderByTiebreaker = `(
+        COALESCE(ABS(tb.home_score - ${hRaw}) + ABS(tb.away_score - ${aRaw}), 9999)
+      )`;
+    }
+    // If scores are not valid integers (e.g. NULL coerced to NaN),
+    // keep orderByTiebreaker = '0' — leaderboard works without tiebreaker.
   }
 
   // Get top 100 scorers across all pools, using pre-aggregated CTEs (F-10)

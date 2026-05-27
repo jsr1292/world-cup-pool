@@ -3,11 +3,16 @@ import { calculateAllScores } from '$lib/server/scoring.js';
 import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
+import { checkPredictionRate } from '$lib/server/rate-limit.js';
 
 // POST /api/predictions/match-scores
 // Body: { prediction_id, scores: { [matchId]: { home_score, away_score }, ... } }
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
+
+  if (!checkPredictionRate(locals.user.id)) {
+    return json({ error: 'Demasiadas peticiones. Espera un momento.' }, { status: 429 });
+  }
 
   const body = await request.json();
   const { prediction_id, scores } = body as {

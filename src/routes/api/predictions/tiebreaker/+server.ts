@@ -1,6 +1,7 @@
 import { query } from '$lib/server/db.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
+import { checkPredictionRate } from '$lib/server/rate-limit.js';
 
 // GET /api/predictions/tiebreaker?prediction_id=X
 export const GET: RequestHandler = async ({ url, locals }) => {
@@ -28,6 +29,10 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 // Body: { prediction_id, home_score: number, away_score: number }
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
+
+  if (!checkPredictionRate(locals.user.id)) {
+    return json({ error: 'Demasiadas peticiones. Espera un momento.' }, { status: 429 });
+  }
 
   const body = await request.json();
   const { prediction_id, home_score, away_score } = body as {

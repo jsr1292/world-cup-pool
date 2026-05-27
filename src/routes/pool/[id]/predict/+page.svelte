@@ -19,6 +19,8 @@
 
   // Deadline countdown
   let countdown = $state('');
+  // 8a: Client-side lock — true if server locked at page load OR if countdown reached zero
+  const effectivelyLocked = $derived(data.isLocked || countdown === 'Cerrado');
   $effect(() => {
     const dl = pool.deadline_group;
     if (!dl) return;
@@ -95,7 +97,7 @@
   let dragOverSlot = $state(null);    // slot index hovered over
 
   function handleDragStart(e, group, slotIndex) {
-    if (data.isLocked) return;
+    if (effectivelyLocked) return;
     draggingGroup = group;
     draggingSlot = slotIndex;
     e.dataTransfer.effectAllowed = 'move';
@@ -103,13 +105,13 @@
   }
 
   function handleDragStartUnassigned(e, group, teamId) {
-    if (data.isLocked) return;
+    if (effectivelyLocked) return;
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', `team:${group}:${teamId}`);
   }
 
   function handleDragOver(e, group, slotIndex) {
-    if (data.isLocked) return;
+    if (effectivelyLocked) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     dragOverGroup = group;
@@ -122,7 +124,7 @@
   }
 
   function handleDrop(e, group, slotIndex) {
-    if (data.isLocked) return;
+    if (effectivelyLocked) return;
     e.preventDefault();
     const raw = e.dataTransfer.getData('text/plain');
     const parts = raw.split(':');
@@ -376,12 +378,12 @@
       </span>
     </div>
 
-    {#if countdown && !data.isLocked}
+    {#if countdown && countdown !== 'Cerrado' && !effectivelyLocked}
       <div style="margin-top: 8px; padding: 8px 12px; background: rgba(201,168,76,0.1); border: 1px solid var(--gold); border-radius: 6px; font-size: 10px; color: var(--gold);">
         ⏰ Cierre en: {countdown}
       </div>
     {/if}
-    {#if data.isLocked}
+    {#if effectivelyLocked}
       <div style="margin-top: 8px; padding: 8px 12px; background: rgba(255,77,106,0.1); border: 1px solid var(--red); border-radius: 6px; font-size: 10px; color: var(--red);">
         ⚠️ Los pronósticos están bloqueados — la fecha límite ha pasado.
       </div>
@@ -453,7 +455,7 @@
         </div>
 
         <!-- Slot rows — each slot is a drop target -->
-        {#if data.isLocked}
+        {#if effectivelyLocked}
           <div style="display: flex; flex-direction: column; gap: 4px;">
             {#each [0,1,2,3] as slot}
               {@const team = teamAt(group, slot)}
@@ -532,7 +534,7 @@
             <span style="font-size: 9px; color: var(--green); background: rgba(0,229,160,0.1); padding: 3px 10px; border-radius: 10px; font-weight: 500;">✓ Completo</span>
           {:else}
             <button
-              disabled={data.isLocked}
+              disabled={effectivelyLocked}
               onclick={() => resetGroup(group)}
               style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; font-size: 9px; color: var(--text-dim); cursor: pointer; {selections[group]?.some(s => s) ? '' : 'opacity: 0.3; pointer-events: none;'}"
             >Reset</button>
@@ -540,7 +542,7 @@
         </div>
 
         <!-- Instruction -->
-        {#if !groupDone && !data.isLocked}
+        {#if !groupDone && !effectivelyLocked}
           {@const ns = nextSlot(group)}
           <div style="font-size: 10px; color: var(--gold); margin-bottom: 10px; padding: 6px 10px; background: rgba(201,168,76,0.08); border-radius: 6px; text-align: center;">
             Toca el equipo que quedar&aacute; <strong>{POS_FULL[ns] || ''}</strong>
@@ -561,7 +563,7 @@
             {@const isRanked = rank >= 0}
             {@const isNext = !groupDone && !isRanked}
             <button
-              disabled={data.isLocked || (!isRanked && groupDone)}
+              disabled={effectivelyLocked || (!isRanked && groupDone)}
               onclick={() => tapTeam(group, team.id)}
               style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1.5px solid {isRanked ? MEDAL[rank] + '88' : isNext ? 'rgba(255,255,255,0.08)' : 'transparent'}; background: {isRanked ? MEDAL[rank] + '15' : isNext ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.01)'}; cursor: pointer; transition: all 0.2s; width: 100%; text-align: left; {isRanked ? 'opacity: 1;' : isNext ? 'opacity: 0.9;' : 'opacity: 0.35;'}"
             >
@@ -623,7 +625,7 @@
                       placeholder="-"
                       value={getMatchScore(match.id, 'home')}
                       oninput={(e) => setMatchScore(match.id, 'home', e.target.value === '' ? null : Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
-                      disabled={data.isLocked}
+                      disabled={effectivelyLocked}
                       style="width: 40px; text-align: center; font-size: 16px; font-weight: 700; padding: 6px 4px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--gold);"
                     />
                     <span style="font-size: 14px; color: var(--text-muted);">—</span>
@@ -635,7 +637,7 @@
                       placeholder="-"
                       value={getMatchScore(match.id, 'away')}
                       oninput={(e) => setMatchScore(match.id, 'away', e.target.value === '' ? null : Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
-                      disabled={data.isLocked}
+                      disabled={effectivelyLocked}
                       style="width: 40px; text-align: center; font-size: 16px; font-weight: 700; padding: 6px 4px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--gold);"
                     />
                   </div>
@@ -653,7 +655,7 @@
       {/each}
 
       <!-- Match scores auto-save indicator -->
-      {#if !data.isLocked}
+      {#if !effectivelyLocked}
         <div style="margin-top: 8px; display: flex; gap: 12px; align-items: center;">
           {#if matchSaving}
             <span style="font-size: 10px; color: var(--text-muted);">Guardando marcadores...</span>
@@ -668,7 +670,7 @@
   {/if}
 
   <!-- Auto-save indicator -->
-  {#if !data.isLocked}
+  {#if !effectivelyLocked}
     <div style="margin-top: 24px; display: flex; gap: 12px; align-items: center;">
       {#if saving}
         <span style="font-size: 10px; color: var(--text-muted);">Guardando...</span>
@@ -681,7 +683,7 @@
   {/if}
 
   <!-- Bracket CTA -->
-  {#if !data.isLocked && data.selectedId}
+  {#if !effectivelyLocked && data.selectedId}
     <div style="margin-top: 20px; padding: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
       <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Grupos completados — ahora predice las eliminatorias</p>
       <a href="/pool/{pool.id}/bracket" class="btn-primary" style="font-size: 11px; padding: 10px 24px; display: inline-block; text-decoration: none;">⚔️ Cuadro Eliminatorio →</a>

@@ -1,6 +1,7 @@
 import { query, getClient } from '$lib/server/db.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
+import { checkPredictionRate } from '$lib/server/rate-limit.js';
 
 const VALID_GROUPS = new Set(['A','B','C','D','E','F','G','H','I','J','K','L']);
 
@@ -45,11 +46,17 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
+  // Rate limit: 30 saves / minute per user
+  if (!checkPredictionRate(locals.user.id)) {
+    return json({ error: 'Demasiadas peticiones. Espera un momento.' }, { status: 429 });
+  }
+
   const body = await request.json();
-  const { prediction_id, groups } = body as {
+  const { prediction_id, groups: rawGroups } = body as {
     prediction_id: number;
     groups: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }>;
   };
+  const groups = { ...rawGroups }; // mutable copy so we can delete started groups
 
   if (!prediction_id || !groups) {
     return json({ error: 'Falta prediction_id o grupos' }, { status: 400 });
@@ -82,15 +89,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
   }
 
-  // Per-match kickoff deadline: reject if any match in these groups has already started
+  // B4-4: Per-group kickoff deadline — only filter out started groups, don't block entire save
   const groupNames = Object.keys(groups);
   if (groupNames.length > 0) {
-    const { rows: started } = await query(
-      `SELECT 1 FROM matches WHERE group_name = ANY($1::text[]) AND kickoff_time IS NOT NULL AND kickoff_time <= NOW() LIMIT 1`,
+    const { rows: startedRows } = await query(
+      `SELECT DISTINCT group_name FROM matches
+       WHERE group_name = ANY($1::text[])
+         AND kickoff_time IS NOT NULL AND kickoff_time <= NOW()`,
       [groupNames]
     );
-    if (started.length > 0) {
-      return json({ error: 'Algunos partidos ya comenzaron' }, { status: 400 });
+    const startedGroupSet = new Set(startedRows.map((r: any) => r.group_name));
+    for (const g of startedGroupSet) {
+      delete (groups as Record<string, unknown>)[g];
     }
   }
 

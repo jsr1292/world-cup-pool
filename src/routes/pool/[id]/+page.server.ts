@@ -110,9 +110,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     };
   });
 
-  // Sort: total_score DESC, then total_correct DESC, then tiebreaker closeness ASC
+  // Sort: total_score DESC, total_correct DESC, tiebreaker closeness ASC,
+  // then updated_at ASC as final deterministic tiebreaker (first-submitted wins).
+  // 8d: updated_at is already returned via getPoolLeaderboard's SELECT *.
   enrichedLeaderboard.sort((a: any, b: any) =>
-    b.total_score - a.total_score || b.total_correct - a.total_correct || a.tiebreaker_close - b.tiebreaker_close
+    b.total_score - a.total_score ||
+    b.total_correct - a.total_correct ||
+    a.tiebreaker_close - b.tiebreaker_close ||
+    new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
   );
 
   // F-20: Cache results data (phases, team cache, group standings)

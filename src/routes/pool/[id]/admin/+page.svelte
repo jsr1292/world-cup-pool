@@ -147,7 +147,7 @@
       if (entryId) {
         _members = _members.map(m => m.entry_id === entryId ? { ...m, has_paid: newValue ? 1 : 0 } : m);
       } else {
-        _members = _members.map(m => m.od_user_id === odUserId ? { ...m, has_paid: newValue ? 1 : 0 } : m);
+        _members = _members.map(m => m.user_id === odUserId ? { ...m, has_paid: newValue ? 1 : 0 } : m);
       }
       version++;
     }
@@ -183,6 +183,21 @@
       <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em;">Partidos</div>
     </div>
   </div>
+
+  <!-- B6-2: Show scoring error banner if last score calculation failed -->
+  {#if data.pool.last_score_error}
+    <div style="margin-bottom: 24px; padding: 14px 16px; background: rgba(255,77,106,0.12); border: 1px solid var(--red); border-radius: 8px;">
+      <div style="font-size: 11px; font-weight: 600; color: var(--red); margin-bottom: 6px;">
+        ⚠️ Error en el último cálculo de puntuación
+      </div>
+      <div style="font-size: 10px; color: var(--text-muted); font-family: monospace; word-break: break-word;">
+        {data.pool.last_score_error}
+      </div>
+      <div style="font-size: 9px; color: var(--text-dim); margin-top: 6px;">
+        El error se borrará automáticamente cuando la puntuación se recalcule con éxito.
+      </div>
+    </div>
+  {/if}
 
   <!-- Prize Distribution -->
   <div style="margin-bottom: 24px;">
@@ -374,7 +389,7 @@
           <span style="font-size: 12px;">{member.display_name}</span>
           {#if pool.buy_in > 0}
             <button
-              onclick={() => togglePaid(member.entry_id, member.has_paid, member.display_name, member.od_user_id)}
+              onclick={() => togglePaid(member.entry_id, member.has_paid, member.display_name, member.user_id)}
               style="font-size: 9px; padding: 4px 10px; border-radius: 4px; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid {member.has_paid ? 'var(--green)' : 'var(--red)'}; background: {member.has_paid ? 'rgba(0,229,160,0.1)' : 'rgba(255,77,106,0.1)'}; color: {member.has_paid ? 'var(--green)' : 'var(--red)'}; cursor: pointer;"
             >
               {member.has_paid ? '✓ Pagado' : '✗ Pendiente'}
