@@ -34,7 +34,7 @@
     match_outcome: 'Resultado partido',
     exact_score: 'Resultado exacto',
     group_position: 'Posición en grupo',
-    knockout_r32: 'Octavos (R32)',
+    knockout_r32: 'Dieciseisavos (R32)',
     knockout_r16: 'Octavos de final',
     knockout_qf: 'Cuartos de final',
     knockout_sf: 'Semifinal',
@@ -428,31 +428,25 @@
             <input
               type="number"
               min="0"
-              value={match.home_score ?? ''}
+              bind:value={match.home_score}
               placeholder="-"
-              data-match-id={match.id}
-              data-side="home"
               style="width: 40px; text-align: center; padding: 4px;"
             />
             <span style="color: var(--text-dim);">-</span>
             <input
               type="number"
               min="0"
-              value={match.away_score ?? ''}
+              bind:value={match.away_score}
               placeholder="-"
-              data-match-id={match.id}
-              data-side="away"
               style="width: 40px; text-align: center; padding: 4px;"
             />
             <span style="flex: 1; text-align: right; {isFinished ? '' : 'color: var(--text-muted);'}">{match.away_name ?? 'TBD'}</span>
             <button type="submit" class="btn-primary"
       style="font-size: 8px; padding: 4px 8px;"
       onclick={async () => {
-        const row = document.querySelector(`[data-match-id="${match.id}"][data-side="home"]`);
-        const row2 = document.querySelector(`[data-match-id="${match.id}"][data-side="away"]`);
-        const hs = Number(row?.value);
-        const as2 = Number(row2?.value);
-        if (isNaN(hs) || isNaN(as2)) return;
+        const hs = Number(match.home_score);
+        const as2 = Number(match.away_score);
+        if (!Number.isFinite(hs) || !Number.isFinite(as2) || hs < 0 || as2 < 0) return;
         const res = await fetch('/api/admin/results', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

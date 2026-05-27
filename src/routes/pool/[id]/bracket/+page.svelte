@@ -201,8 +201,18 @@
   }
 
   // Derive display state reactively based on version
-  const teams = $derived.by(() => { void version; return JSON.parse(JSON.stringify(_teams)); });
-  const explicitPicks = $derived.by(() => { void version; return JSON.parse(JSON.stringify(_picks)); });
+  const teams = $derived.by(() => {
+    void version;
+    const t = {};
+    for (const [k, v] of Object.entries(_teams)) t[k] = Array.isArray(v) ? [...v] : v;
+    return t;
+  });
+  const explicitPicks = $derived.by(() => {
+    void version;
+    const p = {};
+    for (const [k, v] of Object.entries(_picks)) p[k] = Array.isArray(v) ? v.map(row => [...row]) : v;
+    return p;
+  });
 
   // Initialize once on mount - use untracked to avoid infinite loop
   let initialized = false;
@@ -326,17 +336,6 @@
   let tieSaving = $state(false);
   let tieSaved = $state(false);
 
-  async function loadTiebreaker() {
-    if (!data.selectedId) return;
-    try {
-      const r = await fetch(`/api/predictions/tiebreaker?prediction_id=${data.selectedId}`);
-      if (r.ok) {
-        const d = await r.json();
-        tieHome = d.home_score;
-        tieAway = d.away_score;
-      }
-    } catch {}
-  }
 
   let tieTimer = null;
   function onTieInput() {
@@ -390,6 +389,7 @@
   let saving = $state(false);
   let saved = $state(false);
   let saveError = $state(null);
+  let showCreateEntry = $state(false);
   let newEntryLabel = $state('');
   let creating = $state(false);
   let createMsg = $state('');
@@ -481,6 +481,7 @@
       });
       const d = await res.json();
       if (res.ok) {
+        showCreateEntry = false;
         newEntryLabel = '';
         window.location.href = `/pool/${data.pool.id}/bracket?entry=${encodeURIComponent(d.label)}`;
       } else {
@@ -548,7 +549,7 @@
           <span style="font-size: 11px; color: var(--gold); padding: 4px 8px; background: rgba(201,168,76,0.1); border-radius: 4px;">{data.entries[0].label}</span>
         {/if}
         {#if data.pool.allow_multiple_predictions}
-          <button onclick={() => { newEntryLabel = ''; createMsg = ''; }}
+          <button onclick={() => { showCreateEntry = true; newEntryLabel = ''; createMsg = ''; }}
             style="font-size: 9px; padding: 6px 10px; border: 1px solid var(--gold); border-radius: 6px; background: rgba(201,168,76,0.1); color: var(--gold); cursor: pointer;">
             + Nueva entrada
           </button>
@@ -573,7 +574,7 @@
   </div>
 
   <!-- Create entry form -->
-  {#if data.pool.allow_multiple_predictions && newEntryLabel !== ''}
+  {#if data.pool.allow_multiple_predictions && showCreateEntry}
     <div style="margin-bottom: 16px; padding: 14px; background: var(--bg-card); border: 1px solid var(--gold); border-radius: 8px; display: flex; gap: 8px; align-items: flex-end;">
       <div style="flex: 1;">
         <input bind:value={newEntryLabel} placeholder="Nombre de la entrada..."
@@ -581,7 +582,7 @@
           onkeydown={(e) => { if (e.key === 'Enter') createEntry(); }} />
       </div>
       <button onclick={createEntry} disabled={creating || !newEntryLabel.trim()} class="btn-primary" style="font-size: 9px; padding: 8px 16px; white-space: nowrap;">{creating ? '...' : 'Crear'}</button>
-      <button onclick={() => { newEntryLabel = ''; createMsg = ''; }} style="font-size: 9px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer;">✕</button>
+      <button onclick={() => { showCreateEntry = false; newEntryLabel = ''; createMsg = ''; }} style="font-size: 9px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer;">✕</button>
       {#if createMsg}<span style="font-size: 10px; color: var(--red);">{createMsg}</span>{/if}
     </div>
   {/if}
@@ -1580,10 +1581,10 @@
   }
   .third-team-btn {
     display: flex; align-items: center; gap: 8px;
-    background: var(--bg-primary); border: 1px solid var(--border);
+    background: var(--bg-card); border: 1px solid var(--border);
     border-radius: 8px; padding: 10px 12px; cursor: pointer;
     transition: all 0.15s; text-align: left;
-    color: var(--text-primary);
+    color: var(--text);
   }
   .third-team-btn:hover { border-color: var(--gold); background: rgba(201,168,76,0.06); }
   .third-team-btn.selected { border-color: var(--gold); background: rgba(201,168,76,0.12); }

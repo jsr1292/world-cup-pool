@@ -15,10 +15,7 @@
   // PWA service worker disabled during development — re-enable for production builds
   // if (browser && 'serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(() => {}); }
 
-  let currentPath = $state('');
-  $effect(() => {
-    currentPath = $page.url.pathname;
-  });
+  const currentPath = $derived($page.url.pathname);
 
   function isActive(path) {
     if (path === '/') return currentPath === '/';
@@ -65,34 +62,37 @@
   }
 
   // Staggered card entrance + animated counters
+  function stagger() {
+    let i = 0;
+    document.querySelectorAll('.pool-card:not(.stagger-in), .stat-card:not(.stagger-in)').forEach(el => {
+      el.style.animationDelay = `${i * 60}ms`;
+      el.classList.add('stagger-in');
+      i++;
+    });
+    document.querySelectorAll('.stat-value[data-count]:not(.count-animate)').forEach(el => {
+      const target = parseInt(el.dataset.count);
+      if (isNaN(target)) return;
+      el.classList.add('count-animate');
+      const duration = 600;
+      const start = performance.now();
+      const tick = (now) => {
+        const progress = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        el.textContent = Math.round(target * eased);
+        if (progress < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
   onMount(() => {
     if (!browser) return;
-    const stagger = () => {
-      let i = 0;
-      document.querySelectorAll('.pool-card:not(.stagger-in), .stat-card:not(.stagger-in)').forEach(el => {
-        el.style.animationDelay = `${i * 60}ms`;
-        el.classList.add('stagger-in');
-        i++;
-      });
-      document.querySelectorAll('.stat-value[data-count]:not(.count-animate)').forEach(el => {
-        const target = parseInt(el.dataset.count);
-        if (isNaN(target)) return;
-        el.classList.add('count-animate');
-        const duration = 600;
-        const start = performance.now();
-        const tick = (now) => {
-          const progress = Math.min((now - start) / duration, 1);
-          const eased = 1 - Math.pow(1 - progress, 3);
-          el.textContent = Math.round(target * eased);
-          if (progress < 1) requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-      });
-    };
     stagger();
-    // Re-run stagger on page navigation (not on every DOM mutation)
-    const unsubscribe = page.subscribe(() => setTimeout(stagger, 100));
-    return unsubscribe;
+  });
+
+  $effect(() => {
+    $page; // reactive dependency — re-run stagger after each navigation
+    setTimeout(stagger, 100);
   });
 
   const navItems = [
@@ -117,7 +117,7 @@
             <div class="countdown" title="11 de junio de 2026">
               {countdownText}
             </div>
-          {:else if typeof window !== 'undefined'}
+          {:else if browser}
             {@const diff = new Date('2026-06-11T00:00:00Z').getTime() - Date.now()}
             {#if diff > -(1000 * 60 * 60 * 24 * 35)}
               <div class="countdown live">⚽ En juego</div>
@@ -202,11 +202,10 @@
 {#if data?.user}
 <div class="bottom-nav">
   {#each navItems as item}
-    <a href={item.path}>
-      <button class:active={isActive(item.path)} onclick={() => { try { navigator.vibrate(5); } catch {} }}>
-        <svg class="nav-icon-mobile"><use href="/icon.svg#{item.icon}" /></svg>
-        <span class="nav-label">{item.label}</span>
-      </button>
+    <a href={item.path} class:active={isActive(item.path)}
+       onclick={() => { try { navigator.vibrate(5); } catch {} }}>
+      <svg class="nav-icon-mobile"><use href="/icon.svg#{item.icon}" /></svg>
+      <span class="nav-label">{item.label}</span>
     </a>
   {/each}
 </div>

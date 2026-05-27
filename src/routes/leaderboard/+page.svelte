@@ -18,13 +18,14 @@
         <div>#</div><div>Usuario</div><div style="text-align: right;">Pts</div><div style="text-align: right;">Exactos</div><div style="text-align: right;">Ac.</div>
       </div>
       {#each [1,2,3,4,5,6] as _}
-        <div style="display: grid; grid-template-columns: 40px 1fr 70px 60px; padding: 12px 16px; border-bottom: 1px solid var(--border); align-items: center;">
+        <div style="display: grid; grid-template-columns: 40px 1fr 50px 40px 40px; padding: 12px 16px; border-bottom: 1px solid var(--border); align-items: center;">
           <div class="skeleton skeleton-circle"></div>
           <div>
             <div class="skeleton skeleton-text medium" style="width: 120px;"></div>
             <div class="skeleton skeleton-text short" style="margin-top: 6px; width: 80px;"></div>
           </div>
           <div class="skeleton" style="height: 20px; width: 32px; margin-left: auto;"></div>
+          <div class="skeleton" style="height: 20px; width: 24px; margin-left: auto;"></div>
           <div class="skeleton" style="height: 20px; width: 24px; margin-left: auto;"></div>
         </div>
       {/each}
@@ -33,16 +34,17 @@
     <div style="text-align: center; padding: 48px 20px; color: var(--text-muted);">
       <div style="font-size: 40px; margin-bottom: 12px;">🏆</div>
       <p style="font-size: 13px;">Aún no hay predicciones registradas.</p>
-      <p style="font-size: 11px; margin-top: 8px;">¡Únete a una quiniela y empieza a ganar!</p>
-      <a href="/login" class="btn-primary" style="display: inline-block; margin-top: 20px; font-size: 11px; padding: 10px 24px;">Iniciar sesión</a>
+      <p style="font-size: 11px; margin-top: 8px;">¡Sé el primero! Únete a una quiniela y predice.</p>
+      <a href="/pools" class="btn-primary" style="display: inline-block; margin-top: 20px; font-size: 11px; padding: 10px 24px;">Ver quinielas</a>
     </div>
   {:else}
     <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
-      <div style="display: grid; grid-template-columns: 40px 1fr 60px 60px; padding: 10px 16px; font-size: 8px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; border-bottom: 1px solid var(--border);">
+      <div style="display: grid; grid-template-columns: 40px 1fr 50px 40px 40px; padding: 10px 16px; font-size: 8px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; border-bottom: 1px solid var(--border);">
         <div>#</div>
         <div>Usuario</div>
         <div style="text-align: right;">Pts</div>
-        <div style="text-align: right;">Aciertos</div>
+        <div style="text-align: right;">Exactos</div>
+        <div style="text-align: right;">Ac.</div>
       </div>
       {#each leaderboard as entry}
         <div style="display: grid; grid-template-columns: 40px 1fr 50px 40px 40px; padding: 12px 16px; font-size: 12px; border-bottom: 1px solid var(--border); align-items: center; {entry.user_id === data.currentUserId ? 'background: rgba(201,168,76,0.08); border-left: 3px solid var(--gold);' : ''}" class:gold={entry.rank === 1 && entry.user_id !== data.currentUserId} class:silver={entry.rank === 2 && entry.user_id !== data.currentUserId} class:bronze={entry.rank === 3 && entry.user_id !== data.currentUserId} class:me={entry.user_id === data.currentUserId}>

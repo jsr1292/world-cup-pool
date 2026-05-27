@@ -82,7 +82,7 @@
       {#if mode === 'register'}
         <div>
           <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Nombre</label>
-          <input bind:value={displayName} placeholder="Tu nombre" required />
+          <input bind:value={displayName} placeholder="Tu nombre" required autocomplete="name" />
         </div>
       {/if}
 

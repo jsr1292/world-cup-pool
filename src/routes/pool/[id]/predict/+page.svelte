@@ -1,6 +1,7 @@
 <script>
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
+  import { showToast } from '$lib/toast';
 
   let { data } = $props();
 
@@ -205,7 +206,10 @@
         body: JSON.stringify({ prediction_id: data.selectedId, groups }),
       });
       if (res.ok) { saved = true; setTimeout(() => saved = false, 2000); }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      showToast('⚠️ Error al guardar — inténtalo de nuevo');
+    }
     finally { saving = false; }
   }
 

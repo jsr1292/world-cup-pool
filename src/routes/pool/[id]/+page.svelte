@@ -4,13 +4,11 @@
   let { data } = $props();
   let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
   const tabIndexOrder = ['predictions', 'leaderboard', 'members', 'summary', 'results', 'scoring'];
-  let prevTabIndex = $state(tabIndexOrder.indexOf(tab));
   let slideDir = $state<'left' | 'right'>('left');
   function switchTab(newTab: string) {
     haptic(8);
     const oldIdx = tabIndexOrder.indexOf(tab);
     const newIdx = tabIndexOrder.indexOf(newTab);
-    prevTabIndex = newIdx;
     slideDir = newIdx > oldIdx ? 'left' : 'right';
     tab = newTab;
   }
@@ -35,11 +33,11 @@
   function teamName(id: number) { return data.teams[id]?.name || 'TBD'; }
   function teamFlag(id: number) { return flag(data.teams[id]?.flag_code || ''); }
 
-  function getGroupPreds() {
+  const groupPreds = $derived.by(() => {
     if (!summaryEntry) return [];
     return data.groupPreds[summaryEntry] || [];
-  }
-  function getBracketPreds() {
+  });
+  const bracketPredsByPhase = $derived.by(() => {
     if (!summaryEntry) return {};
     const raw = data.bracketPreds[summaryEntry] || [];
     const grouped: Record<string, any[]> = {};
@@ -48,7 +46,7 @@
       grouped[b.phase].push(b);
     }
     return grouped;
-  }
+  });
 
   // Results helpers
   const resultsPhaseLabels: Record<string, string> = {
@@ -217,16 +215,12 @@
 
   <!-- Tabs -->
   <div class="pool-tabs">
-    {#each tabs as t, i}
-      {#if t.link}
-        <a href="/pool/{pool.id}/{t.id}" class="pool-tab" class:active={false}>{t.label}</a>
-      {:else}
-        <button
-          onclick={() => switchTab(t.id)}
-          class="pool-tab"
-          class:active={tab === t.id}
-        >{t.label}</button>
-      {/if}
+    {#each tabs as t}
+      <button
+        onclick={() => switchTab(t.id)}
+        class="pool-tab"
+        class:active={tab === t.id}
+      >{t.label}</button>
     {/each}
   </div>
 
@@ -427,7 +421,7 @@
         <!-- Group predictions -->
         <div style="margin-bottom: 24px;">
           <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">🏆 Fase de Grupos</h2>
-          {#each getGroupPreds() as gp}
+          {#each groupPreds as gp}
             <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px;">
               <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">Grupo {gp.group_name}</div>
               <div style="display: flex; flex-direction: column; gap: 2px;">
@@ -445,7 +439,7 @@
               </div>
             </div>
           {/each}
-          {#if getGroupPreds().length === 0}
+          {#if groupPreds.length === 0}
             <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No has predicho grupos aún.</p>
           {/if}
         </div>
@@ -454,7 +448,7 @@
         <div style="margin-bottom: 24px;">
           <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">⚔️ Eliminatorias</h2>
           {#each phaseOrder as phase}
-            {@const bracketPreds = getBracketPreds()}
+            {@const bracketPreds = bracketPredsByPhase}
             {@const picks = bracketPreds[phase]}
             {#if picks && picks.length > 0}
               <div style="margin-bottom: 12px;">
@@ -469,7 +463,7 @@
               </div>
             {/if}
           {/each}
-          {#if Object.keys(getBracketPreds()).length === 0}
+          {#if Object.keys(bracketPredsByPhase).length === 0}
             <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No has predicho eliminatorias aún.</p>
           {/if}
         </div>
@@ -580,7 +574,9 @@
 
 <!-- Bottom Sheet for Pool Actions -->
 {#if sheetOpen}
-  <div class="bottom-sheet-overlay" onclick={closeSheet} ontouchstart={onSheetTouchStart} ontouchmove={onSheetTouchMove} ontouchend={onSheetTouchEnd}>
+  <div class="bottom-sheet-overlay" onclick={closeSheet} ontouchstart={onSheetTouchStart} ontouchmove={onSheetTouchMove} ontouchend={onSheetTouchEnd}
+    onkeydown={(e) => { if (e.key === 'Escape') closeSheet(); }}
+    role="dialog" aria-modal="true" tabindex="-1">
     <div class="bottom-sheet" style="transform: translateY({sheetDrag}px); padding-bottom: calc(20px + env(safe-area-inset-bottom));" ontouchstart={onSheetTouchStart} ontouchmove={onSheetTouchMove} ontouchend={onSheetTouchEnd} onclick={(e) => e.stopPropagation()}>
       <div class="bottom-sheet-handle"></div>
       <div style="display: flex; flex-direction: column; gap: 4px;">

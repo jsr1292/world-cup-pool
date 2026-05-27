@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   let { data } = $props();
   let error = $state('');
   let loading = $state(false);
@@ -29,34 +30,31 @@
     }
   }
 
-  // Auto-join on load — bandera de un solo disparo para evitar doble envío en hidratación SSR
-  let _autoFired = false;
-  $effect(() => {
-    if (data.code && !loading && !joined && !error && !_autoFired) {
-      _autoFired = true;
-      error = '';
-      loading = true;
-      fetch('/api/pools/join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: data.code }),
+  // Auto-join on load — runs once after hydration, avoiding SSR double-submit
+  onMount(() => {
+    if (!data.code) return;
+    error = '';
+    loading = true;
+    fetch('/api/pools/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: data.code }),
+    })
+      .then(async (res) => {
+        const result = await res.json();
+        if (!res.ok) {
+          error = result.error || 'Error';
+        } else {
+          joined = true;
+          window.location.href = `/pool/${result.pool_id}`;
+        }
       })
-        .then(async (res) => {
-          const result = await res.json();
-          if (!res.ok) {
-            error = result.error || 'Error';
-          } else {
-            joined = true;
-            window.location.href = `/pool/${result.pool_id}`;
-          }
-        })
-        .catch(() => {
-          error = 'Error de conexión';
-        })
-        .finally(() => {
-          loading = false;
-        });
-    }
+      .catch(() => {
+        error = 'Error de conexión';
+      })
+      .finally(() => {
+        loading = false;
+      });
   });
 </script>
 

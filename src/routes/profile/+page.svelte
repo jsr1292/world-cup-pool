@@ -8,7 +8,10 @@
   let changing = $state(false);
   let changeResult = $state(null) as { ok: boolean; msg: string } | null;
 
-  let isDark = $state(typeof window !== 'undefined' && document.documentElement.getAttribute('data-theme') !== 'light');
+  let isDark = $state(false);
+  $effect(() => {
+    isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  });
 
   function toggleTheme() {
     isDark = !isDark;

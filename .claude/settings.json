@@ -1,1 +1,1 @@
-{"permissions":{"allow":["Edit(**)", "Write(**)", "Bash(**)", "Read(**)", "Glob(**)", "Grep(**)"]}}
+{"permissions":{"allow":["Read(**)","Glob(**)","Grep(**)","Bash(**)","Write(**)","Edit(**)"]}}
