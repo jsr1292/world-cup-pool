@@ -12,26 +12,31 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   const predictionId = Number(url.searchParams.get('prediction_id'));
   if (!predictionId) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
-  // Verify ownership
-  const { rows: predRows } = await query('SELECT user_id FROM predictions WHERE id = $1', [predictionId]);
-  const pred = predRows[0] ?? null;
-  if (!pred || pred.user_id !== locals.user.id) {
-    return json({ error: 'No es tu predicción' }, { status: 403 });
+  try {
+    // Verify ownership
+    const { rows: predRows } = await query('SELECT user_id FROM predictions WHERE id = $1', [predictionId]);
+    const pred = predRows[0] ?? null;
+    if (!pred || pred.user_id !== locals.user.id) {
+      return json({ error: 'No es tu predicción' }, { status: 403 });
+    }
+
+    const { rows } = await query(`
+      SELECT phase, slot, team_id FROM bracket_predictions
+      WHERE prediction_id = $1
+      ORDER BY phase, slot
+    `, [predictionId]);
+
+    const result: Record<string, Record<number, number>> = {};
+    for (const row of rows) {
+      if (!result[row.phase]) result[row.phase] = {};
+      result[row.phase][row.slot] = row.team_id;
+    }
+
+    return json(result);
+  } catch (e) {
+    console.error('[api/predictions/bracket] GET error:', e);
+    return json({ error: 'Internal server error' }, { status: 500 });
   }
-
-  const { rows } = await query(`
-    SELECT phase, slot, team_id FROM bracket_predictions
-    WHERE prediction_id = $1
-    ORDER BY phase, slot
-  `, [predictionId]);
-
-  const result: Record<string, Record<number, number>> = {};
-  for (const row of rows) {
-    if (!result[row.phase]) result[row.phase] = {};
-    result[row.phase][row.slot] = row.team_id;
-  }
-
-  return json(result);
 };
 
 // POST /api/predictions/bracket

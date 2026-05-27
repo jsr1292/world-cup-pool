@@ -11,29 +11,34 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   const predictionId = Number(url.searchParams.get('prediction_id'));
   if (!predictionId) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
-  // Verify ownership
-  const { rows: predRows } = await query('SELECT user_id FROM predictions WHERE id = $1', [predictionId]);
-  const pred = predRows[0] ?? null;
-  if (!pred || pred.user_id !== locals.user.id) {
-    return json({ error: 'No es tu predicción' }, { status: 403 });
-  }
+  try {
+    // Verify ownership
+    const { rows: predRows } = await query('SELECT user_id FROM predictions WHERE id = $1', [predictionId]);
+    const pred = predRows[0] ?? null;
+    if (!pred || pred.user_id !== locals.user.id) {
+      return json({ error: 'No es tu predicción' }, { status: 403 });
+    }
 
-  const { rows } = await query(`
-    SELECT group_name, position_1, position_2, position_3, position_4
-    FROM group_predictions
-    WHERE prediction_id = $1
-  `, [predictionId]);
+    const { rows } = await query(`
+      SELECT group_name, position_1, position_2, position_3, position_4
+      FROM group_predictions
+      WHERE prediction_id = $1
+    `, [predictionId]);
 
-  const result: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }> = {};
-  for (const row of rows) {
-    result[row.group_name] = {
-      pos1: row.position_1,
-      pos2: row.position_2,
-      pos3: row.position_3,
-      pos4: row.position_4,
-    };
+    const result: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }> = {};
+    for (const row of rows) {
+      result[row.group_name] = {
+        pos1: row.position_1,
+        pos2: row.position_2,
+        pos3: row.position_3,
+        pos4: row.position_4,
+      };
+    }
+    return json(result);
+  } catch (e) {
+    console.error('[api/predictions/group] GET error:', e);
+    return json({ error: 'Internal server error' }, { status: 500 });
   }
-  return json(result);
 };
 
 // POST /api/predictions/group

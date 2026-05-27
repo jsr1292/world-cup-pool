@@ -9,14 +9,19 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   const predictionId = Number(url.searchParams.get('prediction_id'));
   if (!predictionId) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
-  const { rows: predRows } = await query('SELECT user_id FROM predictions WHERE id = $1', [predictionId]);
-  const pred = predRows[0] ?? null;
-  if (!pred || pred.user_id !== locals.user.id) {
-    return json({ error: 'No es tu predicción' }, { status: 403 });
-  }
+  try {
+    const { rows: predRows } = await query('SELECT user_id FROM predictions WHERE id = $1', [predictionId]);
+    const pred = predRows[0] ?? null;
+    if (!pred || pred.user_id !== locals.user.id) {
+      return json({ error: 'No es tu predicción' }, { status: 403 });
+    }
 
-  const { rows } = await query('SELECT home_score, away_score FROM tiebreaker WHERE prediction_id = $1', [predictionId]);
-  return json(rows[0] ?? { home_score: null, away_score: null });
+    const { rows } = await query('SELECT home_score, away_score FROM tiebreaker WHERE prediction_id = $1', [predictionId]);
+    return json(rows[0] ?? { home_score: null, away_score: null });
+  } catch (e) {
+    console.error('[api/predictions/tiebreaker] GET error:', e);
+    return json({ error: 'Internal server error' }, { status: 500 });
+  }
 };
 
 // POST /api/predictions/tiebreaker
@@ -43,39 +48,44 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     }
   }
 
-  // Verify ownership
-  const { rows: predRows } = await query('SELECT user_id, pool_id FROM predictions WHERE id = $1', [prediction_id]);
-  const pred = predRows[0] ?? null;
-  if (!pred || pred.user_id !== locals.user.id) {
-    return json({ error: 'No es tu predicción' }, { status: 403 });
-  }
+  try {
+    // Verify ownership
+    const { rows: predRows } = await query('SELECT user_id, pool_id FROM predictions WHERE id = $1', [prediction_id]);
+    const pred = predRows[0] ?? null;
+    if (!pred || pred.user_id !== locals.user.id) {
+      return json({ error: 'No es tu predicción' }, { status: 403 });
+    }
 
-  // Verify pool membership
-  const { rows: membership } = await query(
-    'SELECT 1 FROM pool_members WHERE pool_id = $1 AND user_id = $2',
-    [pred.pool_id, locals.user.id]
-  );
-  if (membership.length === 0) {
-    return json({ error: 'No eres miembro de este pool' }, { status: 403 });
-  }
+    // Verify pool membership
+    const { rows: membership } = await query(
+      'SELECT 1 FROM pool_members WHERE pool_id = $1 AND user_id = $2',
+      [pred.pool_id, locals.user.id]
+    );
+    if (membership.length === 0) {
+      return json({ error: 'No eres miembro de este pool' }, { status: 403 });
+    }
 
-  // Check deadline
-  const { rows: poolRows } = await query('SELECT deadline_knockout FROM pools WHERE id = $1', [pred.pool_id]);
-  const pool = poolRows[0] ?? null;
-  if (pool?.deadline_knockout && new Date(pool.deadline_knockout) <= new Date()) {
-    return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
-  }
+    // Check deadline
+    const { rows: poolRows } = await query('SELECT deadline_knockout FROM pools WHERE id = $1', [pred.pool_id]);
+    const pool = poolRows[0] ?? null;
+    if (pool?.deadline_knockout && new Date(pool.deadline_knockout) <= new Date()) {
+      return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
+    }
 
-  // Upsert
-  if (home_score !== null && away_score !== null) {
-    await query(`
-      INSERT INTO tiebreaker (prediction_id, home_score, away_score)
-      VALUES ($1, $2, $3)
-      ON CONFLICT(prediction_id) DO UPDATE SET home_score = $2, away_score = $3
-    `, [prediction_id, home_score, away_score]);
-  } else {
-    await query('DELETE FROM tiebreaker WHERE prediction_id = $1', [prediction_id]);
-  }
+    // Upsert
+    if (home_score !== null && away_score !== null) {
+      await query(`
+        INSERT INTO tiebreaker (prediction_id, home_score, away_score)
+        VALUES ($1, $2, $3)
+        ON CONFLICT(prediction_id) DO UPDATE SET home_score = $2, away_score = $3
+      `, [prediction_id, home_score, away_score]);
+    } else {
+      await query('DELETE FROM tiebreaker WHERE prediction_id = $1', [prediction_id]);
+    }
 
-  return json({ ok: true });
+    return json({ ok: true });
+  } catch (e) {
+    console.error('[api/predictions/tiebreaker] POST error:', e);
+    return json({ error: 'Internal server error' }, { status: 500 });
+  }
 };

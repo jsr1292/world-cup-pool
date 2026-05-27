@@ -11,16 +11,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'Datos inválidos' }, { status: 400 });
   }
 
-  const hash = await hashPwd(new_password);
-  const { rowCount } = await query(
-    'UPDATE users SET password_hash = $1 WHERE username = $2',
-    [hash, username]
-  );
+  try {
+    const hash = await hashPwd(new_password);
+    const { rowCount } = await query(
+      'UPDATE users SET password_hash = $1 WHERE username = $2',
+      [hash, username]
+    );
 
-  if (rowCount === 0) return json({ error: 'Usuario no encontrado' }, { status: 404 });
+    if (rowCount === 0) return json({ error: 'Usuario no encontrado' }, { status: 404 });
 
-  // Invalidate all sessions for this user
-  await query('DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE username = $1)', [username]);
+    // Invalidate all sessions for this user
+    await query('DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE username = $1)', [username]);
 
-  return json({ ok: true });
+    return json({ ok: true });
+  } catch (e) {
+    console.error('[api/admin/reset-password] POST error:', e);
+    return json({ error: 'Internal server error' }, { status: 500 });
+  }
 };

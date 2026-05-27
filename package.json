@@ -7,9 +7,11 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
+		"start": "node build/index.js",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"migrate": "tsx src/lib/server/migrate.ts",
 		"test": "vitest run",
 		"test:watch": "vitest"
 	},
@@ -21,17 +23,17 @@
 		"@tailwindcss/vite": "^4.2.2",
 		"@types/pg": "^8.20.0",
 		"drizzle-kit": "^0.31.10",
+		"playwright": "^1.59.1",
 		"svelte": "^5.55.2",
 		"svelte-check": "^4.4.6",
 		"tailwindcss": "^4.2.2",
+		"tsx": "^4.22.3",
 		"typescript": "^6.0.2",
 		"vite": "^8.0.7",
 		"vitest": "^4.1.7"
 	},
 	"dependencies": {
-		"drizzle-orm": "^0.45.2",
 		"pg": "^8.21.0",
-		"playwright": "^1.59.1",
 		"svelte-dnd-action": "^0.9.69"
 	}
 }

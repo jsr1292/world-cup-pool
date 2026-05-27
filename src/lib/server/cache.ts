@@ -111,6 +111,7 @@ export function invalidateCachedPoolResults(poolId: number): void {
 // ─── Session cache (F-18) ──────────────────────────────────────────────────
 const _sessionCache = new Map<string, TTLEntry<any>>();
 const SESSION_TTL = 60_000; // 1 minute
+const SESSION_CACHE_MAX = 5_000; // evict oldest entry when cap is reached
 
 export function getCachedSession(token: string): any | null {
 	const e = _sessionCache.get(token);
@@ -123,6 +124,11 @@ export function getCachedSession(token: string): any | null {
 }
 
 export function setCachedSession(token: string, user: any): void {
+	if (_sessionCache.size >= SESSION_CACHE_MAX) {
+		// Evict the oldest entry (Map preserves insertion order)
+		const firstKey = _sessionCache.keys().next().value;
+		if (firstKey !== undefined) _sessionCache.delete(firstKey);
+	}
 	_sessionCache.set(token, { data: user, expiresAt: Date.now() + SESSION_TTL });
 }
 

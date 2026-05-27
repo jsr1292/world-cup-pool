@@ -10,13 +10,18 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
   if (new_password.length < 6)
     return json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' }, { status: 400 });
 
-  const { rows } = await query('SELECT password_hash FROM users WHERE id = $1', [locals.user.id]);
-  const user = rows[0] as any;
-  if (!user || !await verifyPwd(current_password, user.password_hash))
-    return json({ error: 'Contraseña actual incorrecta' }, { status: 401 });
+  try {
+    const { rows } = await query('SELECT password_hash FROM users WHERE id = $1', [locals.user.id]);
+    const user = rows[0] as any;
+    if (!user || !await verifyPwd(current_password, user.password_hash))
+      return json({ error: 'Contraseña actual incorrecta' }, { status: 401 });
 
-  await query('UPDATE users SET password_hash = $1 WHERE id = $2', [await hashPwd(new_password), locals.user.id]);
-  // Invalidate all other sessions (keep current one alive)
-  await query('DELETE FROM sessions WHERE user_id = $1 AND token != $2', [locals.user.id, cookies.get('session')]);
-  return json({ ok: true });
+    await query('UPDATE users SET password_hash = $1 WHERE id = $2', [await hashPwd(new_password), locals.user.id]);
+    // Invalidate all other sessions (keep current one alive)
+    await query('DELETE FROM sessions WHERE user_id = $1 AND token != $2', [locals.user.id, cookies.get('session')]);
+    return json({ ok: true });
+  } catch (e) {
+    console.error('[api/auth/change-password] POST error:', e);
+    return json({ error: 'Internal server error' }, { status: 500 });
+  }
 };

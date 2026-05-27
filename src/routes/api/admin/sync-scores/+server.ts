@@ -14,25 +14,30 @@ export const POST: RequestHandler = async ({ locals }) => {
     return json({ error: 'Prohibido' }, { status: 403 });
   }
 
-  const result = await syncScores();
+  try {
+    const result = await syncScores();
 
-  // Async rescoring after sync
-  if (result.updated > 0) {
-    const { rows: pools } = await query('SELECT id FROM pools WHERE is_active = true');
-    const poolIds = pools.map((p: any) => p.id);
-    setImmediate(async () => {
-      for (const poolId of poolIds) {
-        try {
-          await calculateAllScores(poolId);
-          invalidateCachedPoolLeaderboard(poolId);
-          invalidateCachedPoolResults(poolId);
-        } catch (e) {
-          console.error(`[bg-score] sync-scores pool ${poolId}:`, e);
+    // Async rescoring after sync
+    if (result.updated > 0) {
+      const { rows: pools } = await query('SELECT id FROM pools WHERE is_active = true');
+      const poolIds = pools.map((p: any) => p.id);
+      setImmediate(async () => {
+        for (const poolId of poolIds) {
+          try {
+            await calculateAllScores(poolId);
+            invalidateCachedPoolLeaderboard(poolId);
+            invalidateCachedPoolResults(poolId);
+          } catch (e) {
+            console.error(`[bg-score] sync-scores pool ${poolId}:`, e);
+          }
         }
-      }
-      invalidateGlobalLeaderboard();
-    });
-  }
+        invalidateGlobalLeaderboard();
+      });
+    }
 
-  return json({ ok: true, ...result });
+    return json({ ok: true, ...result });
+  } catch (e) {
+    console.error('[api/admin/sync-scores] POST error:', e);
+    return json({ error: 'Internal server error' }, { status: 500 });
+  }
 };

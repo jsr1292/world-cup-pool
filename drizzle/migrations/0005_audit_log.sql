@@ -1,4 +1,4 @@
-CREATE TABLE audit_log (
+CREATE TABLE IF NOT EXISTS audit_log (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id),
   action TEXT NOT NULL,

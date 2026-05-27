@@ -55,7 +55,7 @@ export const POST: RequestHandler = async ({ request, cookies, params, getClient
       const result = await createUser(username, password, display_name || username);
       const userId = result.rows[0].id;
       const token = await createSession(Number(userId));
-      cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
+      cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV !== 'development' });
       return json({ ok: true });
     } catch (e: any) {
       if (e.code === '23505' || e.message?.includes('unique constraint') || e.message?.includes('UNIQUE constraint')) {
@@ -69,12 +69,17 @@ export const POST: RequestHandler = async ({ request, cookies, params, getClient
     const { username, password } = body;
     if (!username || !password) return json({ error: 'Todos los campos son obligatorios' }, { status: 400 });
 
-    const user = await authenticateUser(username, password);
-    if (!user) return json({ error: 'Credenciales incorrectas' }, { status: 401 });
+    try {
+      const user = await authenticateUser(username, password);
+      if (!user) return json({ error: 'Credenciales incorrectas' }, { status: 401 });
 
-    const token = await createSession(user.id);
-    cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
-    return json({ ok: true });
+      const token = await createSession(user.id);
+      cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV !== 'development' });
+      return json({ ok: true });
+    } catch (e) {
+      console.error('[auth] Login error:', e);
+      return json({ error: 'Error al iniciar sesión' }, { status: 500 });
+    }
   }
 
   return json({ error: 'Acción desconocida' }, { status: 400 });

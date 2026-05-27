@@ -2,7 +2,7 @@
 -- Migration: 0001_initial.sql
 
 -- Users
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   username TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE users (
 );
 
 -- Pools
-CREATE TABLE pools (
+CREATE TABLE IF NOT EXISTS pools (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   invite_code TEXT NOT NULL UNIQUE,
@@ -28,7 +28,7 @@ CREATE TABLE pools (
 );
 
 -- Pool members
-CREATE TABLE pool_members (
+CREATE TABLE IF NOT EXISTS pool_members (
   id SERIAL PRIMARY KEY,
   pool_id INTEGER NOT NULL REFERENCES pools(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -38,7 +38,7 @@ CREATE TABLE pool_members (
 );
 
 -- Teams (static tournament data)
-CREATE TABLE teams (
+CREATE TABLE IF NOT EXISTS teams (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   flag_code TEXT,
@@ -47,7 +47,7 @@ CREATE TABLE teams (
 );
 
 -- Matches
-CREATE TABLE matches (
+CREATE TABLE IF NOT EXISTS matches (
   id SERIAL PRIMARY KEY,
   fifa_id TEXT,
   phase TEXT NOT NULL,
@@ -63,7 +63,7 @@ CREATE TABLE matches (
 );
 
 -- Predictions (one entry per user per pool)
-CREATE TABLE predictions (
+CREATE TABLE IF NOT EXISTS predictions (
   id SERIAL PRIMARY KEY,
   pool_id INTEGER NOT NULL REFERENCES pools(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -76,7 +76,7 @@ CREATE TABLE predictions (
 );
 
 -- Match predictions
-CREATE TABLE match_predictions (
+CREATE TABLE IF NOT EXISTS match_predictions (
   id SERIAL PRIMARY KEY,
   prediction_id INTEGER NOT NULL REFERENCES predictions(id) ON DELETE CASCADE,
   match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
@@ -87,7 +87,7 @@ CREATE TABLE match_predictions (
 );
 
 -- Group standings predictions
-CREATE TABLE group_predictions (
+CREATE TABLE IF NOT EXISTS group_predictions (
   id SERIAL PRIMARY KEY,
   prediction_id INTEGER NOT NULL REFERENCES predictions(id) ON DELETE CASCADE,
   group_name TEXT NOT NULL,
@@ -100,7 +100,7 @@ CREATE TABLE group_predictions (
 );
 
 -- Knockout bracket predictions
-CREATE TABLE bracket_predictions (
+CREATE TABLE IF NOT EXISTS bracket_predictions (
   id SERIAL PRIMARY KEY,
   prediction_id INTEGER NOT NULL REFERENCES predictions(id) ON DELETE CASCADE,
   phase TEXT NOT NULL,
@@ -111,7 +111,7 @@ CREATE TABLE bracket_predictions (
 );
 
 -- Scoring config per pool
-CREATE TABLE scoring_config (
+CREATE TABLE IF NOT EXISTS scoring_config (
   id SERIAL PRIMARY KEY,
   pool_id INTEGER NOT NULL REFERENCES pools(id) ON DELETE CASCADE,
   rule TEXT NOT NULL,
@@ -120,7 +120,7 @@ CREATE TABLE scoring_config (
 );
 
 -- Sessions
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
   id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token TEXT NOT NULL UNIQUE,
@@ -129,7 +129,7 @@ CREATE TABLE sessions (
 );
 
 -- Tiebreaker: predicted final score
-CREATE TABLE tiebreaker (
+CREATE TABLE IF NOT EXISTS tiebreaker (
   id SERIAL PRIMARY KEY,
   prediction_id INTEGER NOT NULL UNIQUE REFERENCES predictions(id) ON DELETE CASCADE,
   home_score INTEGER,
@@ -137,7 +137,7 @@ CREATE TABLE tiebreaker (
 );
 
 -- Site-wide settings
-CREATE TABLE site_settings (
+CREATE TABLE IF NOT EXISTS site_settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
@@ -145,18 +145,18 @@ INSERT INTO site_settings (key, value) VALUES ('can_create_pools', 'admin')
   ON CONFLICT DO NOTHING;
 
 -- Users allowed to create pools (when mode is 'admin')
-CREATE TABLE pool_creators (
+CREATE TABLE IF NOT EXISTS pool_creators (
   user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Indexes
-CREATE INDEX idx_pool_members_user ON pool_members(user_id);
-CREATE INDEX idx_predictions_pool ON predictions(pool_id);
-CREATE INDEX idx_match_predictions_pred ON match_predictions(prediction_id);
-CREATE INDEX idx_group_predictions_pred ON group_predictions(prediction_id);
-CREATE INDEX idx_matches_phase ON matches(phase);
-CREATE INDEX idx_bracket_predictions_pred ON bracket_predictions(prediction_id);
-CREATE INDEX idx_matches_status ON matches(status);
-CREATE INDEX idx_matches_phase_status ON matches(phase, status);
-CREATE INDEX idx_pools_is_active ON pools(is_active);
-CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_pool_members_user ON pool_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_predictions_pool ON predictions(pool_id);
+CREATE INDEX IF NOT EXISTS idx_match_predictions_pred ON match_predictions(prediction_id);
+CREATE INDEX IF NOT EXISTS idx_group_predictions_pred ON group_predictions(prediction_id);
+CREATE INDEX IF NOT EXISTS idx_matches_phase ON matches(phase);
+CREATE INDEX IF NOT EXISTS idx_bracket_predictions_pred ON bracket_predictions(prediction_id);
+CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
+CREATE INDEX IF NOT EXISTS idx_matches_phase_status ON matches(phase, status);
+CREATE INDEX IF NOT EXISTS idx_pools_is_active ON pools(is_active);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
