@@ -1,4 +1,4 @@
-import { query } from '$lib/server/db.js';
+import { query, getClient } from '$lib/server/db.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
 import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
 import type { RequestHandler } from '@sveltejs/kit';
@@ -75,19 +75,38 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     }
   }
 
+  // Validate scores: must be integers 0–30
+  for (const [matchIdStr, score] of Object.entries(scores)) {
+    const homeRaw = score.home_score;
+    const awayRaw = score.away_score;
+    if (homeRaw != null) {
+      const h = Number(homeRaw);
+      if (!Number.isInteger(h) || h < 0 || h > 30) {
+        return json({ error: `Score inválido para partido ${matchIdStr}` }, { status: 400 });
+      }
+    }
+    if (awayRaw != null) {
+      const a = Number(awayRaw);
+      if (!Number.isInteger(a) || a < 0 || a > 30) {
+        return json({ error: `Score inválido para partido ${matchIdStr}` }, { status: 400 });
+      }
+    }
+  }
+
+  // H-01: Wrap all per-match saves in a transaction for atomicity
+  const client = await getClient();
   try {
+    await client.query('BEGIN');
+
     for (const [matchIdStr, score] of Object.entries(scores)) {
       const matchId = Number(matchIdStr);
-      const homeRaw = score.home_score;
-      const awayRaw = score.away_score;
-      const homeScore = (homeRaw !== null && homeRaw !== undefined) ? Number(homeRaw) : null;
-      const awayScore = (awayRaw !== null && awayRaw !== undefined) ? Number(awayRaw) : null;
+      const homeScore = (score.home_score != null) ? Number(score.home_score) : null;
+      const awayScore = (score.away_score != null) ? Number(score.away_score) : null;
 
-      if (homeScore === null || awayScore === null || isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || awayScore < 0) {
-        // Delete prediction if scores are null/undefined, NaN, or negative
-        await query('DELETE FROM match_predictions WHERE prediction_id = $1 AND match_id = $2', [prediction_id, matchId]);
+      if (homeScore === null || awayScore === null) {
+        await client.query('DELETE FROM match_predictions WHERE prediction_id = $1 AND match_id = $2', [prediction_id, matchId]);
       } else {
-        await query(`
+        await client.query(`
           INSERT INTO match_predictions (prediction_id, match_id, home_score, away_score)
           VALUES ($1, $2, $3, $4)
           ON CONFLICT(prediction_id, match_id) DO UPDATE SET
@@ -98,22 +117,26 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       }
     }
 
-    // Async scoring — respond immediately, score in background
-    const poolId = pred.pool_id;
-    setImmediate(async () => {
-      try {
-        await calculateAllScores(poolId);
-        invalidateCachedPoolLeaderboard(poolId);
-        invalidateCachedPoolResults(poolId);
-        invalidateGlobalLeaderboard();
-      } catch (e) {
-        console.error('[bg-score] match-scores pool', poolId, e);
-      }
-    });
-
-    return json({ ok: true });
+    await client.query('COMMIT');
   } catch (e) {
-    console.error(e);
-    return json({ error: 'Error al guardar' }, { status: 500 });
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
   }
+
+  // Async scoring — respond immediately, score in background
+  const poolId = pred.pool_id;
+  setImmediate(async () => {
+    try {
+      await calculateAllScores(poolId);
+      invalidateCachedPoolLeaderboard(poolId);
+      invalidateCachedPoolResults(poolId);
+      invalidateGlobalLeaderboard();
+    } catch (e) {
+      console.error('[bg-score] match-scores pool', poolId, e);
+    }
+  });
+
+  return json({ ok: true });
 };

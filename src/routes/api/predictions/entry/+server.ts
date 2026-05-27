@@ -10,6 +10,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     if (!pool_id) return json({ error: 'Falta pool_id' }, { status: 400 });
 
+    // H-06: Validate label length
+    if (typeof label !== 'string' || label.length > 50) {
+      return json({ error: 'Label debe tener máximo 50 caracteres' }, { status: 400 });
+    }
+
     // Check allow_multiple
     const { rows: poolRows } = await query('SELECT * FROM pools WHERE id = $1', [pool_id]);
     const pool = poolRows[0] as any;

@@ -1,4 +1,4 @@
-import { query } from '$lib/server/db.js';
+import { query, getClient } from '$lib/server/db.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 
@@ -124,7 +124,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     }
   }
 
+  // H-02: Wrap all group saves in a transaction for atomicity
+  const client = await getClient();
   try {
+    await client.query('BEGIN');
+
     for (const [groupName, positions] of Object.entries(groups)) {
       // Always save — even if all null, it means user cleared the group
       // Delete row if all null to keep DB clean, otherwise upsert
@@ -132,9 +136,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
       if (!hasData) {
         // User cleared this group — delete from DB
-        await query('DELETE FROM group_predictions WHERE prediction_id = $1 AND group_name = $2', [prediction_id, groupName]);
+        await client.query('DELETE FROM group_predictions WHERE prediction_id = $1 AND group_name = $2', [prediction_id, groupName]);
       } else {
-        await query(`
+        await client.query(`
           INSERT INTO group_predictions (prediction_id, group_name, position_1, position_2, position_3, position_4)
           VALUES ($1, $2, $3, $4, $5, $6)
           ON CONFLICT(prediction_id, group_name) DO UPDATE SET
@@ -152,9 +156,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         ]);
       }
     }
+
+    await client.query('COMMIT');
     return json({ ok: true });
   } catch (e) {
-    console.error(e);
-    return json({ error: 'Error al guardar' }, { status: 500 });
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
   }
 };
