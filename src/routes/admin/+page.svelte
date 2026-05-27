@@ -5,8 +5,8 @@
   let msg = $state('');
   let searchQuery = $state('');
 
-  const creators = [...data.creators];
-  let allUsers = [...data.allUsers];
+  let creators = $state([...data.creators]);
+  let allUsers = $state([...data.allUsers]);
 
   let filteredUsers = $derived(
     searchQuery.length < 2 ? []

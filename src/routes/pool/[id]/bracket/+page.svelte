@@ -54,7 +54,7 @@
   const THIRD_LABEL = 'L(SF-1) vs L(SF-2)';
 
   function r32Label(mi) { return R32_LABELS[mi] || `R32-${mi + 1}`; }
-  function r16Label(mi) { return R16_LABELS[mi] || r16Label(mi); }
+  function r16Label(mi) { return R16_LABELS[mi] || `R16-${mi + 1}`; }
   function qfLabel(mi) { return QF_LABELS[mi] || `QF-${mi + 1}`; }
   function sfLabel(mi) { return SF_LABELS[mi] || `SF-${mi + 1}`; }
 
@@ -363,7 +363,30 @@
   }
 
   // Load tiebreaker on mount
-  $effect(() => { loadTiebreaker(); });
+  $effect(() => {
+    const id = data.selectedId;
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/predictions/tiebreaker?prediction_id=${id}`);
+        if (!cancelled && r.ok) {
+          const d = await r.json();
+          tieHome = d.home_score;
+          tieAway = d.away_score;
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  });
+
+  // Cleanup timers on component destroy
+  $effect(() => {
+    return () => {
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      if (tieTimer) clearTimeout(tieTimer);
+    };
+  });
 
   let saving = $state(false);
   let saved = $state(false);
@@ -375,14 +398,14 @@
   // Team path highlighting
   let hoveredTeam = $state(null); // team ID being hovered
 
-  function getTeamPath(teamId) {
+  function getTeamPath(teamId, teamsSnapshot) {
     // Trace a team's path through the bracket
     const path = new Set(); // set of 'round:matchIndex:teamIndex' keys
     if (!teamId) return path;
 
     // Find where this team appears in each round
     for (const round of ['r32', 'r16', 'qf', 'sf']) {
-      const matches = _teams[round] || [];
+      const matches = teamsSnapshot[round] || [];
       for (let mi = 0; mi < matches.length; mi++) {
         for (let ti = 0; ti < 2; ti++) {
           if (Number(matches[mi][ti]) === Number(teamId)) {
@@ -394,9 +417,9 @@
       }
     }
     // Final
-    if (_teams.final?.[0]) {
+    if (teamsSnapshot.final?.[0]) {
       for (let ti = 0; ti < 2; ti++) {
-        if (Number(_teams.final[0][ti]) === Number(teamId)) {
+        if (Number(teamsSnapshot.final[0][ti]) === Number(teamId)) {
           path.add(`final:0:${ti}`);
           path.add(`final:0`);
         }
@@ -405,7 +428,7 @@
     return path;
   }
 
-  const teamPath = $derived(getTeamPath(hoveredTeam));
+  const teamPath = $derived(getTeamPath(hoveredTeam, teams));
 
   function isInPath(round, mi, ti = null) {
     if (!hoveredTeam) return false;

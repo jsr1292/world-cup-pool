@@ -3,6 +3,7 @@
   let version = $state(0);
   let _scoring = { ...data.scoring };
   let scoring = $derived.by(() => { void version; return { ..._scoring }; });
+  let localMatches = $state(data.matches.map(m => ({ ...m })));
   let _members = [...data.members];
   let members = $derived.by(() => { void version; return [..._members]; });
   let saving = $state(false);
@@ -20,7 +21,7 @@
       : members.filter(m => m.display_name.toLowerCase().includes(memberSearch.toLowerCase()))
   );
 
-  const pool = data.pool;
+  const pool = $derived(data.pool);
 
   const prizeSplits = [
     { label: '1er puesto', pct: 0.6 },
@@ -398,13 +399,13 @@
       }} style="font-size: 9px; padding: 8px 16px;">📡 Sincronizar con FIFA</button>
       <span style="font-size: 9px; color: var(--text-dim);">Actualiza resultados automáticamente desde FIFA</span>
     </div>
-    {#if data.matches.length === 0}
+    {#if localMatches.length === 0}
       <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px;">
         No hay partidos de grupo configurados aún.
       </div>
     {:else}
       <div style="display: flex; flex-direction: column; gap: 4px;">
-        {#each data.matches as match}
+        {#each localMatches as match (match.id)}
           {@const isFinished = match.status === 'finished'}
           <div style="display: flex; align-items: center; gap: 6px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 11px;">
             <span style="width: 20px; color: var(--text-dim); font-size: 9px; text-transform: uppercase;">{match.group_name}</span>

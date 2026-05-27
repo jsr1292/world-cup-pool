@@ -5,8 +5,8 @@
   let { data } = $props();
 
   const GROUP_NAMES = ['A','B','C','D','E','F','G','H','I','J','K','L'];
-  const pool = data.pool;
-  const allowMultiple = !!pool.allow_multiple_predictions;
+  const pool = $derived(data.pool);
+  const allowMultiple = $derived(!!data.pool.allow_multiple_predictions);
 
   // Progress tracking
   const groupsCompleted = $derived.by(() => {
@@ -37,18 +37,22 @@
   });
 
   // selections[group] = ordered array of teamIds [pos1, pos2, pos3, pos4]
-  // Initialize synchronously so mutations are immediately reactive
-  let _initSel = {};
-  for (const group of GROUP_NAMES) {
-    const existing = data.existingGroupPreds?.[group] || {};
-    _initSel[group] = [
-      existing.pos1 ?? null,
-      existing.pos2 ?? null,
-      existing.pos3 ?? null,
-      existing.pos4 ?? null,
-    ];
-  }
-  let selections = $state(_initSel);
+  // Re-derive initial state when data changes (entry switch via soft navigation)
+  const selectionsInit = $derived.by(() => {
+    const init = {};
+    for (const group of GROUP_NAMES) {
+      const existing = data.existingGroupPreds?.[group] || {};
+      init[group] = [
+        existing.pos1 ?? null,
+        existing.pos2 ?? null,
+        existing.pos3 ?? null,
+        existing.pos4 ?? null,
+      ];
+    }
+    return init;
+  });
+  let selections = $state({});
+  $effect(() => { selections = JSON.parse(JSON.stringify(selectionsInit)); });
 
   // ─── Mobile: sequential tap-to-rank ───────────────────────────────
 
@@ -215,6 +219,7 @@
   let newEntryLabel = $state('');
   let creating = $state(false);
   let createMsg = $state('');
+  let showCreateEntry = $state(false);
 
   async function createEntry() {
     if (!newEntryLabel.trim()) return;
@@ -236,11 +241,25 @@
   // ─── Knockout Match Scores ─────────────────────────────────────────────
 
   // Initialize match scores from existing predictions
-  let _initMatchScores = {};
-  for (const [matchId, score] of Object.entries(data.existingMatchPreds || {})) {
-    _initMatchScores[Number(matchId)] = { home: score.home_score, away: score.away_score };
-  }
-  let matchScores = $state(_initMatchScores);
+  // Match scores — re-derive when data changes (entry switch)
+  const matchScoresInit = $derived.by(() => {
+    const init = {};
+    for (const [matchId, score] of Object.entries(data.existingMatchPreds || {})) {
+      init[Number(matchId)] = { home: score.home_score, away: score.away_score };
+    }
+    return init;
+  });
+  let matchScores = $state({});
+  $effect(() => { matchScores = JSON.parse(JSON.stringify(matchScoresInit)); });
+
+  // Cleanup timers on component destroy
+  $effect(() => {
+    return () => {
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      if (matchSaveTimer) clearTimeout(matchSaveTimer);
+    };
+  });
+
   let matchSaving = $state(false);
   let matchSaved = $state(false);
   let matchSaveTimer = null;
@@ -386,7 +405,7 @@
         </span>
       {/if}
       {#if allowMultiple}
-        <button onclick={() => { newEntryLabel = ''; createMsg = ''; }}
+        <button onclick={() => { showCreateEntry = true; newEntryLabel = ''; }}
           style="font-size: 9px; padding: 6px 12px; border: 1px solid var(--gold); border-radius: 6px; background: rgba(201,168,76,0.1); color: var(--gold); cursor: pointer;">
           + Nueva entrada
         </button>
@@ -395,7 +414,7 @@
   {/if}
 
   <!-- Create entry inline form -->
-  {#if allowMultiple && newEntryLabel !== undefined}
+  {#if allowMultiple && showCreateEntry}
     <div style="margin-bottom: 20px; padding: 14px; background: var(--bg-card); border: 1px solid var(--gold); border-radius: 8px;">
       <div style="font-size: 11px; color: var(--gold); margin-bottom: 10px; font-weight: 600;">Nueva entrada</div>
       <div style="display: flex; gap: 8px; align-items: flex-end;">
@@ -408,7 +427,7 @@
         <button onclick={createEntry} disabled={creating || !newEntryLabel.trim()} class="btn-primary" style="font-size: 9px; padding: 8px 16px; white-space: nowrap;">
           {creating ? 'Creando...' : 'Crear'}
         </button>
-        <button onclick={() => { newEntryLabel = ''; createMsg = ''; }}
+        <button onclick={() => { showCreateEntry = false; newEntryLabel = ''; createMsg = ''; }}
           style="font-size: 9px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer;">✕</button>
       </div>
       {#if createMsg}<div style="margin-top: 8px; font-size: 10px; color: var(--red);">{createMsg}</div>{/if}
