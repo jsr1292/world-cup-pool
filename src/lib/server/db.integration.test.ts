@@ -506,3 +506,309 @@ describe('Share token', () => {
 		}
 	});
 });
+
+// ─── queries.ts SQL patterns ────────────────────────────────────────
+// These tests replicate the SQL used in queries.ts against the real
+// PostgreSQL schema, validating syntax, constraints, and behaviour
+// without importing the module (which has its own DB connection).
+
+describe('queries.ts SQL patterns', () => {
+	// 1. createUser pattern
+	it('createUser pattern: INSERT user with hashed password returns id', async () => {
+		const { rows } = await client.query(
+			'INSERT INTO users (username, password_hash, display_name, email) VALUES ($1, $2, $3, $4) RETURNING id',
+			['q_user_create', 'saltdeadbeef:hashdeadbeef', 'Query User', null]
+		);
+		expect(rows[0].id).toBeGreaterThan(0);
+
+		// Duplicate username must fail
+		await expect(
+			client.query(
+				'INSERT INTO users (username, password_hash, display_name) VALUES ($1, $2, $3)',
+				['q_user_create', 'x', 'Dup']
+			)
+		).rejects.toThrow(/unique/i);
+	});
+
+	// 2. getUserById pattern
+	it('getUserById pattern: SELECT returns all expected fields', async () => {
+		const id = await insertUser('q_getbyid');
+		const { rows } = await client.query(
+			'SELECT id, username, display_name, email, is_admin, created_at FROM users WHERE id = $1',
+			[id]
+		);
+		expect(rows).toHaveLength(1);
+		expect(rows[0].id).toBe(id);
+		expect(rows[0].username).toBe('q_getbyid');
+		expect(rows[0]).toHaveProperty('email');
+		expect(rows[0]).toHaveProperty('is_admin');
+		expect(rows[0]).toHaveProperty('created_at');
+	});
+
+	// 3. authenticateUser pattern
+	it('authenticateUser pattern: lookup by username then verify password_hash', async () => {
+		const fakeHash = 'abcd1234:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
+		await client.query(
+			'INSERT INTO users (username, password_hash, display_name) VALUES ($1, $2, $3)',
+			['q_auth_user', fakeHash, 'Auth User']
+		);
+
+		// Step 1: lookup — same SQL as getUserForAuth
+		const { rows } = await client.query(
+			'SELECT id, username, password_hash, display_name, is_admin FROM users WHERE username = $1',
+			['q_auth_user']
+		);
+		expect(rows).toHaveLength(1);
+		expect(rows[0].password_hash).toBe(fakeHash);
+		expect(rows[0].username).toBe('q_auth_user');
+		// Step 2 (verify is Node crypto, not SQL — just confirm hash is retrievable)
+		const parts = rows[0].password_hash.split(':');
+		expect(parts).toHaveLength(2);
+		expect(parts[0]).toBeTruthy();
+		expect(parts[1]).toBeTruthy();
+	});
+
+	// 4. createPool full transaction
+	it('createPool pattern: transaction creates pool + member + 10 scoring_config rows', async () => {
+		const userId = await insertUser('q_pool_tx');
+
+		// Use a separate client for inner transaction (outer client is already in BEGIN)
+		const inner = await pool.connect();
+		try {
+			await inner.query('BEGIN');
+
+			const poolRes = await inner.query(
+				`INSERT INTO pools (name, invite_code, share_token, created_by, buy_in, allow_multiple_predictions, currency)
+				 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+				['Q Transaction Pool', 'TXCODE123', 'tx-share-token', userId, 0, false, 'EUR']
+			);
+			const poolId = Number(poolRes.rows[0].id);
+
+			// Creator auto-joins
+			await inner.query(
+				'INSERT INTO pool_members (pool_id, user_id) VALUES ($1, $2)',
+				[poolId, userId]
+			);
+
+			// 10 scoring_config defaults (same as queries.ts)
+			const defaults: [string, number][] = [
+				['match_outcome', 1], ['exact_score', 3], ['group_position', 2],
+				['knockout_r32', 2], ['knockout_r16', 3], ['knockout_qf', 4],
+				['knockout_sf', 6], ['knockout_final', 6], ['third_place', 6],
+				['knockout_winner', 8],
+			];
+			for (const [rule, pts] of defaults) {
+				await inner.query(
+					'INSERT INTO scoring_config (pool_id, rule, points) VALUES ($1, $2, $3)',
+					[poolId, rule, pts]
+				);
+			}
+
+			await inner.query('COMMIT');
+
+			// Verify via the test transaction client (same connection pool, data is committed)
+			const p = await client.query('SELECT * FROM pools WHERE id = $1', [poolId]);
+			expect(p.rows).toHaveLength(1);
+			expect(p.rows[0].name).toBe('Q Transaction Pool');
+
+			const m = await client.query('SELECT * FROM pool_members WHERE pool_id = $1', [poolId]);
+			expect(m.rows).toHaveLength(1);
+			expect(m.rows[0].user_id).toBe(userId);
+
+			const sc = await client.query('SELECT * FROM scoring_config WHERE pool_id = $1 ORDER BY rule', [poolId]);
+			expect(sc.rows).toHaveLength(10);
+
+			// Clean up committed data (outer test is in ROLLBACK so manual delete)
+			await client.query('DELETE FROM pools WHERE id = $1', [poolId]);
+		} finally {
+			inner.release();
+		}
+	});
+
+	// 5. joinPool pattern — duplicate throws 23505
+	it('joinPool pattern: INSERT pool_members succeeds, duplicate throws 23505', async () => {
+		const creatorId = await insertUser('q_join_creator');
+		const joinerId = await insertUser('q_joiner');
+		const poolId = await insertPool('Q Join Pool', creatorId);
+
+		// First join succeeds
+		await client.query(
+			'INSERT INTO pool_members (pool_id, user_id) VALUES ($1, $2)',
+			[poolId, joinerId]
+		);
+
+		// Second join with same (pool_id, user_id) fails with code 23505
+		let err: any;
+		try {
+			await client.query(
+				'INSERT INTO pool_members (pool_id, user_id) VALUES ($1, $2)',
+				[poolId, joinerId]
+			);
+		} catch (e: any) {
+			err = e;
+		}
+		expect(err).toBeDefined();
+		expect(err.code).toBe('23505');
+	});
+
+	// 6. createPrediction ON CONFLICT upsert
+	it('createPrediction pattern: ON CONFLICT upsert returns same row', async () => {
+		const userId = await insertUser('q_pred_upsert');
+		const poolId = await insertPool('Q Upsert Pool', userId);
+
+		// First insert
+		const r1 = await client.query(
+			`INSERT INTO predictions (user_id, pool_id, label, total_score, has_paid)
+			 VALUES ($1, $2, $3, 0, FALSE)
+			 ON CONFLICT (user_id, pool_id, label) DO UPDATE SET label = EXCLUDED.label
+			 RETURNING id`,
+			[userId, poolId, 'Entry1']
+		);
+		expect(r1.rows[0].id).toBeGreaterThan(0);
+		const firstId = r1.rows[0].id;
+
+		// Upsert with same (user_id, pool_id, label) — should return same id
+		const r2 = await client.query(
+			`INSERT INTO predictions (user_id, pool_id, label, total_score, has_paid)
+			 VALUES ($1, $2, $3, 0, FALSE)
+			 ON CONFLICT (user_id, pool_id, label) DO UPDATE SET label = EXCLUDED.label
+			 RETURNING id`,
+			[userId, poolId, 'Entry1']
+		);
+		expect(r2.rows[0].id).toBe(firstId);
+
+		// Verify only one row exists
+		const all = await client.query(
+			'SELECT * FROM predictions WHERE pool_id = $1 AND user_id = $2',
+			[poolId, userId]
+		);
+		expect(all.rows).toHaveLength(1);
+	});
+
+	// 7. getScoringConfig pattern
+	it('getScoringConfig pattern: SELECT rows as Record<string, number>', async () => {
+		const userId = await insertUser('q_scfg_user');
+		const poolId = await insertPool('Q Scfg Pool', userId);
+
+		await client.query(
+			'INSERT INTO scoring_config (pool_id, rule, points) VALUES ($1, $2, $3)',
+			[poolId, 'match_outcome', 5]
+		);
+		await client.query(
+			'INSERT INTO scoring_config (pool_id, rule, points) VALUES ($1, $2, $3)',
+			[poolId, 'exact_score', 10]
+		);
+
+		// Same logic as getScoringConfig: SELECT rule, points -> Record
+		const { rows } = await client.query(
+			'SELECT rule, points FROM scoring_config WHERE pool_id = $1',
+			[poolId]
+		);
+		const config: Record<string, number> = {};
+		for (const row of rows as any[]) config[row.rule] = row.points;
+
+		expect(config['match_outcome']).toBe(5);
+		expect(config['exact_score']).toBe(10);
+		expect(Object.keys(config)).toHaveLength(2);
+	});
+
+	// 8. Session CRUD pattern
+	it('session CRUD pattern: INSERT, SELECT by token, DELETE', async () => {
+		const userId = await insertUser('q_sess_crud');
+		const token = 'crud-token-' + Date.now();
+		const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+		// Create
+		await client.query(
+			'INSERT INTO sessions (user_id, token, expires_at) VALUES ($1, $2, $3)',
+			[userId, token, expires]
+		);
+
+		// Read
+		const { rows } = await client.query(
+			'SELECT * FROM sessions WHERE token = $1',
+			[token]
+		);
+		expect(rows).toHaveLength(1);
+		expect(rows[0].user_id).toBe(userId);
+
+		// Delete
+		await client.query('DELETE FROM sessions WHERE token = $1', [token]);
+		const after = await client.query('SELECT * FROM sessions WHERE token = $1', [token]);
+		expect(after.rows).toHaveLength(0);
+	});
+
+	// 9. IS NOT DISTINCT FROM
+	it('IS NOT DISTINCT FROM works for NULL label comparisons', async () => {
+		const userId = await insertUser('q_indf_user');
+		const poolId = await insertPool('Q INDF Pool', userId);
+
+		// Insert two predictions with NULL label (override default '')
+		await client.query(
+			`INSERT INTO predictions (pool_id, user_id, label, total_score) VALUES ($1, $2, NULL, 0)`,
+			[poolId, userId]
+		);
+
+		// IS NOT DISTINCT FROM should match NULL = NULL
+		const { rows } = await client.query(
+			`SELECT * FROM predictions WHERE pool_id = $1 AND user_id = $2 AND label IS NOT DISTINCT FROM NULL`,
+			[poolId, userId]
+		);
+		expect(rows).toHaveLength(1);
+	});
+
+	// 10. unnest() for array parameters
+	it('unnest() works for batch array operations', async () => {
+		const t1 = await insertTeam('Unnest1', 'X');
+		const t2 = await insertTeam('Unnest2', 'X');
+		const t3 = await insertTeam('Unnest3', 'X');
+
+		// Use unnest to fetch teams by an array of IDs
+		const { rows } = await client.query(
+			'SELECT id, name FROM teams WHERE id = ANY($1::int[]) ORDER BY id',
+			[[t1, t2, t3]]
+		);
+		expect(rows).toHaveLength(3);
+		expect(rows.map((r: any) => r.name)).toEqual(['Unnest1', 'Unnest2', 'Unnest3']);
+
+		// Also test raw unnest as a set-returning function
+		const { rows: unnestRows } = await client.query(
+			'SELECT unnest($1::int[]) AS id',
+			[[t1, t2, t3]]
+		);
+		expect(unnestRows).toHaveLength(3);
+	});
+
+	// 11. getUserPools pattern
+	it('getUserPools pattern: JOIN returns pools with member_count', async () => {
+		const u1 = await insertUser('q_pools_u1');
+		const u2 = await insertUser('q_pools_u2');
+		const poolId1 = await insertPool('Q UserPool1', u1);
+		const poolId2 = await insertPool('Q UserPool2', u1);
+
+		// u1 is creator/auto-join for both pools
+		// u2 joins pool1
+		await client.query(
+			'INSERT INTO pool_members (pool_id, user_id) VALUES ($1, $2)',
+			[poolId1, u2]
+		);
+
+		// getUserPools SQL pattern
+		const { rows } = await client.query(
+			`SELECT p.id, p.name, pm.has_paid, pm.joined_at,
+				(SELECT COUNT(*) FROM pool_members WHERE pool_id = p.id) as member_count
+			 FROM pools p
+			 JOIN pool_members pm ON pm.pool_id = p.id
+			 WHERE pm.user_id = $1
+			 ORDER BY p.created_at DESC`,
+			[u1]
+		);
+
+		expect(rows).toHaveLength(2);
+		// pool1 has 2 members (u1 + u2), pool2 has 1 member (u1)
+		const p1 = rows.find((r: any) => r.name === 'Q UserPool1');
+		const p2 = rows.find((r: any) => r.name === 'Q UserPool2');
+		expect(Number(p1.member_count)).toBe(2);
+		expect(Number(p2.member_count)).toBe(1);
+	});
+});
