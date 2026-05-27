@@ -6,6 +6,10 @@ vi.mock('$lib/server/db.js', () => ({
 	query: vi.fn()
 }));
 
+// Grab reference to the mocked query for write-path tests
+import { query as _mockQuery } from '$lib/server/db.js';
+const dbQuery = _mockQuery as unknown as ReturnType<typeof vi.fn>;
+
 // Helper: build a minimal API-Football fixture response
 function apiFixture(round: string, opts?: { home?: number; away?: number }) {
 	return {
@@ -287,5 +291,211 @@ describe('syncScores', () => {
 
 		const result = await syncScores();
 		expect(result).toEqual({ updated: 0, skipped: 0, errors: 0 });
+	});
+});
+
+describe('syncScores write path', () => {
+	const originalKey = process.env.API_FOOTBALL_KEY;
+
+	beforeEach(() => {
+		process.env.API_FOOTBALL_KEY = 'test-key';
+		vi.restoreAllMocks();
+		dbQuery.mockReset();
+	});
+
+	afterEach(() => {
+		if (originalKey) {
+			process.env.API_FOOTBALL_KEY = originalKey;
+		} else {
+			delete process.env.API_FOOTBALL_KEY;
+		}
+	});
+
+	it('updates match found by fifa_id', async () => {
+		// API-Football returns one finished match
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ response: [apiFixture('Group Stage - Matchday 1', { home: 3, away: 2 })] })
+		}));
+
+		// query is called twice: SELECT by fifa_id (returns match), then UPDATE
+		dbQuery
+			.mockResolvedValueOnce({ rows: [{ id: 10, fifa_id: '1001' }] }) // SELECT by fifa_id
+			.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
+
+		const result = await syncScores();
+		expect(result).toEqual({ updated: 1, skipped: 0, errors: 0 });
+
+		// Verify the SELECT used fifa_id
+		expect(dbQuery).toHaveBeenNthCalledWith(1, expect.stringContaining('fifa_id'), ['1001']);
+		// Verify the UPDATE set scores
+		expect(dbQuery).toHaveBeenNthCalledWith(2, expect.stringContaining('UPDATE matches'), [3, 2, 10, expect.any(Date)]);
+	});
+
+	it('skips match when already finished (UPDATE returns rowCount 0)', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ response: [apiFixture('Group Stage')] })
+		}));
+
+		dbQuery
+			.mockResolvedValueOnce({ rows: [{ id: 10, fifa_id: '1001' }] }) // SELECT
+			.mockResolvedValueOnce({ rowCount: 0 }); // UPDATE — already finished
+
+		const result = await syncScores();
+		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0 });
+	});
+
+	it('falls back to team name fuzzy match when no fifa_id match', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ response: [apiFixture('Group Stage', { home: 1, away: 0 })] })
+		}));
+
+		dbQuery
+			.mockResolvedValueOnce({ rows: [] }) // SELECT by fifa_id — no match
+			.mockResolvedValueOnce({ rows: [{ id: 20 }] }) // SELECT by team names — found
+			.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
+
+		const result = await syncScores();
+		expect(result).toEqual({ updated: 1, skipped: 0, errors: 0 });
+
+		// Second query should be the fuzzy LIKE query
+		expect(dbQuery).toHaveBeenNthCalledWith(2, expect.stringContaining('LIKE'), expect.arrayContaining(['%Team A%', '%Team B%']));
+	});
+
+	it('skips live matches (status !== finished)', async () => {
+		// Return a match that is NOT finished (use FIFA API format with non-Completed status)
+		delete process.env.API_FOOTBALL_KEY; // skip API-Football, go to FIFA
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ results: [fifaMatch('285063', { home: 1, away: 1, status: 'Live' })] })
+		}));
+
+		const result = await syncScores();
+		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0 });
+		// No DB queries should have been made
+		expect(dbQuery).not.toHaveBeenCalled();
+	});
+
+	it('skips when no match found at all', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ response: [apiFixture('Group Stage')] })
+		}));
+
+		dbQuery
+			.mockResolvedValueOnce({ rows: [] }) // SELECT by fifa_id — no match
+			.mockResolvedValueOnce({ rows: [] }); // SELECT by team names — no match
+
+		const result = await syncScores();
+		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0 });
+	});
+
+	it('increments error count when UPDATE throws', async () => {
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ response: [apiFixture('Final', { home: 2, away: 1 })] })
+		}));
+
+		dbQuery
+			.mockResolvedValueOnce({ rows: [{ id: 5, fifa_id: '1001' }] }) // SELECT
+			.mockRejectedValueOnce(new Error('DB write failed')); // UPDATE throws
+
+		const result = await syncScores();
+		expect(result).toEqual({ updated: 0, skipped: 0, errors: 1 });
+		expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('5'), expect.any(Error));
+	});
+
+	it('processes multiple matches and returns correct totals', async () => {
+		const fixture1 = apiFixture('Group Stage - Matchday 1', { home: 2, away: 0 });
+		const fixture2 = apiFixture('Group Stage - Matchday 2', { home: 1, away: 1 });
+		// Give different fixture IDs so they have different fifa_ids
+		fixture2.fixture.id = 1002;
+
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ response: [fixture1, fixture2] })
+		}));
+
+		// Match 1: found by fifa_id, updated
+		dbQuery
+			.mockResolvedValueOnce({ rows: [{ id: 10 }] }) // SELECT match1 by fifa_id
+			.mockResolvedValueOnce({ rowCount: 1 }) // UPDATE match1
+			// Match 2: not found by fifa_id, not found by name either
+			.mockResolvedValueOnce({ rows: [] }) // SELECT match2 by fifa_id
+			.mockResolvedValueOnce({ rows: [] }); // SELECT match2 by name
+
+		const result = await syncScores();
+		expect(result).toEqual({ updated: 1, skipped: 1, errors: 0 });
+	});
+
+	it('sets kickoff_time via COALESCE when available', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ response: [apiFixture('Semi-finals', { home: 1, away: 0 })] })
+		}));
+
+		dbQuery
+			.mockResolvedValueOnce({ rows: [{ id: 42 }] }) // SELECT
+			.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
+
+		await syncScores();
+
+		// Verify UPDATE was called with a Date object for kickoff_time
+		const updateCall = dbQuery.mock.calls[1];
+		expect(updateCall[1][3]).toBeInstanceOf(Date);
+		expect(updateCall[0]).toContain('COALESCE(kickoff_time');
+	});
+
+	it('handles null kickoff_time correctly', async () => {
+		// Build a fixture with no date → kickoff_time should be null
+		const fixture = apiFixture('Final', { home: 0, away: 0 });
+		fixture.fixture.date = null;
+
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ response: [fixture] })
+		}));
+
+		dbQuery
+			.mockResolvedValueOnce({ rows: [{ id: 99 }] }) // SELECT
+			.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
+
+		await syncScores();
+
+		const updateCall = dbQuery.mock.calls[1];
+		// kickoff_time parameter should be null
+		expect(updateCall[1][3]).toBeNull();
+	});
+
+	it('escapes LIKE wildcards in team names', async () => {
+		// Create fixture with team names containing LIKE wildcards
+		const fixture = {
+			fixture: { id: 3001, round: 'Group Stage', date: '2026-06-14T20:00:00Z' },
+			teams: { home: { name: '100% Winners_FC' }, away: { name: 'Team_B' } },
+			goals: { home: 2, away: 1 }
+		};
+
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ response: [fixture] })
+		}));
+
+		dbQuery
+			.mockResolvedValueOnce({ rows: [] }) // SELECT by fifa_id — no match
+			.mockResolvedValueOnce({ rows: [{ id: 50 }] }) // SELECT by team names — found
+			.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
+
+		const result = await syncScores();
+		expect(result).toEqual({ updated: 1, skipped: 0, errors: 0 });
+
+		// Verify the LIKE parameters have escaped wildcards
+		const likeCall = dbQuery.mock.calls[1];
+		const params = likeCall[1] as string[];
+		// % should be escaped to \%, _ should be escaped to \_
+		expect(params[0]).toContain('\\%');
+		expect(params[1]).toContain('\\_');
 	});
 });
