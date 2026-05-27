@@ -167,9 +167,15 @@ export async function getPoolMembers(poolId: number) {
 
 // Predictions
 export async function createPrediction(poolId: number, userId: number, label = '') {
+  // Inherit has_paid from pool_members if already paid
+  const { rows: memberRows } = await query(
+    'SELECT has_paid FROM pool_members WHERE pool_id = $1 AND user_id = $2',
+    [poolId, userId]
+  );
+  const hasPaid = memberRows[0]?.has_paid ?? false;
   const { rows } = await query(
-    `INSERT INTO predictions (user_id, pool_id, label, total_score) VALUES ($1, $2, $3, 0) ON CONFLICT (user_id, pool_id, label) DO UPDATE SET label = EXCLUDED.label RETURNING id`,
-    [userId, poolId, label]
+    `INSERT INTO predictions (user_id, pool_id, label, total_score, has_paid) VALUES ($1, $2, $3, 0, $4) ON CONFLICT (user_id, pool_id, label) DO UPDATE SET label = EXCLUDED.label RETURNING id`,
+    [userId, poolId, label, hasPaid]
   );
   return { rows };
 }

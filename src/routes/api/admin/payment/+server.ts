@@ -13,6 +13,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   };
 
   if (!pool_id) return json({ error: 'Falta pool_id' }, { status: 400 });
+  if (!user_id && !entry_id) return json({ error: 'Falta user_id o entry_id' }, { status: 400 });
 
   const { rows: poolRows } = await query('SELECT created_by FROM pools WHERE id = $1', [pool_id]);
   const pool = poolRows[0] ?? null;

@@ -2,6 +2,7 @@ import { query } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
+import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
 
 // POST /api/admin/fifa-sync
 // Triggers a manual FIFA API sync from the admin page
@@ -23,7 +24,10 @@ export const POST: RequestHandler = async ({ locals }) => {
     const { rows: pools } = await query('SELECT id FROM pools WHERE is_active = true');
     for (const p of pools) {
       await calculateAllScores(p.id);
+      invalidateCachedPoolLeaderboard(p.id);
+      invalidateCachedPoolResults(p.id);
     }
+    invalidateGlobalLeaderboard();
 
     return json({
       ok: true,

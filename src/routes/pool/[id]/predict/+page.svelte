@@ -6,13 +6,13 @@
 
   const GROUP_NAMES = ['A','B','C','D','E','F','G','H','I','J','K','L'];
   const pool = data.pool;
-  const allowMultiple = pool.allow_multiple_predictions === 1;
+  const allowMultiple = !!pool.allow_multiple_predictions;
 
   // Progress tracking
   const groupsCompleted = $derived.by(() => {
     return GROUP_NAMES.filter(g => {
-      const gp = data.existingGroupPreds?.[g];
-      return gp?.pos1 && gp?.pos2 && gp?.pos3 && gp?.pos4;
+      const arr = selections[g] || [];
+      return arr[0] != null && arr[1] != null && arr[2] != null && arr[3] != null;
     }).length;
   });
   const progressPct = $derived(Math.round((groupsCompleted / 12) * 100));
@@ -149,8 +149,9 @@
         draggingGroup = null; draggingSlot = null; dragOverGroup = null; dragOverSlot = null;
         return;
       }
+      const adjustedTarget = slotIndex > srcSlot ? slotIndex - 1 : slotIndex;
       arr.splice(srcSlot, 1);
-      arr.splice(slotIndex, 0, movingTeamId);
+      arr.splice(adjustedTarget, 0, movingTeamId);
       selections[group] = arr;
       autoSave();
     }
@@ -418,8 +419,8 @@
   <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
     {#each GROUP_NAMES as group}
       {@const groupTeams = data.teamsByGroup[group] || []}
-      {@const gp = data.existingGroupPreds?.[group]}
-      {@const groupDone = !!(gp?.pos1 && gp?.pos2 && gp?.pos3 && gp?.pos4)}
+      {@const _selArr = selections[group] || []}
+      {@const groupDone = _selArr[0] != null && _selArr[1] != null && _selArr[2] != null && _selArr[3] != null}
 
       <!-- ── Desktop: native drag-to-reorder ──────────────────────── -->
       <div class="desktop-view group-card" style="background: var(--bg-card); border: 1px solid {groupDone ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 8px; padding: 14px; {groupDone ? 'box-shadow: 0 0 12px rgba(201,168,76,0.08);' : ''}">
@@ -571,7 +572,7 @@
         <h2 style="font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--gold); margin-bottom: 4px;">⚽ Resultados de Eliminatorias</h2>
         <p style="font-size: 10px; color: var(--text-muted);">Predice el marcador exacto de cada partido eliminado.</p>
         <p style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
-          Acierta el resultado (1/X/2): <strong style="color: var(--gold);">+2 pts</strong> · Marcador exacto: <strong style="color: var(--gold);">+5 pts</strong>
+          Acierta el resultado (1/X/2): <strong style="color: var(--gold);">+1 pts</strong> · Marcador exacto: <strong style="color: var(--gold);">+3 pts</strong>
         </p>
       </div>
 

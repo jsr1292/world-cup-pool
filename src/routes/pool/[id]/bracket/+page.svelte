@@ -510,7 +510,7 @@
     </div>
 
     <!-- Entry selector -->
-    {#if data.entries.length > 1 || (data.pool.allow_multiple_predictions === 1)}
+    {#if data.entries.length > 1 || (data.pool.allow_multiple_predictions)}
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
         {#if data.entries.length > 1}
           <select
@@ -525,7 +525,7 @@
         {:else if data.entries.length === 1}
           <span style="font-size: 11px; color: var(--gold); padding: 4px 8px; background: rgba(201,168,76,0.1); border-radius: 4px;">{data.entries[0].label}</span>
         {/if}
-        {#if data.pool.allow_multiple_predictions === 1}
+        {#if data.pool.allow_multiple_predictions}
           <button onclick={() => { newEntryLabel = ''; createMsg = ''; }}
             style="font-size: 9px; padding: 6px 10px; border: 1px solid var(--gold); border-radius: 6px; background: rgba(201,168,76,0.1); color: var(--gold); cursor: pointer;">
             + Nueva entrada
@@ -551,7 +551,7 @@
   </div>
 
   <!-- Create entry form -->
-  {#if data.pool.allow_multiple_predictions === 1 && newEntryLabel !== ''}
+  {#if data.pool.allow_multiple_predictions && newEntryLabel !== ''}
     <div style="margin-bottom: 16px; padding: 14px; background: var(--bg-card); border: 1px solid var(--gold); border-radius: 8px; display: flex; gap: 8px; align-items: flex-end;">
       <div style="flex: 1;">
         <input bind:value={newEntryLabel} placeholder="Nombre de la entrada..."

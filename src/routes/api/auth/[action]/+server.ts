@@ -58,7 +58,7 @@ export const POST: RequestHandler = async ({ request, cookies, params, getClient
       cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
       return json({ ok: true });
     } catch (e: any) {
-      if (e.message?.includes('UNIQUE constraint')) {
+      if (e.code === '23505' || e.message?.includes('unique constraint') || e.message?.includes('UNIQUE constraint')) {
         return json({ error: 'Nombre de usuario ya en uso' }, { status: 409 });
       }
       return json({ error: 'Error al registrar' }, { status: 500 });

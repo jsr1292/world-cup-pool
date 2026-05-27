@@ -25,7 +25,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     LEFT JOIN teams t1 ON t1.id = m.home_team_id
     LEFT JOIN teams t2 ON t2.id = m.away_team_id
     WHERE m.phase = 'group'
-    ORDER BY m.group_name, m.sort_order, m.kickoff
+    ORDER BY m.group_name, m.sort_order, m.kickoff_time
   `);
 
   // Stats

@@ -1,11 +1,12 @@
 import { getPoolById, getUserPredictions } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
+import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   const poolId = Number(params.id);
   const pool = await getPoolById(poolId);
-  if (!pool) throw new Error('Quiniela no encontrada');
+  if (!pool) throw error(404, 'Quiniela no encontrada');
 
   // Get all matches with team names
   const { rows: matches } = await query(`
@@ -15,7 +16,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     FROM matches m
     LEFT JOIN teams ht ON ht.id = m.home_team_id
     LEFT JOIN teams at ON at.id = m.away_team_id
-    ORDER BY m.sort_order, m.kickoff
+    ORDER BY m.sort_order, m.kickoff_time
   `);
 
   // Group matches by phase

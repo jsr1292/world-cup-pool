@@ -72,7 +72,7 @@
   let deadlineMsg = $state('');
 
   // Multiple predictions setting
-  let allowMultiple = $state(pool.allow_multiple_predictions === 1);
+  let allowMultiple = $state(!!pool.allow_multiple_predictions);
   let savingSettings = $state(false);
   let settingsMsg = $state('');
 

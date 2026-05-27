@@ -1,11 +1,12 @@
 import { getPoolById, getUserPredictions } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
+import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   const poolId = Number(params.id);
   const pool = await getPoolById(poolId);
-  if (!pool) throw new Error('Quiniela no encontrada');
+  if (!pool) throw error(404, 'Quiniela no encontrada');
 
   if (!locals.user) return { pool, entries: [], groupPreds: {}, bracketPreds: {}, teams: {} };
 

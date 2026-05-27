@@ -1,4 +1,4 @@
-import { getPoolById, getUserPredictions, getGroupPredictions, getAllTeams } from '$lib/server/queries.js';
+import { getPoolById, getUserPredictions, getGroupPredictions, getAllTeams, createPrediction } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
@@ -11,7 +11,19 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   if (!pool) throw error(404, 'Quiniela no encontrada');
 
   // Get ALL user predictions for this pool
-  const predictions = await getUserPredictions(poolId, locals.user.id) as any[];
+  let predictions = await getUserPredictions(poolId, locals.user.id) as any[];
+
+  // Auto-create first prediction entry if user is a member with none yet
+  if (predictions.length === 0) {
+    const { rows: membership } = await query(
+      `SELECT 1 FROM pool_members WHERE pool_id = $1 AND user_id = $2`,
+      [poolId, locals.user.id]
+    );
+    if (membership.length > 0) {
+      await createPrediction(poolId, locals.user.id, '');
+      predictions = await getUserPredictions(poolId, locals.user.id) as any[];
+    }
+  }
 
   // Get selected entry from query param
   const selectedLabel = url.searchParams.get('entry') || '';

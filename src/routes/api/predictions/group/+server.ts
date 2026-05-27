@@ -114,7 +114,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       `SELECT COUNT(*) as cnt FROM teams WHERE group_name = $1 AND id = ANY($2::int[])`,
       [groupName, filled]
     );
-    if (validRows[0].cnt !== filled.length) {
+    if (Number(validRows[0].cnt) !== filled.length) {
       return json({ error: `Equipo inválido en grupo ${groupName}` }, { status: 400 });
     }
   }

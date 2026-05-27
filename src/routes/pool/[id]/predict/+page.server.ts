@@ -22,6 +22,18 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   // Get ALL user predictions for this pool
   let predictions = await getUserPredictions(poolId, locals.user.id) as any[];
 
+  // Auto-create first prediction entry if user is a member with none yet
+  if (predictions.length === 0) {
+    const { rows: membership } = await query(
+      `SELECT 1 FROM pool_members WHERE pool_id = $1 AND user_id = $2`,
+      [poolId, locals.user.id]
+    );
+    if (membership.length > 0) {
+      await createPrediction(poolId, locals.user.id, '');
+      predictions = await getUserPredictions(poolId, locals.user.id) as any[];
+    }
+  }
+
   // Check deadline (group deadline for group predictions)
   const deadline = pool.deadline_group ? new Date(pool.deadline_group as string) : null;
   const isLocked = deadline ? new Date() >= deadline : false;

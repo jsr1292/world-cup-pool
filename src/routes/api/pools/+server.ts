@@ -30,8 +30,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const { name, buy_in = 0, allow_multiple = false } = body;
 
   if (!name?.trim() || name.trim().length < 2) return json({ error: 'Nombre requerido (mínimo 2 caracteres)' }, { status: 400 });
-  if (typeof buy_in === 'number' && buy_in < 0) return json({ error: 'buy_in debe ser positivo' }, { status: 400 });
+  if (name.trim().length > 100) return json({ error: 'Nombre demasiado largo (máximo 100 caracteres)' }, { status: 400 });
+  const buyin = Number(buy_in);
+  if (!isFinite(buyin) || buyin < 0) return json({ error: 'buy_in debe ser un número positivo' }, { status: 400 });
 
-  const result = await createPool(name.trim(), locals.user.id, buy_in, allow_multiple);
+  const result = await createPool(name.trim(), locals.user.id, buyin, allow_multiple);
   return json({ id: Number(result.id), invite_code: result.inviteCode });
 };
