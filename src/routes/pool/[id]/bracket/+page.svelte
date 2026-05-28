@@ -204,13 +204,25 @@
   const teams = $derived.by(() => {
     void version;
     const t = {};
-    for (const [k, v] of Object.entries(_teams)) t[k] = Array.isArray(v) ? [...v] : v;
+    for (const [k, v] of Object.entries(_teams)) {
+      if (Array.isArray(v)) {
+        t[k] = v.map(m => Array.isArray(m) ? [m[0], m[1]] : m);
+      } else {
+        t[k] = v;
+      }
+    }
     return t;
   });
   const explicitPicks = $derived.by(() => {
     void version;
     const p = {};
-    for (const [k, v] of Object.entries(_picks)) p[k] = Array.isArray(v) ? v.map(row => [...row]) : v;
+    for (const [k, v] of Object.entries(_picks)) {
+      if (Array.isArray(v)) {
+        p[k] = v.map(row => Array.isArray(row) ? [row[0], row[1]] : row);
+      } else {
+        p[k] = v;
+      }
+    }
     return p;
   });
 
