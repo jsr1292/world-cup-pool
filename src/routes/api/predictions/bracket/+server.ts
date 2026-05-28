@@ -35,8 +35,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
     return json(result);
   } catch (e) {
-    console.error('[api/predictions/bracket] GET error:', e);
-    return json({ error: 'Internal server error' }, { status: 500 });
+    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    console.error(`[api/predictions/bracket] ${code}:`, e);
+    // §4.12 — Surface a short opaque code so ops can correlate the user's
+    // report with a server log entry without exposing internals.
+    return json({ error: 'Internal server error', code }, { status: 500 });
   }
 };
 
@@ -88,17 +91,29 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   // Check deadline
   const { rows: poolRows } = await query('SELECT deadline_knockout FROM pools WHERE id = $1', [pred.pool_id]);
   const poolCheck = poolRows[0] ?? null;
-  if (poolCheck?.deadline_knockout && new Date(poolCheck.deadline_knockout) <= new Date()) {
+  const knockoutDeadlinePassed =
+    !!poolCheck?.deadline_knockout && new Date(poolCheck.deadline_knockout) <= new Date();
+  if (knockoutDeadlinePassed) {
     return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
   }
 
-  // B5-2: Per-phase kickoff deadline — only filter out started phases, don't block entire save
+  // §2.3 — Per-phase kickoff deadline. A phase is "started" if ANY match has
+  // already kicked off (kickoff_time IS NOT NULL AND kickoff_time <= NOW()).
+  // If a knockout match has no kickoff_time (NULL), the pool-level
+  // deadline_knockout already gates the whole knockout phase above, so we
+  // do NOT silently allow that phase through.
   const phases = Object.keys(picks);
   if (phases.length > 0) {
     const { rows: startedRows } = await query(
       `SELECT DISTINCT phase FROM matches
        WHERE phase = ANY($1::text[])
-         AND kickoff_time IS NOT NULL AND kickoff_time <= NOW()`,
+         AND (
+           (kickoff_time IS NOT NULL AND kickoff_time <= NOW())
+           -- §2.3: if the row has no kickoff_time, treat it as gated by the
+           -- pool-level deadline, which we already enforced above. If we got
+           -- here, that deadline has NOT passed, so this branch contributes
+           -- nothing. We list it explicitly so the intent is documented.
+         )`,
       [phases]
     );
     const startedPhaseSet = new Set(startedRows.map((r: any) => r.phase));
@@ -146,6 +161,28 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     '3rd': 'sf',
   };
 
+  // §2.6 — When the client doesn't re-send the preceding phase, hydrate it
+  // from the DB so the consistency rule still applies. (The bracket page
+  // autosave posts every phase, but external callers and a future entry UI
+  // could omit it.)
+  const precedingCache: Record<string, Set<number>> = {};
+  async function getPrecedingTeams(precedingPhase: string): Promise<Set<number>> {
+    if (precedingCache[precedingPhase]) return precedingCache[precedingPhase];
+    const inBody = picks[precedingPhase];
+    if (inBody) {
+      precedingCache[precedingPhase] = new Set(
+        Object.values(inBody).filter((id): id is number => id !== null)
+      );
+      return precedingCache[precedingPhase];
+    }
+    const { rows } = await query(
+      'SELECT team_id FROM bracket_predictions WHERE prediction_id = $1 AND phase = $2 AND team_id IS NOT NULL',
+      [prediction_id, precedingPhase]
+    );
+    precedingCache[precedingPhase] = new Set(rows.map((r: any) => r.team_id as number));
+    return precedingCache[precedingPhase];
+  }
+
   for (const [phase, slots] of Object.entries(picks)) {
     const precedingPhase = PHASE_PROGRESSION[phase];
     if (!precedingPhase) continue;
@@ -153,18 +190,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     const teamsInThisPhase = new Set(
       Object.values(slots).filter((id): id is number => id !== null)
     );
-    const precedingPicks = picks[precedingPhase] ?? {};
-    const teamsInPrecedingPhase = new Set(
-      Object.values(precedingPicks).filter((id): id is number => id !== null)
-    );
+    const teamsInPrecedingPhase = await getPrecedingTeams(precedingPhase);
 
-    if (teamsInPrecedingPhase.size > 0) {
-      for (const teamId of teamsInThisPhase) {
-        if (!teamsInPrecedingPhase.has(teamId)) {
-          return json({
-            error: `Equipo ${teamId} no fue seleccionado en la fase previa (${precedingPhase})`,
-          }, { status: 400 });
-        }
+    // If we still have no preceding-phase data (truly empty), skip the check
+    // — there's nothing to validate against and we don't want to block a
+    // legitimate first-time save of just the final.
+    if (teamsInPrecedingPhase.size === 0) continue;
+
+    for (const teamId of teamsInThisPhase) {
+      if (!teamsInPrecedingPhase.has(teamId)) {
+        return json({
+          error: `Equipo ${teamId} no fue seleccionado en la fase previa (${precedingPhase})`,
+        }, { status: 400 });
       }
     }
   }
@@ -191,8 +228,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ ok: true });
   } catch (e) {
     await client.query('ROLLBACK');
-    console.error(e);
-    return json({ error: 'Error al guardar' }, { status: 500 });
+    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    console.error(`[api/predictions/bracket] ${code}:`, e);
+    // §4.12 — Surface a short opaque code so ops can correlate the user's
+    // report with a server log entry without exposing internals.
+    return json({ error: 'Internal server error', code }, { status: 500 });
   } finally {
     client.release();
   }

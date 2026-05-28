@@ -27,7 +27,7 @@ const mockUrl = (searchParams?: Record<string, string>) => {
 	return url;
 };
 
-const defaultPool = { id: 1, deadline_group: null };
+const defaultPool = { id: 1, deadline_group: null, created_by: 1 };
 const defaultPrediction = { id: 10, label: 'Principal', total_score: 5 };
 
 /**
@@ -36,10 +36,10 @@ const defaultPrediction = { id: 10, label: 'Principal', total_score: 5 };
  *
  * Call order in load():
  *   1. getPoolById → pool
- *   2. getAllTeams → teams[]
- *   3. getUserPredictions → predictions[]
- *   4. (if no preds) query → membership check
- *   5. query → knockout matches
+ *   2. query → membership gate (IDOR check)
+ *   3. getAllTeams → teams[]
+ *   4. getUserPredictions → predictions[]
+ *   5. (if selectedPrediction) query → knockout matches
  *   6. (if selectedPrediction) getGroupPredictions → group pred rows
  *   7. (if selectedPrediction) query → match predictions
  */
@@ -50,6 +50,7 @@ function setupDefaultMocks(overrides: {
 	knockoutRows?: any[];
 	groupPredRows?: any[];
 	matchPredRows?: any[];
+	memberRows?: any[];
 } = {}) {
 	const pool = overrides.pool ?? defaultPool;
 	const teams = overrides.teams ?? [];
@@ -57,13 +58,18 @@ function setupDefaultMocks(overrides: {
 	const knockoutRows = overrides.knockoutRows ?? [];
 	const groupPredRows = overrides.groupPredRows ?? [];
 	const matchPredRows = overrides.matchPredRows ?? [];
+	const memberRows = overrides.memberRows ?? [{ 1: 1 }]; // is a member by default
 
 	(getPoolById as any).mockResolvedValue(pool);
+	// Membership gate query (IDOR check)
+	(query as any).mockResolvedValueOnce({ rows: memberRows });
 	(getAllTeams as any).mockResolvedValue(teams);
 	(getUserPredictions as any).mockResolvedValue(predictions);
-	(query as any).mockResolvedValueOnce({ rows: knockoutRows }); // knockout matches query
-	(getGroupPredictions as any).mockResolvedValue(groupPredRows);
-	(query as any).mockResolvedValueOnce({ rows: matchPredRows }); // match predictions query
+	if (predictions.length > 0) {
+		(query as any).mockResolvedValueOnce({ rows: knockoutRows }); // knockout matches query
+		(getGroupPredictions as any).mockResolvedValue(groupPredRows);
+		(query as any).mockResolvedValueOnce({ rows: matchPredRows }); // match predictions query
+	}
 }
 
 describe('predict page load', () => {
@@ -158,19 +164,21 @@ describe('predict page load', () => {
 	// 6. Auto-creates prediction when user is member with no predictions
 	it('auto-creates prediction when user is member with no predictions', async () => {
 		(getPoolById as any).mockResolvedValue(defaultPool);
+		// Membership gate query (IDOR check) → is a member
+		(query as any).mockResolvedValueOnce({ rows: [{ 1: 1 }] });
 		(getAllTeams as any).mockResolvedValue([]);
 		// First getUserPredictions returns [], second returns the newly created one
 		(getUserPredictions as any)
 			.mockResolvedValueOnce([]) // first call: no predictions yet
 			.mockResolvedValueOnce([{ id: 99, label: '', total_score: 0 }]); // after create
-		// query call sequence:
-		//   1st: membership check → is a member
+		// query call sequence for auto-create path:
+		//   1st: membership check for auto-create → is a member
 		//   2nd: knockout matches → empty
-		//   3rd: match predictions → empty
+		//   3rd: match predictions for the auto-created entry (selected by default)
 		(query as any)
-			.mockResolvedValueOnce({ rows: [{ 1: 1 }] }) // membership check: is a member
+			.mockResolvedValueOnce({ rows: [{ 1: 1 }] }) // auto-create membership check: is a member
 			.mockResolvedValueOnce({ rows: [] }) // knockout matches
-			.mockResolvedValueOnce({ rows: [] }); // match predictions
+			.mockResolvedValueOnce({ rows: [] }); // match predictions for selected (auto-created) entry
 		(createPrediction as any).mockResolvedValue(undefined);
 		(getGroupPredictions as any).mockResolvedValue([]);
 
@@ -187,31 +195,27 @@ describe('predict page load', () => {
 
 	// 7. Does NOT auto-create when user is NOT a member
 	it('does not auto-create prediction when user is not a member', async () => {
-		(getPoolById as any).mockResolvedValue(defaultPool);
-		(getAllTeams as any).mockResolvedValue([]);
-		(getUserPredictions as any).mockResolvedValue([]); // no predictions
-		// query call sequence:
-		//   1st: membership check → NOT a member
-		//   2nd: knockout matches → empty
-		(query as any)
-			.mockResolvedValueOnce({ rows: [] }) // membership check: NOT a member
-			.mockResolvedValueOnce({ rows: [] }); // knockout matches
+		(getPoolById as any).mockResolvedValue({ ...defaultPool, created_by: 999 });
+		// Membership gate query (IDOR check) → NOT a member (and not creator)
+		(query as any).mockResolvedValueOnce({ rows: [] });
 
-		const result = await load({
-			params: mockParams('1'),
-			locals: mockLocals(1) as any,
-			url: mockUrl(),
-		} as any);
-
-		expect(createPrediction).not.toHaveBeenCalled();
-		expect(result.entries).toEqual([]);
-		expect(result.selectedId).toBeNull();
+		// Should throw 403
+		try {
+			await load({
+				params: mockParams('1'),
+				locals: mockLocals(1) as any,
+				url: mockUrl(),
+			} as any);
+			expect.fail('Should have thrown');
+		} catch (e: any) {
+			expect(e.status).toBe(403);
+		}
 	});
 
 	// 8. Sets isLocked=true when deadline_group is in the past
 	it('sets isLocked=true when deadline_group is in the past', async () => {
 		const pastDate = new Date('2020-01-01').toISOString();
-		setupDefaultMocks({ pool: { id: 1, deadline_group: pastDate } });
+		setupDefaultMocks({ pool: { id: 1, deadline_group: pastDate, created_by: 1 } });
 
 		const result = await load({
 			params: mockParams('1'),
@@ -225,7 +229,7 @@ describe('predict page load', () => {
 	// 9. Sets isLocked=false when deadline_group is in the future
 	it('sets isLocked=false when deadline_group is in the future', async () => {
 		const futureDate = new Date('2099-12-31').toISOString();
-		setupDefaultMocks({ pool: { id: 1, deadline_group: futureDate } });
+		setupDefaultMocks({ pool: { id: 1, deadline_group: futureDate, created_by: 1 } });
 
 		const result = await load({
 			params: mockParams('1'),
@@ -238,7 +242,7 @@ describe('predict page load', () => {
 
 	// 10. Sets isLocked=false when no deadline_group
 	it('sets isLocked=false when no deadline_group', async () => {
-		setupDefaultMocks({ pool: { id: 1, deadline_group: null } });
+		setupDefaultMocks({ pool: { id: 1, deadline_group: null, created_by: 1 } });
 
 		const result = await load({
 			params: mockParams('1'),
@@ -333,11 +337,14 @@ describe('predict page load', () => {
 	// 15. Returns empty existing predictions when no selected prediction
 	it('returns empty existing predictions when no selected prediction', async () => {
 		(getPoolById as any).mockResolvedValue(defaultPool);
+		// Membership gate query (IDOR check) → is a member
+		(query as any).mockResolvedValueOnce({ rows: [{ 1: 1 }] });
 		(getAllTeams as any).mockResolvedValue([]);
 		(getUserPredictions as any).mockResolvedValue([]); // no predictions
-		(query as any)
-			.mockResolvedValueOnce({ rows: [] }) // membership check: not a member
-			.mockResolvedValueOnce({ rows: [] }); // knockout matches
+		// Auto-create membership check → NOT a member
+		(query as any).mockResolvedValueOnce({ rows: [] });
+		// knockout matches query
+		(query as any).mockResolvedValueOnce({ rows: [] });
 
 		const result = await load({
 			params: mockParams('1'),

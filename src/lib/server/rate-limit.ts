@@ -45,3 +45,26 @@ export function checkPredictionRate(userId: number): boolean {
 	entry.count++;
 	return true;
 }
+
+// §2.1 — change-password rate limit, keyed on userId.
+// 5 attempts / 15 minutes is enough to thwart brute force without locking out a
+// user who genuinely forgot their current password.
+const _authLimits = new Map<number, { count: number; resetAt: number }>();
+const AUTH_LIMIT = 5;
+const AUTH_WINDOW = 15 * 60 * 1000;
+
+export function checkAuthRate(userId: number): boolean {
+  const now = Date.now();
+  // Piggy-back on the existing eviction cadence to keep the map bounded.
+  if (_authLimits.size > 10_000) {
+    for (const [k, v] of _authLimits) if (now > v.resetAt) _authLimits.delete(k);
+  }
+  const e = _authLimits.get(userId);
+  if (!e || now > e.resetAt) {
+    _authLimits.set(userId, { count: 1, resetAt: now + AUTH_WINDOW });
+    return true;
+  }
+  if (e.count >= AUTH_LIMIT) return false;
+  e.count++;
+  return true;
+}

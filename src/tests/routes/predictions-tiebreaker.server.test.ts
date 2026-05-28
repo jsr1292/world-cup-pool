@@ -100,7 +100,7 @@ describe('POST /api/predictions/tiebreaker', () => {
 
 		expect(res.status).toBe(200);
 		const data = await res.json();
-		expect(data).toEqual({ ok: true });
+		expect(data).toEqual({ ok: true, action: 'saved' });
 		expect(query).toHaveBeenCalledWith(
 			expect.stringContaining('INSERT INTO tiebreaker'),
 			[1, 2, 1]
@@ -154,7 +154,7 @@ describe('POST /api/predictions/tiebreaker', () => {
 
 		expect(res.status).toBe(200);
 		const data = await res.json();
-		expect(data).toEqual({ ok: true });
+		expect(data).toEqual({ ok: true, action: 'deleted' });
 		expect(query).toHaveBeenCalledWith(
 			'DELETE FROM tiebreaker WHERE prediction_id = $1',
 			[1]

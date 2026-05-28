@@ -73,7 +73,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       client.release();
     }
   } catch (e) {
-    console.error('[api/predictions/entry] POST error:', e);
-    return json({ error: 'Internal server error' }, { status: 500 });
+    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    console.error(`[api/predictions/entry] ${code}:`, e);
+    // §4.12 — Surface a short opaque code so ops can correlate the user's
+    // report with a server log entry without exposing internals.
+    return json({ error: 'Internal server error', code }, { status: 500 });
   }
 };

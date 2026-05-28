@@ -130,18 +130,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     client.release();
   }
 
-  // Async scoring — respond immediately, score in background
+  // §3.6 — Score synchronously when the user edits a prediction whose previous
+  // points_earned was non-zero. The ON CONFLICT clause above sets points_earned
+  // to 0 on update, so the UI would otherwise show a stale total until the
+  // setImmediate callback finishes. Doing it inline keeps the displayed total
+  // in lockstep with the just-zeroed row.
   const poolId = pred.pool_id;
-  setImmediate(async () => {
-    try {
-      await calculateAllScores(poolId);
-      invalidateCachedPoolLeaderboard(poolId);
-      invalidateCachedPoolResults(poolId);
-      invalidateGlobalLeaderboard();
-    } catch (e) {
-      console.error('[bg-score] match-scores pool', poolId, e);
-    }
-  });
+  try {
+    await calculateAllScores(poolId);
+    invalidateCachedPoolLeaderboard(poolId);
+    invalidateCachedPoolResults(poolId);
+    invalidateGlobalLeaderboard();
+  } catch (e) {
+    console.error('[score] match-scores pool', poolId, e);
+    // Fall through — we already saved the prediction; the next sync will
+    // reconcile points_earned. Surface the error code, not a generic 500.
+    return json({ ok: true, scoring: 'failed' });
+  }
 
   return json({ ok: true });
 };

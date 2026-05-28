@@ -9,10 +9,12 @@ export function getPool(): pg.Pool {
 		_pool = new pg.Pool({
 			connectionString: url,
 			max: 10,
-			// H-05: Production-safe defaults for remote Postgres
 			ssl: url.includes('localhost') || url.includes('127.0.0.1') ? false : { rejectUnauthorized: false },
 			idleTimeoutMillis: 30_000,
 			connectionTimeoutMillis: 10_000,
+			// §4.9 — Set application_name so DBA dashboards (pg_stat_activity)
+			// can identify this app's connections.
+			application_name: process.env.PG_APPLICATION_NAME || 'mundial2026',
 		});
 		_pool.on('error', (err) => console.error('[db] Idle client error:', err.message));
 	}

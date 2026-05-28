@@ -1,9 +1,13 @@
 import { verifyPwd, hashPwd } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
 import { json, type RequestHandler } from '@sveltejs/kit';
+import { checkAuthRate } from '$lib/server/rate-limit.js';
 
 export const POST: RequestHandler = async ({ request, locals, cookies }) => {
   if (!locals.user) return json({ error: 'Inicia sesión' }, { status: 401 });
+  if (!checkAuthRate(locals.user.id)) {
+    return json({ error: 'Demasiados intentos. Espera 15 minutos.' }, { status: 429 });
+  }
   const { current_password, new_password } = await request.json();
   if (!current_password || !new_password)
     return json({ error: 'Todos los campos son obligatorios' }, { status: 400 });
@@ -21,7 +25,10 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
     await query('DELETE FROM sessions WHERE user_id = $1 AND token != $2', [locals.user.id, cookies.get('session')]);
     return json({ ok: true });
   } catch (e) {
-    console.error('[api/auth/change-password] POST error:', e);
-    return json({ error: 'Internal server error' }, { status: 500 });
+    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    console.error(`[api/auth/change-password] ${code}:`, e);
+    // §4.12 — Surface a short opaque code so ops can correlate the user's
+    // report with a server log entry without exposing internals.
+    return json({ error: 'Internal server error', code }, { status: 500 });
   }
 };

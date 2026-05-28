@@ -191,7 +191,7 @@ describe('POST /api/admin/results', () => {
 
 	it('returns 200 and calls UPDATE query with correct params', async () => {
 		mockQuery.mockResolvedValueOnce({ rows: [{ is_admin: true }] });
-		mockQuery.mockResolvedValueOnce({ rows: [{ id: 5, home_score: null, away_score: null }] });
+		mockQuery.mockResolvedValueOnce({ rows: [{ id: 5, home_score: null, away_score: null, home_team_id: 1, away_team_id: 2 }] });
 		mockQuery.mockResolvedValueOnce({ rows: [] });
 		mockQuery.mockResolvedValueOnce({ rows: [] });
 
@@ -216,7 +216,7 @@ describe('POST /api/admin/results', () => {
 
 	it('returns 200 and calls logAudit with correct params', async () => {
 		mockQuery.mockResolvedValueOnce({ rows: [{ is_admin: true }] });
-		mockQuery.mockResolvedValueOnce({ rows: [{ id: 5, home_score: null, away_score: null }] });
+		mockQuery.mockResolvedValueOnce({ rows: [{ id: 5, home_score: null, away_score: null, home_team_id: 1, away_team_id: 2 }] });
 		mockQuery.mockResolvedValueOnce({ rows: [] });
 		mockQuery.mockResolvedValueOnce({ rows: [] });
 
@@ -238,7 +238,7 @@ describe('POST /api/admin/results', () => {
 
 	it('passes penalty_winner_id to UPDATE query when provided', async () => {
 		mockQuery.mockResolvedValueOnce({ rows: [{ is_admin: true }] });
-		mockQuery.mockResolvedValueOnce({ rows: [{ id: 10, home_score: 1, away_score: 1 }] });
+		mockQuery.mockResolvedValueOnce({ rows: [{ id: 10, home_score: 1, away_score: 1, home_team_id: 5, away_team_id: 7 }] });
 		mockQuery.mockResolvedValueOnce({ rows: [] });
 		mockQuery.mockResolvedValueOnce({ rows: [] });
 
@@ -256,7 +256,7 @@ describe('POST /api/admin/results', () => {
 
 	it('triggers calculateAllScores and cache invalidation via setImmediate for each active pool', async () => {
 		mockQuery.mockResolvedValueOnce({ rows: [{ is_admin: true }] });
-		mockQuery.mockResolvedValueOnce({ rows: [{ id: 3, home_score: 0, away_score: 0 }] });
+		mockQuery.mockResolvedValueOnce({ rows: [{ id: 3, home_score: 0, away_score: 0, home_team_id: 1, away_team_id: 2 }] });
 		mockQuery.mockResolvedValueOnce({ rows: [] });
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 100 }, { id: 200 }] });
 
@@ -305,5 +305,6 @@ describe('POST /api/admin/results', () => {
 
 		expect(response.status).toBe(500);
 		expect(body.error).toBe('Internal server error');
+		expect(body.code).toBeDefined();
 	});
 });

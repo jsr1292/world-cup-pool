@@ -346,7 +346,7 @@ describe('syncScores write path', () => {
 		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0 });
 	});
 
-	it('falls back to team name fuzzy match when no fifa_id match', async () => {
+	it('falls back to team name alias CTE match when no fifa_id match', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
 			ok: true,
 			json: () => Promise.resolve({ response: [apiFixture('Group Stage', { home: 1, away: 0 })] })
@@ -354,14 +354,14 @@ describe('syncScores write path', () => {
 
 		dbQuery
 			.mockResolvedValueOnce({ rows: [] }) // SELECT by fifa_id — no match
-			.mockResolvedValueOnce({ rows: [{ id: 20 }] }) // SELECT by team names — found
+			.mockResolvedValueOnce({ rows: [{ id: 20 }] }) // SELECT by CTE resolver — found
 			.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
 
 		const result = await syncScores();
 		expect(result).toEqual({ updated: 1, skipped: 0, errors: 0 });
 
-		// Second query should be the fuzzy LIKE query
-		expect(dbQuery).toHaveBeenNthCalledWith(2, expect.stringContaining('LIKE'), expect.arrayContaining(['%Team A%', '%Team B%']));
+		// Second query should be the CTE resolver query
+		expect(dbQuery).toHaveBeenNthCalledWith(2, expect.stringContaining('resolver'), expect.arrayContaining(['team a', 'team b']));
 	});
 
 	it('skips live matches (status !== finished)', async () => {
@@ -386,7 +386,7 @@ describe('syncScores write path', () => {
 
 		dbQuery
 			.mockResolvedValueOnce({ rows: [] }) // SELECT by fifa_id — no match
-			.mockResolvedValueOnce({ rows: [] }); // SELECT by team names — no match
+			.mockResolvedValueOnce({ rows: [] }); // SELECT by CTE resolver — no match
 
 		const result = await syncScores();
 		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0 });
@@ -423,9 +423,9 @@ describe('syncScores write path', () => {
 		dbQuery
 			.mockResolvedValueOnce({ rows: [{ id: 10 }] }) // SELECT match1 by fifa_id
 			.mockResolvedValueOnce({ rowCount: 1 }) // UPDATE match1
-			// Match 2: not found by fifa_id, not found by name either
+			// Match 2: not found by fifa_id, not found by CTE resolver either
 			.mockResolvedValueOnce({ rows: [] }) // SELECT match2 by fifa_id
-			.mockResolvedValueOnce({ rows: [] }); // SELECT match2 by name
+			.mockResolvedValueOnce({ rows: [] }); // SELECT match2 by CTE resolver
 
 		const result = await syncScores();
 		expect(result).toEqual({ updated: 1, skipped: 1, errors: 0 });
@@ -470,8 +470,8 @@ describe('syncScores write path', () => {
 		expect(updateCall[1][3]).toBeNull();
 	});
 
-	it('escapes LIKE wildcards in team names', async () => {
-		// Create fixture with team names containing LIKE wildcards
+	it('escapes LIKE wildcards in team names via CTE resolver', async () => {
+		// Create fixture with team names containing special characters
 		const fixture = {
 			fixture: { id: 3001, round: 'Group Stage', date: '2026-06-14T20:00:00Z' },
 			teams: { home: { name: '100% Winners_FC' }, away: { name: 'Team_B' } },
@@ -485,17 +485,19 @@ describe('syncScores write path', () => {
 
 		dbQuery
 			.mockResolvedValueOnce({ rows: [] }) // SELECT by fifa_id — no match
-			.mockResolvedValueOnce({ rows: [{ id: 50 }] }) // SELECT by team names — found
+			.mockResolvedValueOnce({ rows: [{ id: 50 }] }) // SELECT by CTE resolver — found
 			.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
 
 		const result = await syncScores();
 		expect(result).toEqual({ updated: 1, skipped: 0, errors: 0 });
 
-		// Verify the LIKE parameters have escaped wildcards
-		const likeCall = dbQuery.mock.calls[1];
-		const params = likeCall[1] as string[];
-		// % should be escaped to \%, _ should be escaped to \_
-		expect(params[0]).toContain('\\%');
-		expect(params[1]).toContain('\\_');
+		// Verify the CTE resolver query was called with normalized team names
+		const resolverCall = dbQuery.mock.calls[1];
+		expect(resolverCall[0]).toContain('resolver');
+		// The normalization lowercases, strips diacritics, collapses spaces
+		// but does NOT escape LIKE wildcards (CTE uses exact match, not LIKE)
+		const params = resolverCall[1] as string[];
+		expect(params[0]).toBe('100% winners_fc');
+		expect(params[1]).toBe('team_b');
 	});
 });

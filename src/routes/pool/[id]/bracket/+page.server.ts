@@ -10,6 +10,15 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   const pool = await getPoolById(poolId) as any;
   if (!pool) throw error(404, 'Quiniela no encontrada');
 
+  // Membership gate (IDOR §1.2)
+  const { rows: gate } = await query(
+    'SELECT 1 FROM pool_members WHERE pool_id = $1 AND user_id = $2',
+    [poolId, locals.user.id]
+  );
+  if (gate.length === 0 && pool.created_by !== locals.user.id) {
+    throw error(403, 'No eres miembro de esta quiniela');
+  }
+
   // Get ALL user predictions for this pool
   let predictions = await getUserPredictions(poolId, locals.user.id) as any[];
 

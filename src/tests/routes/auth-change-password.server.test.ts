@@ -11,8 +11,13 @@ vi.mock('$lib/server/queries.js', () => ({
 	hashPwd: vi.fn(),
 }));
 
+vi.mock('$lib/server/rate-limit.js', () => ({
+	checkAuthRate: vi.fn().mockReturnValue(true),
+}));
+
 import { query } from '$lib/server/db.js';
 import { verifyPwd, hashPwd } from '$lib/server/queries.js';
+import { checkAuthRate } from '$lib/server/rate-limit.js';
 
 // --- Helpers ---
 const mockRequest = (body: any) => ({ json: vi.fn().mockResolvedValue(body) });
@@ -33,6 +38,7 @@ const mockEvent = (body: any, userId: number | null = 1, cookies = mockCookies()
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	(checkAuthRate as any).mockReturnValue(true);
 });
 
 describe('POST /api/auth/change-password', () => {

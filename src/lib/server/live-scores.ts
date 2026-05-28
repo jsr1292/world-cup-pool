@@ -147,18 +147,38 @@ export async function syncScores(): Promise<{ updated: number; skipped: number; 
     }
 
     if (!dbMatch) {
-      // Try matching by team names (fuzzy)
-      // Escape LIKE wildcards % and _ in team names to prevent injection
-      const escapeLike = (s: string) => s.replace(/[%_]/g, '\\$&');
-      const res = await query(`
-        SELECT m.* FROM matches m
-        JOIN teams t1 ON t1.id = m.home_team_id
-        JOIN teams t2 ON t2.id = m.away_team_id
-        WHERE (t1.name LIKE $1 ESCAPE '\\' AND t2.name LIKE $2 ESCAPE '\\')
-          AND m.status != 'finished'
+      // §2.4 — Resolve API team names through teams.name AND team_aliases,
+      // using a normalized form (lower + strip diacritics + collapse spaces).
+      const norm = (s: string) =>
+        s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+         .toLowerCase().trim().replace(/\s+/g, ' ');
+      const homeN = norm(m.home_team);
+      const awayN = norm(m.away_team);
+
+      const res = await query(
+        `
+        WITH resolver AS (
+          SELECT id, lower(name) AS canon FROM teams
+          UNION ALL
+          SELECT team_id AS id, alias_normalized AS canon FROM team_aliases
+        )
+        SELECT m.*
+        FROM matches m
+        JOIN resolver rh ON rh.id = m.home_team_id AND rh.canon = $1
+        JOIN resolver ra ON ra.id = m.away_team_id AND ra.canon = $2
+        WHERE m.status != 'finished'
         LIMIT 1
-      `, [`%${escapeLike(m.home_team)}%`, `%${escapeLike(m.away_team)}%`]);
+        `,
+        [homeN, awayN]
+      );
       dbMatch = res.rows[0] ?? null;
+
+      if (!dbMatch) {
+        console.warn(
+          `[live-scores] No DB match for "${m.home_team}" (norm "${homeN}") ` +
+          `vs "${m.away_team}" (norm "${awayN}") — consider adding an alias.`
+        );
+      }
     }
 
     if (!dbMatch) { skipped++; continue; }
@@ -198,15 +218,21 @@ function mapRoundToPhase(round: string): string {
   return 'group';
 }
 
-// FIFA World Cup 2026 numeric stage IDs — verify against live API before tournament starts
+// §4.7 — FIFA World Cup 2026 numeric stage IDs. The IDs below are STUBS placed
+// during scaffolding and were never confirmed against a live FIFA API
+// response. Before the tournament kicks off:
+//   1. Hit `${FIFA_BASE}/competitions/{competitionId}/stages` from a one-off
+//      script (or use the live response from `${FIFA_BASE}/matches/...`).
+//   2. Replace each value below with the real `idStage`.
+//   3. Add a unit test that pins these IDs.
 const FIFA_STAGE_MAP: Record<string, string> = {
-	'285063': 'group',  // Group Stage
-	'285064': 'r32',    // Round of 32
-	'285065': 'r16',    // Round of 16
-	'285066': 'qf',     // Quarter-finals
-	'285067': 'sf',     // Semi-finals
-	'285068': '3rd',    // Third Place
-	'285069': 'final',  // Final
+	'285063': 'group',  // Group Stage    — STUB
+	'285064': 'r32',    // Round of 32    — STUB
+	'285065': 'r16',    // Round of 16    — STUB
+	'285066': 'qf',     // Quarter-finals — STUB
+	'285067': 'sf',     // Semi-finals    — STUB
+	'285068': '3rd',    // Third Place    — STUB
+	'285069': 'final',  // Final          — STUB
 };
 
 function mapFifaStageToPhase(stageId: string): string {

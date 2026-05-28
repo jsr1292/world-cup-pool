@@ -1,16 +1,44 @@
 /**
  * In-memory TTL cache for session, teams, and pool results.
  *
- * ⚠️ CONSTRAINT: All state is module-level (per-process).
- * This works for single-server deployment but will NOT work
- * with horizontal scaling (Vercel serverless, Railway replicas, etc.)
- * — each instance has an isolated cache. After a score sync,
- * only the instance that handled the request invalidates its cache.
- * Other instances serve stale data until TTL expires.
- * If horizontal scaling is needed, migrate to Redis.
+ * ⚠️ HARD CONSTRAINT: All state is module-level (per-process). This is only
+ * safe with a SINGLE Node instance. With multiple replicas a logout/password
+ * change/score sync executes on one instance only — every other instance keeps
+ * serving stale data (and stale auth!) until its local TTL expires.
+ *
+ * If you need horizontal scale, migrate session + leaderboard caches to Redis
+ * (or Postgres LISTEN/NOTIFY) before bumping replica count above 1.
  */
 
 import { query } from './db.js';
+
+// §1.3 — boot-time assertion: refuse to start if env hints at multi-instance.
+// Recognises common platform indicators: Vercel (VERCEL=1), Railway replica
+// count, Fly machines, Kubernetes pod replicas. Override with
+// ALLOW_MULTI_INSTANCE_CACHE=1 (only after migrating caches to a shared store).
+(() => {
+  if (process.env.ALLOW_MULTI_INSTANCE_CACHE === '1') return;
+  const multiHints: { name: string; value: string | undefined }[] = [
+    { name: 'VERCEL', value: process.env.VERCEL },
+    { name: 'RAILWAY_REPLICA_COUNT', value: process.env.RAILWAY_REPLICA_COUNT },
+    { name: 'FLY_APP_REPLICAS', value: process.env.FLY_APP_REPLICAS },
+    { name: 'K8S_REPLICAS', value: process.env.K8S_REPLICAS },
+  ];
+  for (const h of multiHints) {
+    if (h.value && h.value !== '' && h.value !== '0' && h.value !== '1') {
+      throw new Error(
+        `[cache] Refusing to boot: ${h.name}=${h.value} indicates >1 instance ` +
+        `but caches are in-process. Set ALLOW_MULTI_INSTANCE_CACHE=1 only ` +
+        `after migrating session/leaderboard caches to Redis (see cache.ts).`
+      );
+    }
+    if (h.name === 'VERCEL' && h.value === '1') {
+      // Vercel is serverless by default — every cold start has an empty cache.
+      console.warn('[cache] Running on Vercel; per-invocation caches are cold. ' +
+                   'Consider migrating to Redis for shared state.');
+    }
+  }
+})();
 
 // ─── Teams ─────────────────────────────────────────────────────────────────
 // Teams are static during a tournament. Load once per process.

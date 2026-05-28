@@ -95,7 +95,9 @@ describe('POST /api/admin/sync-scores', () => {
 	it('returns 200 with updates > 0 — triggers setImmediate rescoring', async () => {
 		vi.useFakeTimers();
 		mockSyncScores.mockResolvedValueOnce({ updated: 3, skipped: 1, errors: 0 });
-		mockQuery.mockResolvedValueOnce({ rows: [{ id: 10 }] });
+		mockQuery.mockResolvedValueOnce({ rows: [{ id: 10 }] }); // SELECT pools
+		// Each pool worker re-checks is_active via query
+		mockQuery.mockResolvedValueOnce({ rows: [{ 1: 1 }] }); // is_active check for pool 10
 		mockCalculateAllScores.mockResolvedValue(undefined);
 
 		const response = await POST({
@@ -147,13 +149,18 @@ describe('POST /api/admin/sync-scores', () => {
 		expect(response.status).toBe(500);
 		const body = await response.json();
 		expect(body.error).toBeDefined();
+		expect(body.code).toBeDefined();
 		expect(errorSpy).toHaveBeenCalled();
 	});
 
 	it('rescores multiple pools when updated > 0', async () => {
 		vi.useFakeTimers();
 		mockSyncScores.mockResolvedValueOnce({ updated: 1, skipped: 0, errors: 0 });
-		mockQuery.mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }, { id: 3 }] });
+		mockQuery.mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }, { id: 3 }] }); // SELECT pools
+		// Each pool worker re-checks is_active
+		mockQuery.mockResolvedValueOnce({ rows: [{ 1: 1 }] }); // pool 1 active
+		mockQuery.mockResolvedValueOnce({ rows: [{ 1: 1 }] }); // pool 2 active
+		mockQuery.mockResolvedValueOnce({ rows: [{ 1: 1 }] }); // pool 3 active
 		mockCalculateAllScores.mockResolvedValue(undefined);
 
 		const response = await POST({
@@ -176,7 +183,10 @@ describe('POST /api/admin/sync-scores', () => {
 		vi.useFakeTimers();
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		mockSyncScores.mockResolvedValueOnce({ updated: 1, skipped: 0, errors: 0 });
-		mockQuery.mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }] });
+		mockQuery.mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }] }); // SELECT pools
+		// Each pool worker re-checks is_active
+		mockQuery.mockResolvedValueOnce({ rows: [{ 1: 1 }] }); // pool 1 active
+		mockQuery.mockResolvedValueOnce({ rows: [{ 1: 1 }] }); // pool 2 active
 		// First pool throws, second succeeds
 		mockCalculateAllScores
 			.mockRejectedValueOnce(new Error('Pool 1 scoring failed'))

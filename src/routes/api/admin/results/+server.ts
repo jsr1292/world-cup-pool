@@ -39,6 +39,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     const match = matchRows[0] ?? null;
     if (!match) return json({ error: 'Partido no encontrado' }, { status: 404 });
 
+    // §2.5 — Validate penalty_winner_id:
+    //   - only allowed when the match ends in a draw,
+    //   - must equal one of the two teams.
+    if (penalty_winner_id !== null) {
+      if (home_score !== away_score) {
+        return json({ error: 'penalty_winner sólo en empates' }, { status: 400 });
+      }
+      if (
+        penalty_winner_id !== match.home_team_id &&
+        penalty_winner_id !== match.away_team_id
+      ) {
+        return json({ error: 'penalty_winner_id no coincide con los equipos del partido' }, { status: 400 });
+      }
+    }
+
     // Update match result (penalty_winner_id is NULL for normal wins, set for penalty shootout deciders)
     await query(
       "UPDATE matches SET home_score = $1, away_score = $2, status = 'finished', penalty_winner_id = $4 WHERE id = $3",
@@ -66,7 +81,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     return json({ ok: true, scoring: 'pending' });
   } catch (e) {
-    console.error('[api/admin/results] POST error:', e);
-    return json({ error: 'Internal server error' }, { status: 500 });
+    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    console.error(`[api/admin/results] ${code}:`, e);
+    // §4.12 — Surface a short opaque code so ops can correlate the user's
+    // report with a server log entry without exposing internals.
+    return json({ error: 'Internal server error', code }, { status: 500 });
   }
 };

@@ -10,6 +10,15 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   const pool = await getPoolById(poolId) as any;
   if (!pool) throw error(404, 'Quiniela no encontrada');
 
+  // Membership gate (IDOR §1.2)
+  const { rows: m } = await query(
+    'SELECT 1 FROM pool_members WHERE pool_id = $1 AND user_id = $2',
+    [poolId, locals.user.id]
+  );
+  if (m.length === 0 && pool.created_by !== locals.user.id) {
+    throw error(403, 'No eres miembro de esta quiniela');
+  }
+
   const teams = await getAllTeams() as any[];
 
   // Group teams by group_name — skip teams with no group assigned

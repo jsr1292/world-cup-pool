@@ -1,5 +1,5 @@
 import { query } from '$lib/server/db.js';
-import { getPoolById, getPoolMembers, getScoringConfig } from '$lib/server/queries.js';
+import { getPoolById, getPoolMembers, getPoolEntries, getScoringConfig } from '$lib/server/queries.js';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
 
@@ -10,11 +10,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   const pool = await getPoolById(poolId) as any;
   if (!pool) throw error(404, 'Quiniela no encontrada');
 
-  if (pool.created_by !== locals.user.id) {
-    throw error(403, 'Solo el creador puede acceder al admin');
+  // §4.6 — Match /api/admin/payment behaviour: creator OR site admin.
+  if (pool.created_by !== locals.user.id && !locals.user.is_admin) {
+    throw error(403, 'Solo el creador o un administrador del sitio pueden acceder');
   }
 
-  const members = await getPoolMembers(poolId);
+  const members = await getPoolMembers(poolId);   // one row per user
+  const entries = await getPoolEntries(poolId);   // one row per (user, entry)
   const scoring = await getScoringConfig(poolId);
 
   // Get group stage matches
@@ -34,12 +36,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   const { rows: fmRows } = await query("SELECT COUNT(*) as c FROM matches WHERE phase = 'group' AND status = 'finished'");
 
   const stats = {
-    totalMembers: members.length,
+    totalMembers: members.length,                 // §3.11 — true member count
+    totalEntries: entries.length,                 // §3.11 — entry count
     totalPaid: (members as any[]).filter(m => m.has_paid).length,
     totalPredictions: tpRows[0].c,
     totalMatches: tmRows[0].c,
     finishedMatches: fmRows[0].c,
   };
 
-  return { pool, members, scoring, matches, stats };
+  return { pool, members, entries, scoring, matches, stats };
 };

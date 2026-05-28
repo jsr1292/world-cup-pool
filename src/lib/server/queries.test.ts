@@ -38,9 +38,9 @@ describe('hashPwd + verifyPwd', () => {
 // ── generateInviteCode ───────────────────────────────────────────────────
 
 describe('generateInviteCode', () => {
-	it('returns a 16-char uppercase base64url string', () => {
+	it('returns a 24-char uppercase base64url string', () => {
 		const code = generateInviteCode();
-		expect(code).toHaveLength(16);
+		expect(code).toHaveLength(24);
 		expect(code).toMatch(/^[A-Z0-9_-]+$/);
 	});
 

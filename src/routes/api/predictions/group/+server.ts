@@ -37,8 +37,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     }
     return json(result);
   } catch (e) {
-    console.error('[api/predictions/group] GET error:', e);
-    return json({ error: 'Internal server error' }, { status: 500 });
+    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    console.error(`[api/predictions/group] ${code}:`, e);
+    // §4.12 — Surface a short opaque code so ops can correlate the user's
+    // report with a server log entry without exposing internals.
+    return json({ error: 'Internal server error', code }, { status: 500 });
   }
 };
 
@@ -120,10 +123,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   // Validate no duplicate teams within a group, and skip groups with no positions filled
   for (const [groupName, positions] of Object.entries(groups)) {
-    const filled = [positions.pos1, positions.pos2, positions.pos3, positions.pos4].filter(v => v != null);
+    const ordered = [positions.pos1, positions.pos2, positions.pos3, positions.pos4];
+    const filled = ordered.filter(v => v != null);
     const unique = new Set(filled);
     if (filled.length !== unique.size) {
       return json({ error: `Duplicate team in Group ${groupName}` }, { status: 400 });
+    }
+
+    // §3.5 — No gaps: if posN is set, every position before it must also be set.
+    let seenNull = false;
+    for (const p of ordered) {
+      if (p == null) seenNull = true;
+      else if (seenNull) {
+        return json(
+          { error: `Posiciones con huecos en Grupo ${groupName} (rellena las posiciones anteriores primero)` },
+          { status: 400 }
+        );
+      }
     }
   }
 

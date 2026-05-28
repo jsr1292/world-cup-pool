@@ -9,6 +9,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   const pool = await getPoolById(poolId);
   if (!pool) throw error(404, 'Quiniela no encontrada');
 
+  // Membership gate (IDOR §1.2)
+  if (!locals.user) throw error(401, 'Inicia sesión');
+  const { rows: m } = await query(
+    'SELECT 1 FROM pool_members WHERE pool_id = $1 AND user_id = $2',
+    [poolId, locals.user.id]
+  );
+  if (m.length === 0 && (pool as any).created_by !== locals.user.id) {
+    throw error(403, 'No eres miembro de esta quiniela');
+  }
+
   const members = await getPoolMembers(poolId);
   const leaderboard = await getPoolLeaderboard(poolId);
   const scoring = await getScoringConfig(poolId);
@@ -94,7 +104,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     const predId = entry.id;
     const groupCorrect = groupCorrectMap[predId] ?? 0;
     const bracketByPhase = bracketByPredPhase[predId] ?? {};
-    let tiebreakerClose = 9999;
+    // §4.11 — When no tiebreaker exists, leave it `null` (sorted last via the
+    // sort below). 9999 placed entries-without-tiebreakers ABOVE entries with a
+    // very bad tiebreaker, which is not the desired order.
+    let tiebreakerClose: number | null = null;
     if (finalMatch) {
       const tb = tiebreakerMap[predId];
       if (tb?.home_score != null && tb?.away_score != null) {
@@ -113,14 +126,22 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   // Sort: total_score DESC, total_correct DESC, tiebreaker closeness ASC,
   // then updated_at ASC as final deterministic tiebreaker (first-submitted wins).
   // 8d: updated_at is already returned via getPoolLeaderboard's SELECT *.
-  enrichedLeaderboard.sort((a: any, b: any) =>
-    b.total_score - a.total_score ||
-    b.total_correct - a.total_correct ||
-    a.tiebreaker_close - b.tiebreaker_close ||
-    new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
-  );
+  enrichedLeaderboard.sort((a: any, b: any) => {
+    if (b.total_score !== a.total_score) return b.total_score - a.total_score;
+    if (b.total_correct !== a.total_correct) return b.total_correct - a.total_correct;
+    // §4.11 — null tiebreaker_close sorts after any numeric value.
+    const at = a.tiebreaker_close ?? Number.POSITIVE_INFINITY;
+    const bt = b.tiebreaker_close ?? Number.POSITIVE_INFINITY;
+    if (at !== bt) return at - bt;
+    return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+  });
 
-  // F-20: Cache results data (phases, team cache, group standings)
+  // F-20: Cache results data (phases, team cache, group standings).
+  // §3.2 — IMPORTANT: this cache key is `pool.id` only and the cached object
+  // currently contains tournament-wide data (no user-specific fields). DO NOT
+  // add user-scoped fields here — they would be served to every member of the
+  // pool. If user-specific data ever belongs here, change the cache key to
+  // `${pool.id}:${userId}`.
   let resultsPhases: Record<string, any[]>;
   let resultsTeamCache: Record<number, any>;
   let resultsGroupStandings: Record<string, any[]>;

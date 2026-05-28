@@ -8,6 +8,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   const pool = await getPoolById(poolId);
   if (!pool) throw error(404, 'Quiniela no encontrada');
 
+  // Membership gate (IDOR §1.2)
+  if (!locals.user) throw error(401, 'Inicia sesión');
+  const { rows: m } = await query(
+    'SELECT 1 FROM pool_members WHERE pool_id = $1 AND user_id = $2',
+    [poolId, locals.user.id]
+  );
+  if (m.length === 0 && (pool as any).created_by !== locals.user.id) {
+    throw error(403, 'No eres miembro de esta quiniela');
+  }
+
   // Get all matches with team names
   const { rows: matches } = await query(`
     SELECT m.*, 

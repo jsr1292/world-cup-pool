@@ -118,6 +118,8 @@ describe('POST /api/predictions/bracket', () => {
 		(query as any).mockResolvedValueOnce({ rows: [{ 1: 1 }] });
 		(query as any).mockResolvedValueOnce({ rows: [{ deadline_knockout: null }] });
 		(query as any).mockResolvedValueOnce({ rows: [] });
+		// §2.6: getPrecedingTeams('r32') for R16 phase — not in body picks
+		(query as any).mockResolvedValueOnce({ rows: [{ team_id: 10 }] });
 		const res = await POST({
 			request: mockRequest({ prediction_id: 1, picks: { r16: { 1: 10 }, qf: { 1: 30 } } }),
 			locals: mockLocals(1),
@@ -130,6 +132,8 @@ describe('POST /api/predictions/bracket', () => {
 		(query as any).mockResolvedValueOnce({ rows: [{ 1: 1 }] });
 		(query as any).mockResolvedValueOnce({ rows: [{ deadline_knockout: null }] });
 		(query as any).mockResolvedValueOnce({ rows: [] });
+		// §2.6: getPrecedingTeams('r32') for r16 validation — r32 not in body picks
+		(query as any).mockResolvedValueOnce({ rows: [{ team_id: 10 }, { team_id: 20 }] });
 
 		const clientQuery = vi.fn().mockResolvedValue({ rows: [] });
 		const mockRelease = vi.fn();

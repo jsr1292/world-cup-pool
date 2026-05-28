@@ -20,8 +20,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const { rows } = await query('SELECT home_score, away_score FROM tiebreaker WHERE prediction_id = $1', [predictionId]);
     return json(rows[0] ?? { home_score: null, away_score: null });
   } catch (e) {
-    console.error('[api/predictions/tiebreaker] GET error:', e);
-    return json({ error: 'Internal server error' }, { status: 500 });
+    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    console.error(`[api/predictions/tiebreaker] ${code}:`, e);
+    // §4.12 — Surface a short opaque code so ops can correlate the user's
+    // report with a server log entry without exposing internals.
+    return json({ error: 'Internal server error', code }, { status: 500 });
   }
 };
 
@@ -77,20 +80,27 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       return json({ error: 'La fecha límite ha pasado' }, { status: 403 });
     }
 
-    // Upsert
+    // §3.9 — Surface whether we saved or deleted so the UI can show the right
+    // confirmation toast.
+    let action: 'saved' | 'deleted';
     if (home_score !== null && away_score !== null) {
       await query(`
         INSERT INTO tiebreaker (prediction_id, home_score, away_score)
         VALUES ($1, $2, $3)
         ON CONFLICT(prediction_id) DO UPDATE SET home_score = $2, away_score = $3
       `, [prediction_id, home_score, away_score]);
+      action = 'saved';
     } else {
       await query('DELETE FROM tiebreaker WHERE prediction_id = $1', [prediction_id]);
+      action = 'deleted';
     }
 
-    return json({ ok: true });
+    return json({ ok: true, action });
   } catch (e) {
-    console.error('[api/predictions/tiebreaker] POST error:', e);
-    return json({ error: 'Internal server error' }, { status: 500 });
+    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    console.error(`[api/predictions/tiebreaker] ${code}:`, e);
+    // §4.12 — Surface a short opaque code so ops can correlate the user's
+    // report with a server log entry without exposing internals.
+    return json({ error: 'Internal server error', code }, { status: 500 });
   }
 };

@@ -33,7 +33,7 @@
   let countdownText = $state('');
   $effect(() => {
     if (!browser) return;
-    const kickoff = new Date('2026-06-11T00:00:00Z').getTime();
+    const kickoff = new Date('2026-06-11T17:00:00Z').getTime();
     const update = () => {
       const diff = kickoff - Date.now();
       if (diff <= 0) { countdownText = ''; return; }
@@ -118,7 +118,7 @@
               {countdownText}
             </div>
           {:else if browser}
-            {@const diff = new Date('2026-06-11T00:00:00Z').getTime() - Date.now()}
+            {@const diff = new Date('2026-06-11T17:00:00Z').getTime() - Date.now()}
             {#if diff > -(1000 * 60 * 60 * 24 * 35)}
               <div class="countdown live">⚽ En juego</div>
             {/if}

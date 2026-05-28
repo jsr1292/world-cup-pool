@@ -23,9 +23,13 @@ export async function verifyPwd(password: string, stored: string): Promise<boole
   return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), derived);
 }
 
-// Generate unique invite codes
+// §3.12 — base64url-uppercase collapses the 64-char alphabet to ~38 distinct
+// characters (digits + uppercase letters + '-' '_'). 16 chars at ~38 distinct
+// values is ~84 bits — fine today but at the low end. Bump the length to 24
+// (≈ 126 bits after the uppercase squashing) so codes survive any future
+// public-facing enumeration scan.
 export function generateInviteCode(): string {
-  return crypto.randomBytes(16).toString('base64url').slice(0, 16).toUpperCase();
+  return crypto.randomBytes(24).toString('base64url').slice(0, 24).toUpperCase();
 }
 
 // Session tokens
@@ -127,13 +131,15 @@ export async function getPoolById(id: number): Promise<Pool | null> {
 }
 
 export async function getUserPools(userId: number) {
+  // §4.4 — Order by most-recent-joined so a user who joins many pools sees the
+  // newest one at the top, regardless of when that pool was originally created.
   const { rows } = await query(
     `SELECT p.*, pm.has_paid, pm.joined_at,
       (SELECT COUNT(*) FROM pool_members WHERE pool_id = p.id) as member_count
     FROM pools p
     JOIN pool_members pm ON pm.pool_id = p.id
     WHERE pm.user_id = $1
-    ORDER BY p.created_at DESC`,
+    ORDER BY pm.joined_at DESC, p.created_at DESC`,
     [userId]
   );
   return rows;
@@ -153,19 +159,35 @@ export async function markPaid(poolId: number, userId: number) {
   await query('UPDATE pool_members SET has_paid = TRUE WHERE pool_id = $1 AND user_id = $2', [poolId, userId]);
 }
 
+// §3.11 — DISTINCT one row per member (used for "how many members in the
+// pool" counts). For per-entry data (e.g. the admin list of paid/unpaid
+// entries), call getPoolEntries() instead.
 export async function getPoolMembers(poolId: number) {
-  // Return all pool members + their prediction entries (one row per entry if exists)
-  // Members without predictions still show (just no entry_id)
+  const { rows } = await query(
+    `SELECT u.id as user_id, u.username, u.display_name,
+      pm.has_paid, pm.joined_at
+     FROM pool_members pm
+     JOIN users u ON u.id = pm.user_id
+     WHERE pm.pool_id = $1
+     ORDER BY u.display_name`,
+    [poolId]
+  );
+  return rows;
+}
+
+// §3.11 — One row per (member, prediction entry). Members with no entries are
+// still listed (entry_id is NULL).
+export async function getPoolEntries(poolId: number) {
   const { rows } = await query(
     `SELECT u.id as user_id, u.username, u.display_name,
       pr.id as entry_id, pr.label as entry_label, pr.total_score,
       COALESCE(pr.has_paid, pm.has_paid, FALSE) as has_paid,
       pm.joined_at
-    FROM pool_members pm
-    JOIN users u ON u.id = pm.user_id
-    LEFT JOIN predictions pr ON pr.pool_id = pm.pool_id AND pr.user_id = pm.user_id
-    WHERE pm.pool_id = $1
-    ORDER BY u.display_name, pr.created_at`,
+     FROM pool_members pm
+     JOIN users u ON u.id = pm.user_id
+     LEFT JOIN predictions pr ON pr.pool_id = pm.pool_id AND pr.user_id = pm.user_id
+     WHERE pm.pool_id = $1
+     ORDER BY u.display_name, pr.created_at`,
     [poolId]
   );
   return rows;
@@ -187,7 +209,12 @@ export async function createPrediction(poolId: number, userId: number, label = '
 }
 
 export async function getUserPredictions(poolId: number, userId: number): Promise<Prediction[]> {
-  const { rows } = await query('SELECT * FROM predictions WHERE pool_id = $1 AND user_id = $2', [poolId, userId]);
+  // §3.3 — Sort by creation time so callers that use predictions[0] as the
+  // "default entry" always get the same row across requests.
+  const { rows } = await query(
+    'SELECT * FROM predictions WHERE pool_id = $1 AND user_id = $2 ORDER BY created_at ASC, id ASC',
+    [poolId, userId]
+  );
   return rows as Prediction[];
 }
 

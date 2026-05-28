@@ -33,7 +33,24 @@
   ];
 
   // R32 → R16 feed-in: R16[i] = winner of R32[R32_TO_R16[i*2]] vs R32[R32_TO_R16[i*2+1]]
-  const R32_TO_R16 = [4, 6, 5, 7, 0, 2, 1, 3, 8, 10, 9, 11, 12, 14, 13, 15];
+  // App index → FIFA match number:
+  //   0:M75 1:M76 2:M81 3:M79 4:M82 5:M80 6:M83 7:M84
+  //   8:M85 9:M87 10:M73 11:M74 12:M86 13:M88 14:M77 15:M78
+  // FIFA R16 pairings (adjacent FIFA matches): 73+74, 75+76, 77+78, 79+80,
+  //   81+82, 83+84, 85+86, 87+88
+  // → app index pairs:
+  //   (10,11)=M89, (0,1)=M90, (14,15)=M91, (3,5)=M92,
+  //   (2,4)=M93, (6,7)=M94, (8,12)=M95, (9,13)=M96
+  const R32_TO_R16 = [
+     0, 1,    // R16[0] = M90 (left wing)
+     2, 4,    // R16[1] = M93 (left wing)
+     3, 5,    // R16[2] = M92 (left wing)
+     6, 7,    // R16[3] = M94 (left wing)
+    10, 11,   // R16[4] = M89 (right wing)
+     8, 12,   // R16[5] = M95 (right wing)
+     9, 13,   // R16[6] = M96 (right wing)
+    14, 15,   // R16[7] = M91 (right wing)
+  ];
 
   // Match labels
   const R32_LABELS = [
@@ -43,12 +60,23 @@
     '1J vs 2H', '2D vs 2G', '1B vs 3rd(E/F/G/I/J)', '1K vs 3rd(D/E/I/J/L)',
   ];
   const R16_LABELS = [
-    'W(R32-5) vs W(R32-7)', 'W(R32-6) vs W(R32-8)',
-    'W(R32-1) vs W(R32-3)', 'W(R32-2) vs W(R32-4)',
-    'W(R32-9) vs W(R32-11)', 'W(R32-10) vs W(R32-12)',
-    'W(R32-13) vs W(R32-15)', 'W(R32-14) vs W(R32-16)',
+    'W(R32-1) vs W(R32-2)',   // M90
+    'W(R32-3) vs W(R32-5)',   // M93
+    'W(R32-4) vs W(R32-6)',   // M92
+    'W(R32-7) vs W(R32-8)',   // M94
+    'W(R32-11) vs W(R32-12)', // M89
+    'W(R32-9) vs W(R32-13)',  // M95
+    'W(R32-10) vs W(R32-14)', // M96
+    'W(R32-15) vs W(R32-16)', // M91
   ];
-  const QF_LABELS = ['W(R16-3) vs W(R16-4)', 'W(R16-5) vs W(R16-6)', 'W(R16-1) vs W(R16-2)', 'W(R16-7) vs W(R16-8)'];
+  // FIFA QFs: M97=M89+M90, M98=M91+M92, M99=M93+M94, M100=M95+M96
+  //   → R16-index pairs (using new order above): (4,0), (7,2), (1,3), (5,6)
+  const QF_LABELS = [
+    'W(R16-5) vs W(R16-1)',   // M97 (R16[4] + R16[0])
+    'W(R16-8) vs W(R16-3)',   // M98 (R16[7] + R16[2])
+    'W(R16-2) vs W(R16-4)',   // M99 (R16[1] + R16[3])
+    'W(R16-6) vs W(R16-7)',   // M100 (R16[5] + R16[6])
+  ];
   const SF_LABELS = ['W(QF-1) vs W(QF-2)', 'W(QF-3) vs W(QF-4)'];
   const FINAL_LABEL = 'W(SF-1) vs W(SF-2)';
   const THIRD_LABEL = 'L(SF-1) vs L(SF-2)';
@@ -100,20 +128,28 @@
   let thirdSelectorOpen = $state(null);
   function openThirdSelector(mi) { haptic(8); thirdSelectorOpen = mi; }
   function closeThirdSelector() { thirdSelectorOpen = null; }
+  // §3.13 — Track which 3rd-place team OCCUPIES slot 1 of a wildcard R32 match
+  // independently from who WINS that match. Without this split, choosing the
+  // 3rd-place team would also auto-promote them as the match winner.
+  let _thirdSlots = {}; // { [mi]: teamId } — wildcard occupant only
+
   function pick3rd(mi, teamId) {
     haptic(8);
-    const match = _teams.r32[mi];
-    const current = match[1]; // currently picked team (or null)
     animatePick('r32', mi, 1);
-    const exp = _picks.r32[mi];
-    if (current === teamId) {
-      // Undo pick
-      exp[1] = false;
-      match[1] = null;
+    const currentSlot = _thirdSlots[mi] ?? null;
+    if (currentSlot === teamId) {
+      // Undo slot selection — and any winner pick that referenced it.
+      _thirdSlots[mi] = null;
+      _teams.r32[mi][1] = null;
+      // If the user had picked the 3rd team as the winner, clear that too.
+      if (_picks.r32[mi]?.[1]) {
+        _picks.r32[mi][1] = false;
+      }
     } else {
-      // Set pick
-      exp[1] = true;
-      match[1] = teamId;
+      _thirdSlots[mi] = teamId;
+      _teams.r32[mi][1] = teamId;
+      // Setting the occupant does NOT mark them as the winner.
+      _picks.r32[mi][1] = false;
     }
     recascade();
     bump();
@@ -178,7 +214,16 @@
       const slot = i + 1, mi = Math.floor(i / 2), ti = i % 2;
       if (data.existingBracket?.r32?.[slot]) {
         t.r32[mi][ti] = data.existingBracket.r32[slot];
-        exp.r32[mi][ti] = true;
+        // §3.13 — For wildcard R32 matches, the team in slot ti=1 represents
+        // the chosen 3rd-place occupant. Restore the occupant map; only mark
+        // it as a "winner" pick if the user also predicted them to advance,
+        // which we cannot infer from this single field. Default: occupant only.
+        if (ti === 1 && R32_MAP[mi].t2g === '?') {
+          _thirdSlots = _thirdSlots ?? {};
+          _thirdSlots[mi] = data.existingBracket.r32[slot];
+        } else {
+          exp.r32[mi][ti] = true;
+        }
       }
     }
 
@@ -259,9 +304,20 @@
         _teams.r16[i][j] = _picks.r16[i][j] ? _teams.r16[i][j] : winner;
       }
     }
-    // Cascade: R16 → QF → SF → Final (sequential pairs)
+    // Cascade: R16 → QF uses an explicit FIFA-correct mapping;
+    // QF → SF and SF → Final remain sequential pair-of-two.
+    const R16_TO_QF = [4, 0, 7, 2, 1, 3, 5, 6]; // QF[i] = (R16[R16_TO_QF[i*2]], R16[R16_TO_QF[i*2+1]])
+    for (let i = 0; i < _teams.qf.length; i++) {
+      for (let j = 0; j < 2; j++) {
+        const winner = getWinner('r16', R16_TO_QF[i * 2 + j]);
+        if (_picks.qf[i][j] && _teams.qf[i][j] !== winner) {
+          _picks.qf[i][0] = false;
+          _picks.qf[i][1] = false;
+        }
+        _teams.qf[i][j] = _picks.qf[i][j] ? _teams.qf[i][j] : winner;
+      }
+    }
     const cascades = [
-      { from: 'r16', to: 'qf' },
       { from: 'qf', to: 'sf' },
       { from: 'sf', to: 'final' },
     ];
@@ -269,7 +325,6 @@
       for (let i = 0; i < _teams[to].length; i++) {
         for (let j = 0; j < 2; j++) {
           const winner = getWinner(from, i * 2 + j);
-          // Invalidate explicit pick if the team is no longer available
           if (_picks[to][i][j] && _teams[to][i][j] !== winner) {
             _picks[to][i][0] = false;
             _picks[to][i][1] = false;
@@ -305,13 +360,20 @@
   function animatePick(phase, matchIdx, teamIdx) {
     const btn = document.getElementById(`btn-${phase}-${matchIdx}-${teamIdx}`);
     if (!btn) return;
+    // §4.2 — Cancel any prior animation for this button so rapid taps don't
+    // overwrite origBg and leave the inline override stuck.
+    const prev = btn.dataset.animTimer;
+    if (prev) clearTimeout(Number(prev));
+    if (!btn.dataset.origBg) btn.dataset.origBg = btn.style.background || '';
     btn.classList.add('team-pick');
-    const origBg = btn.style.background;
     btn.style.background = 'rgba(201,168,76,0.15)';
-    setTimeout(() => {
+    const tid = setTimeout(() => {
       btn.classList.remove('team-pick');
-      btn.style.background = origBg;
+      btn.style.background = btn.dataset.origBg || '';
+      delete btn.dataset.origBg;
+      delete btn.dataset.animTimer;
     }, 200);
+    btn.dataset.animTimer = String(tid);
   }
 
   function pickTeam(phase, matchIdx, teamIdx, teamId) {
@@ -359,7 +421,11 @@
     if (!data.selectedId) return;
     const h = tieHome !== null && tieHome !== '' ? Number(tieHome) : null;
     const a = tieAway !== null && tieAway !== '' ? Number(tieAway) : null;
-    if (h === null || a === null || isNaN(h) || isNaN(a)) return;
+    // §3.9 — Allow saving when both are null (treat as explicit clear); the
+    // server will delete the row in that case. Previously this early-returned
+    // and left a stale value in the DB.
+    if ((h !== null && (isNaN(h) || h === null)) ||
+        (a !== null && (isNaN(a) || a === null))) return;
     tieSaving = true; tieSaved = false;
     try {
       const r = await fetch('/api/predictions/tiebreaker', {
@@ -367,7 +433,11 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prediction_id: data.selectedId, home_score: h, away_score: a }),
       });
-      if (r.ok) { showToast('✓ Guardado'); }
+      if (r.ok) {
+        const body = await r.json().catch(() => ({}));
+        if (body.action === 'deleted') showToast('✓ Borrado');
+        else showToast('✓ Guardado');
+      }
     } catch {}
     tieSaving = false;
   }
@@ -507,7 +577,14 @@
     if (!code) return '';
     if (code === 'ENG') return '🏴󠁧󠁢󠁥󠁮󠁧󠁿';
     if (code === 'SCT') return '🏴󠁧󠁢󠁳󠁣󠁴󠁿';
-    if (code.length !== 2) return '🏳️';
+    if (code.length !== 2) {
+      // §4.3 — Surface unknown codes during dev so we add tags as new teams
+      // qualify, instead of silently rendering 🏳️.
+      if (typeof console !== 'undefined' && code.length > 0) {
+        console.warn('[flagEmoji] unknown flag code:', code);
+      }
+      return '🏳️';
+    }
     return code.toUpperCase().split('').map(c => String.fromCodePoint(c.codePointAt(0) + 127397)).join('');
   }
 
@@ -990,7 +1067,7 @@
   <div class="bracket-legend">
     <span class="legend-item"><span class="pick-star">★</span> Tu elección</span>
     <span class="legend-item"><span class="legend-match">A1 vs B2</span> Enfrentamiento de grupo</span>
-    <span class="legend-item"><span class="legend-tbd">TBD</span> Clasificados de 3er puesto</span>
+    <span class="legend-item"><span class="legend-tbd">TBD</span> Clasificados (3er puesto o grupo sin predecir)</span>
   </div>
 
   <!-- Tiebreaker: predicted final score -->

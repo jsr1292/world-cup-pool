@@ -70,7 +70,10 @@ export const load: PageServerLoad = async ({ locals }) => {
     LEFT JOIN group_correct gc ON gc.prediction_id = p.id
     LEFT JOIN bracket_correct bc ON bc.prediction_id = p.id
     GROUP BY u.id
-    ORDER BY total_score DESC, exact_score_hits DESC, total_correct DESC, tc.closeness ASC
+    ORDER BY total_score DESC,
+             exact_score_hits DESC,
+             total_correct DESC,
+             MIN(tc.closeness) ASC NULLS LAST
     LIMIT 100
   `);
 
