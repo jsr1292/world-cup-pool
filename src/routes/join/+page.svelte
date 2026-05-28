@@ -38,7 +38,7 @@
   <form onsubmit={handleJoin} style="display: flex; flex-direction: column; gap: 14px;">
     <div>
       <label style="display: block; font-size: 9px; color: var(--text-muted); margin-bottom: 5px; letter-spacing: 0.12em; text-transform: uppercase;">Código de invitación</label>
-      <input bind:value={code} placeholder="AB12CD34" style="text-align: center; font-size: 18px; letter-spacing: 0.15em; text-transform: uppercase;" maxlength="8" required />
+      <input bind:value={code} placeholder="AB12CD34" style="text-align: center; font-size: 18px; letter-spacing: 0.15em; text-transform: uppercase;" maxlength="32" required />
     </div>
 
     {#if error}

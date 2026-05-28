@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     const { rows: settingRows } = await query("SELECT value FROM site_settings WHERE key = 'can_create_pools'");
     const setting = settingRows[0] as any;
     const mode = setting?.value ?? 'admin';
-    if (mode === 'anyone') {
+    if (mode === 'anyone' || mode === 'all') {
       canCreate = true;
     } else {
       const { rows: userRows } = await query('SELECT is_admin FROM users WHERE id = $1', [locals.user.id]);

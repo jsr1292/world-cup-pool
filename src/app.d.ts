@@ -6,6 +6,7 @@ declare global {
         username: string;
         display_name: string;
         is_admin: number;
+        created_at?: string;
       };
     }
   }

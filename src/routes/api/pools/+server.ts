@@ -8,7 +8,7 @@ async function canCreatePools(userId: number): Promise<boolean> {
   const setting = settingRows[0] ?? null;
   const mode = setting?.value ?? 'admin';
 
-  if (mode === 'anyone') return true;
+  if (mode === 'anyone' || mode === 'all') return true;
 
   // 'admin' mode — check if user is admin or explicitly allowed
   const { rows: userRows } = await query('SELECT is_admin FROM users WHERE id = $1', [userId]);

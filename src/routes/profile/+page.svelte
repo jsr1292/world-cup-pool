@@ -78,7 +78,7 @@
       </div>
       <div>
         <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 3px;">Miembro desde</div>
-        <div style="font-size: 13px; color: var(--text);">{data.user.created_at}</div>
+        <div style="font-size: 13px; color: var(--text);">{data.user.created_at ? new Date(data.user.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'}</div>
       </div>
     </div>
   </div>
