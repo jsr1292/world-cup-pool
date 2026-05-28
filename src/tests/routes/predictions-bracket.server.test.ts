@@ -149,7 +149,7 @@ describe('POST /api/predictions/bracket', () => {
 
 		expect(res.status).toBe(200);
 		const data = await res.json();
-		expect(data).toEqual({ ok: true });
+		expect(data).toEqual(expect.objectContaining({ ok: true }));
 
 		expect(clientQuery).toHaveBeenCalledWith('BEGIN');
 		expect(clientQuery).toHaveBeenCalledWith(

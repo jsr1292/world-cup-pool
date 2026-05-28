@@ -1,3 +1,4 @@
+import { errCode } from '$lib/server/err-code.js';
 import { query } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
@@ -11,7 +12,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
   try {
-    const { match_id, home_score, away_score, penalty_winner_id = null } = await request.json() as {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { match_id, home_score, away_score, penalty_winner_id = null } = body as {
       match_id: number; home_score: number; away_score: number; penalty_winner_id?: number | null;
     };
 
@@ -62,26 +69,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     await logAudit('update_result', locals.user.id, 'match', match_id, { home_score: match.home_score, away_score: match.away_score }, { home_score, away_score });
 
-    // Async rescoring — respond immediately, score all pools in background
+    // Sync rescoring — score all pools before responding
     const { rows: pools } = await query('SELECT id FROM pools WHERE is_active = true');
     const poolIds = pools.map((p: any) => p.id);
 
-    setImmediate(async () => {
-      for (const poolId of poolIds) {
-        try {
-          await calculateAllScores(poolId);
-          invalidateCachedPoolLeaderboard(poolId);
-          invalidateCachedPoolResults(poolId);
-        } catch (e) {
-          console.error(`[bg-score] admin/results pool ${poolId}:`, e);
-        }
+    for (const poolId of poolIds) {
+      try {
+        await calculateAllScores(poolId);
+        invalidateCachedPoolLeaderboard(poolId);
+        invalidateCachedPoolResults(poolId);
+      } catch (e) {
+        console.error(`[score] admin/results pool ${poolId}:`, e);
       }
-      invalidateGlobalLeaderboard();
-    });
+    }
+    invalidateGlobalLeaderboard();
 
-    return json({ ok: true, scoring: 'pending' });
+    return json({ ok: true });
   } catch (e) {
-    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    const code = errCode();
     console.error(`[api/admin/results] ${code}:`, e);
     // §4.12 — Surface a short opaque code so ops can correlate the user's
     // report with a server log entry without exposing internals.

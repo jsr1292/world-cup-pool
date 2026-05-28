@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { showToast } from '$lib/toast';
+  import { flagEmoji, shortName } from '$lib/teams.js';
 
   let { data } = $props();
 
@@ -59,8 +60,17 @@
     }
     return init;
   });
-  let selections = $state({});
-  $effect(() => { selections = JSON.parse(JSON.stringify(selectionsInit)); });
+  let selections = $state(JSON.parse(JSON.stringify(selectionsInit)));
+  const _dirtyGroups = new Set();
+
+  $effect(() => {
+    const fresh = JSON.parse(JSON.stringify(selectionsInit));
+    for (const [group, ranks] of Object.entries(fresh)) {
+      if (!_dirtyGroups.has(group)) {
+        selections[group] = ranks;
+      }
+    }
+  });
 
   // ─── Mobile: sequential tap-to-rank ───────────────────────────────
 
@@ -87,11 +97,13 @@
       }
     }
     selections[group] = arr;
+    _dirtyGroups.add(group);
     autoSave();
   }
 
   function resetGroup(group) {
     selections[group] = [null, null, null, null];
+    _dirtyGroups.delete(group);
     autoSave();
   }
 
@@ -210,7 +222,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prediction_id: data.selectedId, groups }),
       });
-      if (res.ok) { saved = true; setTimeout(() => saved = false, 2000); }
+      if (res.ok) { saved = true; _dirtyGroups.clear(); setTimeout(() => saved = false, 2000); }
     } catch (e) {
       console.error(e);
       showToast('⚠️ Error al guardar — inténtalo de nuevo');
@@ -323,25 +335,6 @@
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────
-
-  function flagEmoji(code) {
-    if (!code) return '';
-    if (code === 'ENG') return '🏴󠁧󠁢󠁥󠁮󠁧󠁿';
-    if (code === 'SCT') return '🏴󠁧󠁢󠁳󠁣󠁴󠁿';
-    if (code.length !== 2) return '🏳️';
-    const offset = 127397;
-    return code.toUpperCase().split('').map(c => String.fromCodePoint(c.codePointAt(0) + offset)).join('');
-  }
-
-  function shortName(name) {
-    const map = {
-      'United States': 'USA', 'South Korea': 'S. Korea', 'South Africa': 'S. Africa',
-      'New Zealand': 'N. Zealand', 'Czech Republic': 'Czechia',
-      'Saudi Arabia': 'S. Arabia', 'Bosnia and Herzegovina': 'Bosnia',
-      'DR Congo': 'DR Congo', 'North Macedonia': 'N. Macedonia',
-    };
-    return map[name] || name;
-  }
 
   const MEDAL = { 0: '#c9a84c', 1: '#a0a0a0', 2: '#b87333' };
 

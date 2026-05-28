@@ -9,7 +9,14 @@ import { getCachedSession, setCachedSession } from '$lib/server/cache.js';
 // security hole — just a documentation note. If a future route under
 // /api/auth/* assumes the publicPaths prefix means "unauthenticated", add
 // an explicit auth check.
-const publicPaths = ['/login', '/register', '/api/auth', '/leaderboard', '/join', '/s/', '/api/health'];
+const publicPaths = new Set(['/login', '/register', '/leaderboard', '/api/health']);
+const publicPathPrefixes = [
+	'/api/auth/login',
+	'/api/auth/register',
+	'/api/auth/logout',
+	'/join',
+	'/s/',
+];
 let _lastClean = 0;
 
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -27,16 +34,16 @@ export const handle: Handle = async ({ event, resolve }) => {
       // Normalize both sides: strip common LAN host variants so that
       // http://localhost:3000, http://127.0.0.1:3000, http://0.0.0.0:3000
       // and http://<lan-ip>:3000 all match each other.
-      const normalize = (u: string) => {
+      const normalize = (u: string): string => {
         try {
           const url = new URL(u);
-          // Map all loopback variants to localhost
+          // Collapse loopback variants so dev still works regardless of which
+          // bind address the browser sees. Force http so both sides agree.
           if (['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(url.hostname)) {
             url.hostname = 'localhost';
+            url.protocol = 'http:';
           }
-          // In dev/behind-proxy, event.url.origin may use https while browser uses http
-          // (or vice versa). For same-host requests, scheme doesn't matter.
-          return `${url.hostname}:${url.port || (url.protocol === 'https:' ? '443' : '80')}`;
+          return url.origin; // scheme + hostname + port — full comparison
         } catch {
           return u;
         }
@@ -91,7 +98,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     throw redirect(302, '/');
   }
 
-  if (publicPaths.some(p => path.startsWith(p))) return resolve(event);
+  if (publicPaths.has(path) || publicPathPrefixes.some(p => path.startsWith(p))) return resolve(event);
   if (path.startsWith('/_app') || path.includes('.')) return resolve(event);
   if (!event.locals.user) {
     if (event.url.pathname.startsWith('/api/')) {

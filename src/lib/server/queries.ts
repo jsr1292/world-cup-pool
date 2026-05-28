@@ -1,5 +1,6 @@
 import { query, getClient } from './db.js';
 import { invalidateCachedSession, getAllTeamsCached } from './cache.js';
+import { DEFAULT_SCORING_RULES } from './scoring.js';
 import type { User, Pool, Prediction, GroupPrediction } from './types.js';
 import crypto from 'crypto';
 
@@ -88,20 +89,8 @@ export async function createPool(name: string, createdBy: number, buyIn = 0, all
     // Creator auto-joins
     await client.query('INSERT INTO pool_members (pool_id, user_id) VALUES ($1, $2)', [poolId, createdBy]);
 
-    // Default scoring config
-    const defaults = [
-      ['match_outcome', 1],
-      ['exact_score', 3],
-      ['group_position', 2],
-      ['knockout_r32', 2],
-      ['knockout_r16', 3],
-      ['knockout_qf', 4],
-      ['knockout_sf', 6],
-      ['knockout_final', 6],
-      ['third_place', 6],
-      ['knockout_winner', 8],
-    ];
-    for (const [rule, pts] of defaults) {
+    // Single-source default scoring config from scoring.ts
+    for (const [rule, pts] of Object.entries(DEFAULT_SCORING_RULES)) {
       await client.query('INSERT INTO scoring_config (pool_id, rule, points) VALUES ($1, $2, $3)', [poolId, rule, pts]);
     }
 

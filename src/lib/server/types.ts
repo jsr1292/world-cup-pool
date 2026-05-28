@@ -15,11 +15,11 @@ export interface Pool {
   share_token: string;
   created_by: number;
   buy_in: number;
-  allow_multiple: boolean;
-  is_active: boolean;          // B3-5: campo presente en la BD pero faltaba en el tipo
+  currency: string;
+  allow_multiple_predictions: boolean;
+  is_active: boolean;
   deadline_group: Date | null;
   deadline_knockout: Date | null;
-  status: string;
   last_scored_at: Date | null;
   last_score_error: string | null;
   created_at: Date;

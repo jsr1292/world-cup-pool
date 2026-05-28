@@ -1,8 +1,10 @@
 import pg from 'pg';
 
 let _pool: pg.Pool | null = null;
+let _shuttingDown = false;
 
 export function getPool(): pg.Pool {
+	if (_shuttingDown) throw new Error('[db] Server is shutting down');
 	if (!_pool) {
 		const url = process.env.DATABASE_URL;
 		if (!url) throw new Error('DATABASE_URL environment variable is required but not set');
@@ -27,13 +29,13 @@ export const getClient = () => getPool().connect();
 // Graceful shutdown — close the pool when the server stops
 async function shutdown() {
 	if (_pool) {
+		_shuttingDown = true;
 		try {
 			await _pool.end();
 			console.log('[db] Pool closed gracefully');
 		} catch (e) {
 			console.error('[db] Error closing pool:', e);
 		}
-		_pool = null;
 	}
 }
 

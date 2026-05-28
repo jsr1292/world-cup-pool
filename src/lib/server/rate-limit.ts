@@ -53,6 +53,14 @@ const _authLimits = new Map<number, { count: number; resetAt: number }>();
 const AUTH_LIMIT = 5;
 const AUTH_WINDOW = 15 * 60 * 1000;
 
+if (process.env.VERCEL || process.env.RAILWAY_REPLICA_COUNT || process.env.FLY_APP_NAME) {
+	console.warn(
+		'[rate-limit] In-process rate limits are per-instance and will NOT be shared across ' +
+		'replicas. Migrate to a shared store (Postgres rate_limits table or Redis) before ' +
+		'scaling horizontally.'
+	);
+}
+
 export function checkAuthRate(userId: number): boolean {
   const now = Date.now();
   // Piggy-back on the existing eviction cadence to keep the map bounded.

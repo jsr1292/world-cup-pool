@@ -1,7 +1,7 @@
 import { query, getClient } from './db.js';
 import type { PoolClient } from 'pg';
 
-const DEFAULT_RULES: Record<string, number> = {
+export const DEFAULT_SCORING_RULES: Record<string, number> = {
   match_outcome: 1,
   exact_score: 3,
   group_position: 2,
@@ -17,7 +17,7 @@ const DEFAULT_RULES: Record<string, number> = {
 export async function getScoringRules(poolId: number): Promise<Record<string, number>> {
 	const { rows } = await query('SELECT rule, points FROM scoring_config WHERE pool_id = $1', [poolId]);
 	// Always start with defaults; DB rows override them — never leaves a key undefined
-	const config: Record<string, number> = { ...DEFAULT_RULES };
+	const config: Record<string, number> = { ...DEFAULT_SCORING_RULES };
 	for (const row of rows) config[row.rule] = row.points;
 	return config;
 }

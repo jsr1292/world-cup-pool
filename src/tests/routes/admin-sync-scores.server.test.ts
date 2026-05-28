@@ -92,8 +92,7 @@ describe('POST /api/admin/sync-scores', () => {
 		expect(mockQuery).not.toHaveBeenCalled();
 	});
 
-	it('returns 200 with updates > 0 — triggers setImmediate rescoring', async () => {
-		vi.useFakeTimers();
+	it('returns 200 with updates > 0 — triggers sync rescoring', async () => {
 		mockSyncScores.mockResolvedValueOnce({ updated: 3, skipped: 1, errors: 0 });
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 10 }] }); // SELECT pools
 		// Each pool worker re-checks is_active via query
@@ -108,13 +107,7 @@ describe('POST /api/admin/sync-scores', () => {
 		expect(body.ok).toBe(true);
 		expect(body.updated).toBe(3);
 
-		// Before timers run, rescoring should not have been called yet
-		expect(mockCalculateAllScores).not.toHaveBeenCalled();
-
-		// Run the setImmediate callback
-		await vi.runAllTimersAsync();
-
-		// Now rescoring should have been called for the pool
+		// Scoring happens synchronously before response
 		expect(mockCalculateAllScores).toHaveBeenCalledWith(10);
 		expect(mockInvalidatePLB).toHaveBeenCalledWith(10);
 		expect(mockInvalidatePR).toHaveBeenCalledWith(10);

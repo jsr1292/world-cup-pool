@@ -1,3 +1,4 @@
+import { errCode } from '$lib/server/err-code.js';
 import { query, getClient } from '$lib/server/db.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
@@ -37,7 +38,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     }
     return json(result);
   } catch (e) {
-    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    const code = errCode();
     console.error(`[api/predictions/group] ${code}:`, e);
     // §4.12 — Surface a short opaque code so ops can correlate the user's
     // report with a server log entry without exposing internals.
@@ -54,7 +55,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'Demasiadas peticiones. Espera un momento.' }, { status: 429 });
   }
 
-  const body = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
   const { prediction_id, groups: rawGroups } = body as {
     prediction_id: number;
     groups: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }>;

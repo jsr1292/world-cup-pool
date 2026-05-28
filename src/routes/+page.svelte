@@ -64,7 +64,7 @@
                 <div style="font-size: 13px; font-weight: 600; color: var(--text);">{pool.name}</div>
                 <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
                   {pool.member_count} miembro{pool.member_count !== 1 ? 's' : ''}
-                  {pool.buy_in > 0 ? ` · ${pool.buy_in}€` : ''}
+                  {pool.buy_in > 0 ? ` · ${pool.buy_in} ${pool.currency ?? 'EUR'}` : ''}
                 </div>
               </div>
               <span style="font-size: 12px; color: var(--gold);">→</span>
@@ -80,7 +80,7 @@
                   <div class="pool-card-name">{pool.name}</div>
                   <div class="pool-card-meta">
                     👥 {pool.member_count} miembro{pool.member_count !== 1 ? 's' : ''}
-                    {pool.buy_in > 0 ? ` · 💰 ${pool.buy_in}€` : ''}
+                    {pool.buy_in > 0 ? ` · 💰 ${pool.buy_in} ${pool.currency ?? 'EUR'}` : ''}
                   </div>
                 </div>
                 <div style="font-size: 24px; margin-left: 12px;">🏆</div>

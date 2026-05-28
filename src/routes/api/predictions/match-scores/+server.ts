@@ -14,7 +14,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'Demasiadas peticiones. Espera un momento.' }, { status: 429 });
   }
 
-  const body = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
   const { prediction_id, scores } = body as {
     prediction_id: number;
     scores: Record<string, { home_score: number; away_score: number }>;
@@ -145,7 +150,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     console.error('[score] match-scores pool', poolId, e);
     // Fall through — we already saved the prediction; the next sync will
     // reconcile points_earned. Surface the error code, not a generic 500.
-    return json({ ok: true, scoring: 'failed' });
+    return json({ ok: false, error: 'Predicción guardada, pero el cálculo de puntos falló', scoring: 'failed' }, { status: 500 });
   }
 
   return json({ ok: true });

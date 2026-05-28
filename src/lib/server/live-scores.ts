@@ -10,6 +10,16 @@
 
 import { query } from './db.js';
 
+const _provider = process.env.API_FOOTBALL_KEY
+	? 'api-football'
+	: process.env.ENABLE_FIFA_FALLBACK
+		? 'fifa-stub'
+		: 'none';
+console.log(`[live-scores] provider: ${_provider}`);
+if (_provider === 'none') {
+	console.warn('[live-scores] No API_FOOTBALL_KEY and ENABLE_FIFA_FALLBACK not set — syncScores() will return 0 matches.');
+}
+
 const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
 const FIFA_BASE = 'https://api.fifa.com/api/v3';
 
@@ -73,6 +83,10 @@ export async function fetchFromApiFootball(leagueId = 1, season = 2026): Promise
  * Fetch from FIFA's public API (no key required, but may be rate-limited)
  */
 export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
+	if (!process.env.ENABLE_FIFA_FALLBACK) {
+		console.warn('[live-scores] FIFA fallback disabled. Set ENABLE_FIFA_FALLBACK=1 to enable.');
+		return [];
+	}
 	try {
 		// FIFA World Cup 2026 competition ID — verify this before the tournament starts
 		// TODO: update '254648' once FIFA publishes 2026 WC official API endpoints

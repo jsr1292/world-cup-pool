@@ -1,3 +1,4 @@
+import { errCode } from '$lib/server/err-code.js';
 import { query, getClient } from '$lib/server/db.js';
 import { getTeamsMapCached } from '$lib/server/cache.js';
 import type { RequestHandler } from '@sveltejs/kit';
@@ -35,7 +36,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
     return json(result);
   } catch (e) {
-    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    const code = errCode();
     console.error(`[api/predictions/bracket] ${code}:`, e);
     // §4.12 — Surface a short opaque code so ops can correlate the user's
     // report with a server log entry without exposing internals.
@@ -52,12 +53,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'Demasiadas peticiones. Espera un momento.' }, { status: 429 });
   }
 
-  const body = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
   const { prediction_id, picks: rawPicks } = body as {
     prediction_id: number;
     picks: Record<string, Record<number, number | null>>;
   };
   const picks = { ...rawPicks }; // mutable copy so we can delete started phases
+  const droppedPhases: string[] = [];
 
   if (!prediction_id || !picks) {
     return json({ error: 'Falta prediction_id o selecciones' }, { status: 400 });
@@ -119,6 +126,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     const startedPhaseSet = new Set(startedRows.map((r: any) => r.phase));
     for (const p of startedPhaseSet) {
       delete (picks as Record<string, unknown>)[p];
+      droppedPhases.push(p);
     }
   }
 
@@ -183,19 +191,26 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return precedingCache[precedingPhase];
   }
 
-  for (const [phase, slots] of Object.entries(picks)) {
+  const CANONICAL_PHASE_ORDER = ['r32', 'r16', 'qf', 'sf', 'final', '3rd'];
+  const sortedPickEntries = Object.entries(picks).sort(
+    ([a], [b]) => CANONICAL_PHASE_ORDER.indexOf(a) - CANONICAL_PHASE_ORDER.indexOf(b)
+  );
+  for (const [phase, slots] of sortedPickEntries) {
     const precedingPhase = PHASE_PROGRESSION[phase];
     if (!precedingPhase) continue;
 
     const teamsInThisPhase = new Set(
       Object.values(slots).filter((id): id is number => id !== null)
     );
+    if (teamsInThisPhase.size === 0) continue;
+
     const teamsInPrecedingPhase = await getPrecedingTeams(precedingPhase);
 
-    // If we still have no preceding-phase data (truly empty), skip the check
-    // — there's nothing to validate against and we don't want to block a
-    // legitimate first-time save of just the final.
-    if (teamsInPrecedingPhase.size === 0) continue;
+    if (teamsInPrecedingPhase.size === 0) {
+      return json({
+        error: `No hay selecciones previas en (${precedingPhase}) para validar ${phase}`,
+      }, { status: 400 });
+    }
 
     for (const teamId of teamsInThisPhase) {
       if (!teamsInPrecedingPhase.has(teamId)) {
@@ -225,10 +240,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       }
     }
     await client.query('COMMIT');
-    return json({ ok: true });
+    return json({ ok: true, dropped: droppedPhases });
   } catch (e) {
     await client.query('ROLLBACK');
-    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    const code = errCode();
     console.error(`[api/predictions/bracket] ${code}:`, e);
     // §4.12 — Surface a short opaque code so ops can correlate the user's
     // report with a server log entry without exposing internals.

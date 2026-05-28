@@ -203,7 +203,6 @@ describe('POST /api/admin/results', () => {
 
 		expect(response.status).toBe(200);
 		expect(body.ok).toBe(true);
-		expect(body.scoring).toBe('pending');
 
 		// Third query call is the UPDATE
 		expect(mockQuery).toHaveBeenCalledTimes(4);
@@ -254,7 +253,7 @@ describe('POST /api/admin/results', () => {
 		);
 	});
 
-	it('triggers calculateAllScores and cache invalidation via setImmediate for each active pool', async () => {
+	it('triggers calculateAllScores and cache invalidation for each active pool', async () => {
 		mockQuery.mockResolvedValueOnce({ rows: [{ is_admin: true }] });
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 3, home_score: 0, away_score: 0, home_team_id: 1, away_team_id: 2 }] });
 		mockQuery.mockResolvedValueOnce({ rows: [] });
@@ -271,11 +270,7 @@ describe('POST /api/admin/results', () => {
 		const response = await POST({ request, locals } as any);
 		expect(response.status).toBe(200);
 
-		// Before timers run, background scoring should not have executed yet
-		expect(calculateAllScores).not.toHaveBeenCalled();
-
-		await vi.runAllTimersAsync();
-
+		// Scoring happens synchronously before response
 		// calculateAllScores called for each active pool
 		expect(calculateAllScores).toHaveBeenCalledTimes(2);
 		expect(calculateAllScores).toHaveBeenCalledWith(100);

@@ -12,6 +12,13 @@
 
 import { query } from './db.js';
 
+export type PoolResultsCache = {
+	teams: unknown;
+	matches: unknown;
+	groupStandings: unknown;
+	phaseResults: unknown;
+};
+
 // §1.3 — boot-time assertion: refuse to start if env hints at multi-instance.
 // Recognises common platform indicators: Vercel (VERCEL=1), Railway replica
 // count, Fly machines, Kubernetes pod replicas. Override with
@@ -129,6 +136,14 @@ export function getCachedPoolResults(poolId: number): any | null {
 }
 
 export function setCachedPoolResults(poolId: number, data: any): void {
+	if (process.env.NODE_ENV !== 'production') {
+		const forbidden = ['userId', 'prediction_id', 'predictions', 'userGroupPreds', 'userBracketPreds'];
+		for (const key of forbidden) {
+			if (key in (data as Record<string, unknown>)) {
+				throw new Error(`[cache] setCachedPoolResults must not contain user-scoped key: ${key}`);
+			}
+		}
+	}
 	_poolResults.set(poolId, { data, expiresAt: Date.now() + POOL_RESULTS_TTL });
 }
 

@@ -128,9 +128,11 @@ async function seed() {
 
 // §4.10 — Be explicit about both success and failure exit codes so CI/CD
 // reliably distinguishes them.
+if (import.meta.url === `file://${process.argv[1]}`) {
 seed()
   .then(() => process.exit(0))
   .catch((err) => {
     console.error('Seed failed:', err);
     process.exit(1);
   });
+}

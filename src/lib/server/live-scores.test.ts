@@ -172,7 +172,13 @@ describe('mapFifaStageToPhase (via fetchFromFifaApi)', () => {
 	beforeEach(() => {
 		// Make sure API_FOOTBALL_KEY is NOT set so syncScores falls through to FIFA
 		delete process.env.API_FOOTBALL_KEY;
+		// Enable FIFA fallback so fetchFromFifaApi actually makes the fetch call
+		process.env.ENABLE_FIFA_FALLBACK = '1';
 		vi.restoreAllMocks();
+	});
+
+	afterEach(() => {
+		delete process.env.ENABLE_FIFA_FALLBACK;
 	});
 
 	it('maps stage 285063 to "group"', async () => {
@@ -367,6 +373,7 @@ describe('syncScores write path', () => {
 	it('skips live matches (status !== finished)', async () => {
 		// Return a match that is NOT finished (use FIFA API format with non-Completed status)
 		delete process.env.API_FOOTBALL_KEY; // skip API-Football, go to FIFA
+		process.env.ENABLE_FIFA_FALLBACK = '1';
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
 			ok: true,
 			json: () => Promise.resolve({ results: [fifaMatch('285063', { home: 1, away: 1, status: 'Live' })] })
@@ -376,6 +383,7 @@ describe('syncScores write path', () => {
 		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0 });
 		// No DB queries should have been made
 		expect(dbQuery).not.toHaveBeenCalled();
+		delete process.env.ENABLE_FIFA_FALLBACK;
 	});
 
 	it('skips when no match found at all', async () => {

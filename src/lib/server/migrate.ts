@@ -44,38 +44,12 @@ async function runMigrations(): Promise<void> {
 			)
 		`);
 
-		// Collect SQL files from both directories
-		const dirs = [
-			join(projectRoot, 'drizzle/migrations'),
-			join(__dirname, 'migrations'),
-		];
-
-		const files: { filename: string; fullPath: string }[] = [];
-
-		for (const dir of dirs) {
-			try {
-				const entries = readdirSync(dir)
-					.filter(f => f.endsWith('.sql'))
-					.sort();
-				for (const f of entries) {
-					files.push({ filename: f, fullPath: join(dir, f) });
-				}
-			} catch (e: any) {
-				if (e.code !== 'ENOENT') throw e;
-				// Directory doesn't exist — skip silently
-			}
-		}
-
-		// Deduplicate by filename in case of overlap; first occurrence wins
-		const seen = new Set<string>();
-		const uniqueFiles = files.filter(({ filename }) => {
-			if (seen.has(filename)) return false;
-			seen.add(filename);
-			return true;
-		});
-
-		// Sort all collected files by filename so order is deterministic
-		uniqueFiles.sort((a, b) => a.filename.localeCompare(b.filename));
+		// Collect SQL files from drizzle/migrations
+		const migrationDir = join(projectRoot, 'drizzle/migrations');
+		const entries = readdirSync(migrationDir)
+			.filter(f => f.endsWith('.sql'))
+			.sort();
+		const uniqueFiles = entries.map(f => ({ filename: f, fullPath: join(migrationDir, f) }));
 
 		let applied = 0;
 		let skipped = 0;
@@ -95,16 +69,19 @@ async function runMigrations(): Promise<void> {
 			console.log(`[migrate] apply ${filename} …`);
 			const sql = readFileSync(fullPath, 'utf-8');
 
-			await pool.query('BEGIN');
+			const client = await pool.connect();
 			try {
-				await pool.query(sql);
-				await pool.query('INSERT INTO _migrations (filename) VALUES ($1)', [filename]);
-				await pool.query('COMMIT');
+				await client.query('BEGIN');
+				await client.query(sql);
+				await client.query('INSERT INTO _migrations (filename) VALUES ($1)', [filename]);
+				await client.query('COMMIT');
 				console.log(`[migrate] ✓     ${filename}`);
 				applied++;
 			} catch (e) {
-				await pool.query('ROLLBACK');
+				await client.query('ROLLBACK');
 				throw e;
+			} finally {
+				client.release();
 			}
 		}
 

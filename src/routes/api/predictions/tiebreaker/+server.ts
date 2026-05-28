@@ -1,3 +1,4 @@
+import { errCode } from '$lib/server/err-code.js';
 import { query } from '$lib/server/db.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
@@ -20,7 +21,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const { rows } = await query('SELECT home_score, away_score FROM tiebreaker WHERE prediction_id = $1', [predictionId]);
     return json(rows[0] ?? { home_score: null, away_score: null });
   } catch (e) {
-    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    const code = errCode();
     console.error(`[api/predictions/tiebreaker] ${code}:`, e);
     // §4.12 — Surface a short opaque code so ops can correlate the user's
     // report with a server log entry without exposing internals.
@@ -97,7 +98,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     return json({ ok: true, action });
   } catch (e) {
-    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    const code = errCode();
     console.error(`[api/predictions/tiebreaker] ${code}:`, e);
     // §4.12 — Surface a short opaque code so ops can correlate the user's
     // report with a server log entry without exposing internals.

@@ -4,6 +4,8 @@
   import { onMount } from 'svelte';
   import '../app.css';
   import { page } from '$app/stores';
+  import { toast } from '$lib/toast.js';
+  import { WORLD_CUP_KICKOFF_MS, WORLD_CUP_DURATION_MS } from '$lib/constants.js';
 
   let fading = $state(false);
   onNavigate(() => {
@@ -23,7 +25,9 @@
   }
 
   // Theme toggle
-  let isDark = $state(true);
+  let isDark = $state(
+    browser ? document.documentElement.getAttribute('data-theme') !== 'light' : true
+  );
   $effect(() => {
     if (!browser) return;
     isDark = document.documentElement.getAttribute('data-theme') !== 'light';
@@ -33,7 +37,7 @@
   let countdownText = $state('');
   $effect(() => {
     if (!browser) return;
-    const kickoff = new Date('2026-06-11T17:00:00Z').getTime();
+    const kickoff = WORLD_CUP_KICKOFF_MS;
     const update = () => {
       const diff = kickoff - Date.now();
       if (diff <= 0) { countdownText = ''; return; }
@@ -118,8 +122,8 @@
               {countdownText}
             </div>
           {:else if browser}
-            {@const diff = new Date('2026-06-11T17:00:00Z').getTime() - Date.now()}
-            {#if diff > -(1000 * 60 * 60 * 24 * 35)}
+            {@const diff = WORLD_CUP_KICKOFF_MS - Date.now()}
+            {#if diff > -WORLD_CUP_DURATION_MS}
               <div class="countdown live">⚽ En juego</div>
             {/if}
           {/if}
@@ -196,6 +200,10 @@
     {@render children()}
   </main>
 
+{#if $toast}
+  <div class="toast">{$toast}</div>
+{/if}
+
 </div>
 
 <!-- Mobile Bottom Nav — OUTSIDE the wrapper so position:fixed is truly viewport-relative -->
@@ -250,8 +258,8 @@
   }
 
   .nav-label {
-    font-size: 9px;
-    letter-spacing: 0.05em;
+    font-size: 11px;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
   }
 

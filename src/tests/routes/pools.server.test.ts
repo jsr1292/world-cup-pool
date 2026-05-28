@@ -164,7 +164,7 @@ describe('POST /api/pools', () => {
 		mockCreatePool.mockResolvedValueOnce({ id: 42, inviteCode: 'ABC123DEF456' });
 
 		const response = await POST({
-			request: mockRequest({ name: 'World Cup 2026', buy_in: 10, allow_multiple: true }),
+			request: mockRequest({ name: 'World Cup 2026', buy_in: 10, allow_multiple_predictions: true }),
 			locals: mockLocals(1) as any
 		});
 		expect(response.status).toBe(200);

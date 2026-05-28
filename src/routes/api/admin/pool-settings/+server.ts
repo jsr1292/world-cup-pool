@@ -1,3 +1,4 @@
+import { errCode } from '$lib/server/err-code.js';
 import { query } from '$lib/server/db.js';
 import { getPoolById } from '$lib/server/queries.js';
 import { json, type RequestHandler } from '@sveltejs/kit';
@@ -19,7 +20,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     return json({ ok: true });
   } catch (e) {
-    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    const code = errCode();
     console.error(`[api/admin/pool-settings] ${code}:`, e);
     // §4.12 — Surface a short opaque code so ops can correlate the user's
     // report with a server log entry without exposing internals.

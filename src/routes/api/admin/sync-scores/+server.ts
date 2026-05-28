@@ -1,3 +1,4 @@
+import { errCode } from '$lib/server/err-code.js';
 import { syncScores } from '$lib/server/live-scores.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
 import { query } from '$lib/server/db.js';
@@ -40,31 +41,27 @@ export const POST: RequestHandler = async ({ locals }) => {
       const { rows: pools } = await query('SELECT id FROM pools WHERE is_active = true');
       const poolIds = pools.map((p: any) => p.id);
 
-      setImmediate(async () => {
-        await runWithConcurrency(poolIds, SCORE_CONCURRENCY, async (poolId) => {
-          // §3.7 — Re-check is_active before each scoring pass: the pool may
-          // have been disabled or deleted while the previous batch was running.
-          const { rows: stillActive } = await query(
-            'SELECT 1 FROM pools WHERE id = $1 AND is_active = true',
-            [poolId]
-          );
-          if (stillActive.length === 0) return;
+      await runWithConcurrency(poolIds, SCORE_CONCURRENCY, async (poolId) => {
+        const { rows: stillActive } = await query(
+          'SELECT 1 FROM pools WHERE id = $1 AND is_active = true',
+          [poolId]
+        );
+        if (stillActive.length === 0) return;
 
-          try {
-            await calculateAllScores(poolId);
-            invalidateCachedPoolLeaderboard(poolId);
-            invalidateCachedPoolResults(poolId);
-          } catch (e) {
-            console.error(`[bg-score] sync-scores pool ${poolId}:`, e);
-          }
-        });
-        invalidateGlobalLeaderboard();
+        try {
+          await calculateAllScores(poolId);
+          invalidateCachedPoolLeaderboard(poolId);
+          invalidateCachedPoolResults(poolId);
+        } catch (e) {
+          console.error(`[score] sync-scores pool ${poolId}:`, e);
+        }
       });
+      invalidateGlobalLeaderboard();
     }
 
     return json({ ok: true, ...result });
   } catch (e) {
-    const code = `ERR_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    const code = errCode();
     console.error(`[api/admin/sync-scores] ${code}:`, e);
     // §4.12 — Surface a short opaque code so ops can correlate the user's
     // report with a server log entry without exposing internals.

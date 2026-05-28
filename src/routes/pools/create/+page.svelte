@@ -15,7 +15,7 @@
       const res = await fetch('/api/pools', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, buy_in: parseFloat(buyIn) || 0, allow_multiple: allowMultiple }),
+        body: JSON.stringify({ name, buy_in: parseFloat(buyIn) || 0, allow_multiple_predictions: allowMultiple }),
       });
       const data = await res.json();
       if (!res.ok) {

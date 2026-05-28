@@ -41,7 +41,12 @@ export const POST: RequestHandler = async ({ request, cookies, params, getClient
     throw redirect(303, "/login");
   }
 
-  const body = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
 
   if (action === 'register') {
     const { username, password, display_name } = body;
