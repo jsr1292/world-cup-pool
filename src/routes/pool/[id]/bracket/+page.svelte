@@ -87,10 +87,43 @@
   const FINAL_LABEL = 'W(SF-1) vs W(SF-2)';
   const THIRD_LABEL = 'L(SF-1) vs L(SF-2)';
 
+  // Feed-origin tables for QF and R16 label helpers below.
+  // QF_FEED[qfIdx][teamSlot] = { idx: r16Index, cross: isOppositeWing }
+  // Left-wing QFs are 0–1 (template slice(0,2)); right-wing QFs are 2–3.
+  const QF_FEED = [
+    [{ idx: 4, cross: true  }, { idx: 0, cross: false }],  // QF[0] LEFT wing
+    [{ idx: 7, cross: true  }, { idx: 2, cross: false }],  // QF[1] LEFT wing
+    [{ idx: 1, cross: true  }, { idx: 3, cross: true  }],  // QF[2] RIGHT wing
+    [{ idx: 5, cross: false }, { idx: 6, cross: false }],  // QF[3] RIGHT wing
+  ];
+
+  // R16_FEED[r16Idx][teamSlot] = r32Index (0-based), all same-wing.
+  const R16_FEED = [
+    [0, 1], [2, 4], [3, 5], [6, 7],      // R16[0-3] left wing
+    [10, 11], [8, 12], [9, 13], [14, 15], // R16[4-7] right wing
+  ];
+
   function r32Label(mi) { return R32_LABELS[mi] || `R32-${mi + 1}`; }
   function r16Label(mi) { return R16_LABELS[mi] || `R16-${mi + 1}`; }
   function qfLabel(mi) { return QF_LABELS[mi] || `QF-${mi + 1}`; }
   function sfLabel(mi) { return SF_LABELS[mi] || `SF-${mi + 1}`; }
+
+  // Returns compact feed-origin label for a QF team slot.
+  // Desktop: cross-wing feeds get ← or → arrow. Mobile: suppress arrows.
+  function qfFeedLabel(mi, ti, mobile = false) {
+    const feed = QF_FEED[mi]?.[ti];
+    if (!feed) return null;
+    const n = feed.idx + 1;
+    if (mobile || !feed.cross) return `R16-${n}`;
+    return mi < 2 ? `← R16-${n}` : `R16-${n} →`;
+  }
+
+  // Returns compact feed-origin label for an R16 team slot (always same-wing).
+  function r16FeedLabel(mi, ti) {
+    const r32Idx = R16_FEED[mi]?.[ti];
+    if (r32Idx === undefined) return null;
+    return `R32-${r32Idx + 1}`;
+  }
 
   // Map each R32 "3rd from" slot to the groups whose 3rd-place teams feed into it.
   // §5.5 — Keys here MUST stay in lockstep with R32_MAP — if you reorder R32_MAP,
@@ -505,7 +538,9 @@
   let createMsg = $state('');
 
   // Team path highlighting
-  let hoveredTeam = $state(null); // team ID being hovered
+  let hoveredTeam = $state(null); // team ID being hovered (desktop)
+  let pinnedTeam  = $state(null); // team ID locked by tap (mobile)
+  const activeTeam = $derived(pinnedTeam ?? hoveredTeam);
 
   function getTeamPath(teamId, teamsSnapshot) {
     // Trace a team's path through the bracket
@@ -537,10 +572,10 @@
     return path;
   }
 
-  const teamPath = $derived(getTeamPath(hoveredTeam, teams));
+  const teamPath = $derived(getTeamPath(activeTeam, teams));
 
   function isInPath(round, mi, ti = null) {
-    if (!hoveredTeam) return false;
+    if (!activeTeam) return false;
     if (ti !== null) return teamPath.has(`${round}:${mi}:${ti}`);
     return teamPath.has(`${round}:${mi}`);
   }
@@ -745,7 +780,7 @@
   {/if}
 
   <!-- Bracket Grid -->
-  <div class="bracket-scroll">
+  <div class="bracket-scroll" ontouchend={(e) => { if (!e.target.closest('.team-btn')) pinnedTeam = null; }}>
     <!-- Desktop: split bracket layout -->
     <div class="bracket-grid desktop-bracket">
       <!-- LEFT WING -->
@@ -791,8 +826,9 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  <button id={"btn-r16-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
-                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                  {@const feedLbl = r16FeedLabel(mi, ti)}
+                  <button id={"btn-r16-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} class:path-pinned={pinnedTeam === tid && tid !== null} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }} ontouchstart={() => { if (tid) pinnedTeam = (pinnedTeam === tid) ? null : tid; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if feedLbl}<span class="feed-label">{feedLbl}</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
                 <div class="match-label">R16-{mi + 1}</div>
@@ -810,8 +846,10 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  <button id={"btn-qf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
-                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                  {@const feedLbl = qfFeedLabel(mi, ti)}
+                  {@const feedCross = QF_FEED[mi]?.[ti]?.cross}
+                  <button id={"btn-qf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} class:path-pinned={pinnedTeam === tid && tid !== null} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }} ontouchstart={() => { if (tid) pinnedTeam = (pinnedTeam === tid) ? null : tid; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if feedLbl}<span class="feed-label" class:feed-label-cross={feedCross}>{feedLbl}</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
                 <div class="match-label">QF-{mi + 1}</div>
@@ -901,8 +939,10 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  <button id={"btn-qf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
-                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                  {@const feedLbl = qfFeedLabel(mi, ti)}
+                  {@const feedCross = QF_FEED[mi]?.[ti]?.cross}
+                  <button id={"btn-qf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} class:path-pinned={pinnedTeam === tid && tid !== null} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }} ontouchstart={() => { if (tid) pinnedTeam = (pinnedTeam === tid) ? null : tid; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if feedLbl}<span class="feed-label" class:feed-label-cross={feedCross}>{feedLbl}</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
                 <div class="match-label">QF-{mi + 1}</div>
@@ -921,8 +961,9 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  <button id={"btn-r16-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
-                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                  {@const feedLbl = r16FeedLabel(mi, ti)}
+                  <button id={"btn-r16-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} class:path-pinned={pinnedTeam === tid && tid !== null} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }} ontouchstart={() => { if (tid) pinnedTeam = (pinnedTeam === tid) ? null : tid; }}>
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if feedLbl}<span class="feed-label">{feedLbl}</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
                 <div class="match-label">R16-{mi + 1}</div>
@@ -1008,8 +1049,9 @@
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
                 {@const canClick = !data.isLocked && tid !== null}
-                <button id={"btn-r16-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
-                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                {@const feedLbl = r16FeedLabel(mi, ti)}
+                <button id={"btn-r16-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} class:path-pinned={pinnedTeam === tid && tid !== null} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }} ontouchstart={() => { if (tid) pinnedTeam = (pinnedTeam === tid) ? null : tid; }}>
+                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if feedLbl}<span class="feed-label">{feedLbl}</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
               <div class="match-label">R16-{mi + 1}</div>
@@ -1027,8 +1069,10 @@
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
                 {@const canClick = !data.isLocked && tid !== null}
-                <button id={"btn-qf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }}>
-                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                {@const feedLbl = qfFeedLabel(mi, ti, true)}
+                {@const feedCross = QF_FEED[mi]?.[ti]?.cross}
+                <button id={"btn-qf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} class:path-pinned={pinnedTeam === tid && tid !== null} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }} ontouchstart={() => { if (tid) pinnedTeam = (pinnedTeam === tid) ? null : tid; }}>
+                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if feedLbl}<span class="feed-label" class:feed-label-cross={feedCross}>{feedLbl}</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
               <div class="match-label">QF-{mi + 1}</div>
@@ -1717,4 +1761,50 @@
   }
   .team-tbd-btn { cursor: pointer; color: var(--gold) !important; }
   .team-tbd-btn:hover { text-decoration: underline; }
+
+  /* Feed-origin labels: tiny R32/R16 source tags inside team slots */
+  .feed-label {
+    font-size: 7px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+    white-space: nowrap;
+    opacity: 0.65;
+    font-variant-numeric: tabular-nums;
+    margin-left: auto;
+  }
+  .feed-label-cross {
+    color: var(--gold);
+    opacity: 0.85;
+    font-weight: 600;
+  }
+
+  /* Tap-pinned state: gold outline on the team whose path is locked */
+  .team-btn.path-pinned {
+    outline: 1.5px solid rgba(201, 168, 76, 0.6);
+    outline-offset: -1px;
+  }
+
+  /* Feed-origin labels: tiny R32/R16 source tags inside team slots */
+  .feed-label {
+    font-size: 7px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+    white-space: nowrap;
+    opacity: 0.65;
+    font-variant-numeric: tabular-nums;
+    margin-left: auto;
+  }
+  .feed-label-cross {
+    color: var(--gold);
+    opacity: 0.85;
+    font-weight: 600;
+  }
+
+  /* Tap-pinned state: gold outline on the team whose path is locked */
+  .team-btn.path-pinned {
+    outline: 1.5px solid rgba(201, 168, 76, 0.6);
+    outline-offset: -1px;
+  }
 </style>
