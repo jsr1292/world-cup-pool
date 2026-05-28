@@ -49,7 +49,10 @@ export const POST: RequestHandler = async ({ request, cookies, params, getClient
   }
 
   if (action === 'register') {
-    const { username, password, display_name } = body;
+    if (!body || typeof body !== 'object') {
+      return json({ error: 'Cuerpo inválido' }, { status: 400 });
+    }
+    const { username, password, display_name } = body as Record<string, any>;
     if (!username || !password) {
       return json({ error: 'Todos los campos son obligatorios' }, { status: 400 });
     }
@@ -77,7 +80,10 @@ export const POST: RequestHandler = async ({ request, cookies, params, getClient
   }
 
   if (action === 'login') {
-    const { username, password } = body;
+    if (!body || typeof body !== 'object') {
+      return json({ error: 'Cuerpo inválido' }, { status: 400 });
+    }
+    const { username, password } = body as Record<string, any>;
     if (!username || !password) return json({ error: 'Todos los campos son obligatorios' }, { status: 400 });
 
     try {

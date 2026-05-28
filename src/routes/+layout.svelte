@@ -1,7 +1,6 @@
 <script>
   import { browser } from '$app/environment';
   import { onNavigate } from '$app/navigation';
-  import { onMount } from 'svelte';
   import '../app.css';
   import { page } from '$app/stores';
   import { toast } from '$lib/toast.js';
@@ -38,9 +37,16 @@
   $effect(() => {
     if (!browser) return;
     const kickoff = WORLD_CUP_KICKOFF_MS;
+    let iv;
     const update = () => {
       const diff = kickoff - Date.now();
-      if (diff <= 0) { countdownText = ''; return; }
+      // §4.6 — Halt the interval once kickoff has passed instead of letting
+      // setInterval keep firing every second forever.
+      if (diff <= 0) {
+        countdownText = '';
+        if (iv) { clearInterval(iv); iv = null; }
+        return;
+      }
       const d = Math.floor(diff / 86400000);
       const h = Math.floor((diff % 86400000) / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
@@ -48,8 +54,8 @@
       countdownText = d > 0 ? `${d}d ${h}h ${m}m ${s}s` : `${h}h ${m}m ${s}s`;
     };
     update();
-    const iv = setInterval(update, 1000);
-    return () => clearInterval(iv);
+    iv = setInterval(update, 1000);
+    return () => { if (iv) clearInterval(iv); };
   });
   function toggleTheme() {
     if (!browser) return;
@@ -89,11 +95,8 @@
     });
   }
 
-  onMount(() => {
-    if (!browser) return;
-    stagger();
-  });
-
+  // §4.9 — The $effect below already runs once on mount (it reads $page),
+  // so the onMount stagger() is redundant. Keep only the effect.
   $effect(() => {
     $page; // reactive dependency — re-run stagger after each navigation
     setTimeout(stagger, 100);

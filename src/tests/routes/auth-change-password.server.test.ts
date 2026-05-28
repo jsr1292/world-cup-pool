@@ -66,9 +66,13 @@ describe('POST /api/auth/change-password', () => {
 		expect(body.ok).toBe(true);
 		expect(verifyPwd).toHaveBeenCalledWith('oldPass', 'salt:hash');
 		expect(hashPwd).toHaveBeenCalledWith('newPass123');
-		// First call: SELECT, second call: UPDATE, third call: DELETE sessions
-		expect(query).toHaveBeenCalledTimes(3);
+		// §1.3 — 4 calls now: SELECT hash, UPDATE hash, SELECT other tokens, DELETE sessions
+		expect(query).toHaveBeenCalledTimes(4);
 		expect(query).toHaveBeenCalledWith('UPDATE users SET password_hash = $1 WHERE id = $2', ['newhash', 5]);
+		expect(query).toHaveBeenCalledWith(
+			'SELECT token FROM sessions WHERE user_id = $1 AND token != $2',
+			[5, 'current-session-token']
+		);
 		expect(query).toHaveBeenCalledWith('DELETE FROM sessions WHERE user_id = $1 AND token != $2', [5, 'current-session-token']);
 	});
 

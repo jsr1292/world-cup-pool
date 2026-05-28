@@ -3,7 +3,6 @@
  *
  * Reads SQL files from:
  *   - drizzle/migrations/*.sql
- *   - src/lib/server/migrations/*.sql
  *
  * Tracks applied migrations in the _migrations table so each file
  * runs exactly once. Combined with idempotent SQL (IF NOT EXISTS,
@@ -67,6 +66,8 @@ async function runMigrations(): Promise<void> {
 			}
 
 			console.log(`[migrate] apply ${filename} …`);
+			// §7.6 — Synchronous read intentional: migrate is a one-shot startup
+			// script, so blocking the event loop here is fine.
 			const sql = readFileSync(fullPath, 'utf-8');
 
 			const client = await pool.connect();

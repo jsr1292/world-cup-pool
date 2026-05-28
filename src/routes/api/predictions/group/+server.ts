@@ -61,21 +61,25 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   } catch {
     return json({ error: 'Invalid JSON body' }, { status: 400 });
   }
+  if (!body || typeof body !== 'object') {
+    return json({ error: 'Cuerpo inválido' }, { status: 400 });
+  }
   const { prediction_id, groups: rawGroups } = body as {
-    prediction_id: number;
-    groups: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }>;
+    prediction_id?: number;
+    groups?: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }>;
   };
+  // §1.4 — Guard before Object.entries; rawGroups may be undefined.
+  if (!prediction_id || !rawGroups || typeof rawGroups !== 'object') {
+    return json({ error: 'Falta prediction_id o grupos' }, { status: 400 });
+  }
   // Normalize keys to uppercase so 'a' and 'A' are treated identically
   const groups: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }> = {};
   for (const [k, v] of Object.entries(rawGroups)) {
     groups[k.toUpperCase()] = v;
   }
 
-  if (!prediction_id || !groups) {
-    return json({ error: 'Falta prediction_id o grupos' }, { status: 400 });
-  }
-
-  if (Object.keys(groups).length > 32) {
+  // §3.6 — There are only 12 real groups; anything beyond that is abuse.
+  if (Object.keys(groups).length > 12) {
     return json({ error: 'Demasiados grupos' }, { status: 400 });
   }
 

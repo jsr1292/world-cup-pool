@@ -3,6 +3,7 @@
   import { haptic } from '$lib/haptic';
   import { headerTitle } from '$lib/stores/header';
   import { flagEmoji, shortName } from '$lib/teams.js';
+  import { goto } from '$app/navigation';
   let { data } = $props();
 
   $effect(() => {
@@ -10,27 +11,31 @@
     return () => { headerTitle.set({ text: 'Mundial 2026', emoji: '🏆', showBack: false, poolName: null, poolEmoji: null }); };
   });
 
+  // §5.6 — Sentinel for wildcard R32 group entries (3rd-place teams that
+  // are determined post-group-stage). Use this everywhere instead of the
+  // bare '?' string literal so typos surface at compile time.
+  const WILDCARD = '?';
   const R32_MAP = [
     // UPPER LEFT (feeds R16[2,3])
-    { t1g: 'E', t1p: 1, t2g: '?', t2p: 3 },  // R32-1: E1 vs 3rd(A/B/C/D/F)
-    { t1g: 'I', t1p: 1, t2g: '?', t2p: 3 },  // R32-2: I1 vs 3rd(C/D/F/G/H)
+    { t1g: 'E', t1p: 1, t2g: WILDCARD, t2p: 3 },  // R32-1: E1 vs 3rd(A/B/C/D/F)
+    { t1g: 'I', t1p: 1, t2g: WILDCARD, t2p: 3 },  // R32-2: I1 vs 3rd(C/D/F/G/H)
     { t1g: 'A', t1p: 2, t2g: 'B', t2p: 2 },  // R32-3: 2A vs 2B
     { t1g: 'F', t1p: 1, t2g: 'C', t2p: 2 },  // R32-4: F1 vs 2C
     // LOWER LEFT (feeds R16[0,1])
     { t1g: 'K', t1p: 2, t2g: 'L', t2p: 2 }, // R32-5: 2K vs 2L
     { t1g: 'H', t1p: 1, t2g: 'J', t2p: 2 }, // R32-6: H1 vs 2J
-    { t1g: 'D', t1p: 1, t2g: '?', t2p: 3 }, // R32-7: D1 vs 3rd(B/E/F/I/J)
-    { t1g: 'G', t1p: 1, t2g: '?', t2p: 3 }, // R32-8: G1 vs 3rd(A/E/H/I/J)
+    { t1g: 'D', t1p: 1, t2g: WILDCARD, t2p: 3 }, // R32-7: D1 vs 3rd(B/E/F/I/J)
+    { t1g: 'G', t1p: 1, t2g: WILDCARD, t2p: 3 }, // R32-8: G1 vs 3rd(A/E/H/I/J)
     // UPPER RIGHT (feeds R16[4,5])
     { t1g: 'C', t1p: 1, t2g: 'F', t2p: 2 },  // R32-9: C1 vs 2F
     { t1g: 'E', t1p: 2, t2g: 'I', t2p: 2 },  // R32-10: 2E vs 2I
-    { t1g: 'A', t1p: 1, t2g: '?', t2p: 3 },  // R32-11: A1 vs 3rd(C/E/F/H/I)
-    { t1g: 'L', t1p: 1, t2g: '?', t2p: 3 },  // R32-12: L1 vs 3rd(E/H/I/J/K)
+    { t1g: 'A', t1p: 1, t2g: WILDCARD, t2p: 3 },  // R32-11: A1 vs 3rd(C/E/F/H/I)
+    { t1g: 'L', t1p: 1, t2g: WILDCARD, t2p: 3 },  // R32-12: L1 vs 3rd(E/H/I/J/K)
     // LOWER RIGHT (feeds R16[6,7])
     { t1g: 'J', t1p: 1, t2g: 'H', t2p: 2 },  // R32-13: J1 vs 2H
     { t1g: 'D', t1p: 2, t2g: 'G', t2p: 2 },  // R32-14: 2D vs 2G
-    { t1g: 'B', t1p: 1, t2g: '?', t2p: 3 },  // R32-15: B1 vs 3rd(E/F/G/I/J)
-    { t1g: 'K', t1p: 1, t2g: '?', t2p: 3 },  // R32-16: K1 vs 3rd(D/E/I/J/L)
+    { t1g: 'B', t1p: 1, t2g: WILDCARD, t2p: 3 },  // R32-15: B1 vs 3rd(E/F/G/I/J)
+    { t1g: 'K', t1p: 1, t2g: WILDCARD, t2p: 3 },  // R32-16: K1 vs 3rd(D/E/I/J/L)
   ];
 
   // R32 → R16 feed-in: R16[i] = winner of R32[R32_TO_R16[i*2]] vs R32[R32_TO_R16[i*2+1]]
@@ -87,7 +92,10 @@
   function qfLabel(mi) { return QF_LABELS[mi] || `QF-${mi + 1}`; }
   function sfLabel(mi) { return SF_LABELS[mi] || `SF-${mi + 1}`; }
 
-  // Map each R32 "3rd from" slot to the groups whose 3rd-place teams feed into it
+  // Map each R32 "3rd from" slot to the groups whose 3rd-place teams feed into it.
+  // §5.5 — Keys here MUST stay in lockstep with R32_MAP — if you reorder R32_MAP,
+  // also update these keys. TODO: add an integration test that asserts every
+  // wildcard slot in R32_MAP has a matching THIRD_GROUP_MAP entry.
   const THIRD_GROUP_MAP = {
     0: ['A', 'B', 'C', 'D', 'F'],   // E1 vs 3rd(A/B/C/D/F)
     1: ['C', 'D', 'F', 'G', 'H'],   // I1 vs 3rd(C/D/F/G/H)
@@ -108,7 +116,7 @@
     for (let i = 0; i < 16; i++) {
       if (i === mi) continue;
       const picked = _teams.r32[i]?.[1];
-      if (picked && R32_MAP[i].t2g === '?') alreadyPicked.add(picked);
+      if (picked && R32_MAP[i].t2g === WILDCARD) alreadyPicked.add(picked);
     }
     const options = [];
     const seen = new Set();
@@ -191,23 +199,30 @@
     return null;
   }
 
-  // Count how many groups have explicit predictions
+  // Count how many groups have ALL 4 positions filled
   const groupsPredicted = $derived.by(() => {
     const groups = 'ABCDEFGHIJKL'.split('');
-    return groups.filter(g => data.groupPredictions?.[g]?.pos1).length;
+    return groups.filter(g => {
+      const gp = data.groupPredictions?.[g];
+      return gp?.pos1 && gp?.pos2 && gp?.pos3 && gp?.pos4;
+    }).length;
   });
 
   // Initialize state from server data
   function initState() {
     const t = {};
     const exp = {};
+    // §5.1 — Reset wildcard occupants before rebuilding state. Without this,
+    // soft-switching to a different entry leaves the previous entry's
+    // 3rd-place picks visible in the third-place selector modal.
+    _thirdSlots = {};
 
     t.r32 = [];
     exp.r32 = [];
     for (let i = 0; i < 16; i++) {
       const m = R32_MAP[i];
-      const team1 = m.t1g !== '?' ? getGroupTeam(m.t1g, m.t1p) : null;
-      const team2 = m.t2g !== '?' ? getGroupTeam(m.t2g, m.t2p) : null;
+      const team1 = m.t1g !== WILDCARD ? getGroupTeam(m.t1g, m.t1p) : null;
+      const team2 = m.t2g !== WILDCARD ? getGroupTeam(m.t2g, m.t2p) : null;
       t.r32.push([team1, team2]);
       exp.r32.push([false, false]);
     }
@@ -219,8 +234,7 @@
         // the chosen 3rd-place occupant. Restore the occupant map; only mark
         // it as a "winner" pick if the user also predicted them to advance,
         // which we cannot infer from this single field. Default: occupant only.
-        if (ti === 1 && R32_MAP[mi].t2g === '?') {
-          _thirdSlots = _thirdSlots ?? {};
+        if (ti === 1 && R32_MAP[mi].t2g === WILDCARD) {
           _thirdSlots[mi] = data.existingBracket.r32[slot];
         } else {
           exp.r32[mi][ti] = true;
@@ -281,11 +295,13 @@
     bump();
   });
 
+  let _cascadeClearedThisTick = false;
   function recascade() {
+    _cascadeClearedThisTick = false;
     // Restore R32 from group predictions
     for (let i = 0; i < 16; i++) {
       const m = R32_MAP[i];
-      if (m.t1g === '?') continue;
+      if (m.t1g === WILDCARD) continue;
       _teams.r32[i][0] = getGroupTeam(m.t1g, m.t1p);
       // Only auto-fill team2 from group predictions if user hasn't explicitly picked
       if (!_picks.r32[i][1]) {
@@ -297,8 +313,14 @@
     for (let i = 0; i < _teams.r16.length; i++) {
       for (let j = 0; j < 2; j++) {
         const winner = getWinner('r32', R32_TO_R16[i * 2 + j]);
-        // Invalidate explicit pick if the team is no longer the upstream winner
+        // §5.2 — Invalidate explicit pick if the upstream winner changed.
+        // Surface the clearing via a toast so users notice their later-phase
+        // pick was wiped by an earlier-phase edit.
         if (_picks.r16[i][j] && _teams.r16[i][j] !== winner) {
+          if (!_cascadeClearedThisTick) {
+            _cascadeClearedThisTick = true;
+            showToast('ℹ️ Picks de fases posteriores se han recalculado');
+          }
           _picks.r16[i][0] = false;
           _picks.r16[i][1] = false;
         }
@@ -318,14 +340,19 @@
         _teams.qf[i][j] = _picks.qf[i][j] ? _teams.qf[i][j] : winner;
       }
     }
+    // §5.4 — Make the QF→SF and SF→Final mappings explicit. They are
+    // intentionally sequential pair-of-two (mirroring the FIFA bracket)
+    // but the intent should not be buried inside `i*2+j`.
+    const QF_TO_SF = [0, 1, 2, 3]; // SF[i] = (QF[i*2], QF[i*2+1])
+    const SF_TO_FINAL = [0, 1];    // Final[0] = (SF[0], SF[1])
     const cascades = [
-      { from: 'qf', to: 'sf' },
-      { from: 'sf', to: 'final' },
+      { from: 'qf', to: 'sf', map: QF_TO_SF },
+      { from: 'sf', to: 'final', map: SF_TO_FINAL },
     ];
-    for (const { from, to } of cascades) {
+    for (const { from, to, map } of cascades) {
       for (let i = 0; i < _teams[to].length; i++) {
         for (let j = 0; j < 2; j++) {
-          const winner = getWinner(from, i * 2 + j);
+          const winner = getWinner(from, map[i * 2 + j]);
           if (_picks[to][i][j] && _teams[to][i][j] !== winner) {
             _picks[to][i][0] = false;
             _picks[to][i][1] = false;
@@ -540,17 +567,35 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prediction_id: data.selectedId, picks }),
       });
-      if (res.ok) { showToast('✓ Guardado'); }
-      else { saveError = 'Error al guardar'; setTimeout(() => { saveError = null; }, 3000); }
-    } catch (e) { console.error(e); }
+      if (res.ok) { saveError = null; showToast('✓ Guardado'); }
+      else {
+        const body = await res.json().catch(() => ({}));
+        saveError = body.error || 'Error al guardar';
+        showToast('⚠️ ' + saveError);
+        setTimeout(() => { saveError = null; }, 3000);
+      }
+    } catch (e) {
+      console.error(e);
+      saveError = 'Error de conexión';
+      showToast('⚠️ ' + saveError);
+      setTimeout(() => { saveError = null; }, 3000);
+    }
     finally { saving = false; }
   }
 
   async function switchEntry(label) {
+    // §4.2 — Flush any pending autosave before switching so the last edit
+    // isn't lost. Use goto for soft navigation; window.location.href would
+    // also discard the carefully-built _teams/_picks state.
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = null;
+      await saveBracket();
+    }
     const url = new URL(window.location.href);
     if (label) url.searchParams.set('entry', label);
     else url.searchParams.delete('entry');
-    window.location.href = url.pathname + url.search;
+    await goto(url.pathname + url.search, { invalidateAll: true });
   }
 
   async function createEntry() {
@@ -566,7 +611,8 @@
       if (res.ok) {
         showCreateEntry = false;
         newEntryLabel = '';
-        window.location.href = `/pool/${data.pool.id}/bracket?entry=${encodeURIComponent(d.label)}`;
+        // §4.2 — Use goto for soft navigation; preserves any pending state.
+        await goto(`/pool/${data.pool.id}/bracket?entry=${encodeURIComponent(d.label)}`, { invalidateAll: true });
       } else {
         createMsg = d.error || 'Error';
       }
@@ -627,7 +673,9 @@
     {:else}
       <div class="save-area">
         <span class="pick-count">{totalPicks} picks</span>
-        {#if saving}
+        {#if saveError}
+          <span style="font-size: 10px; color: var(--red);">⚠️ {saveError}</span>
+        {:else if saving}
           <span style="font-size: 10px; color: var(--text-muted);">Guardando...</span>
         {:else if saved}
           <span style="font-size: 10px; color: var(--green);">✓ Guardado</span>
@@ -707,13 +755,13 @@
           <div class="match-list r32-list">
             {#each (teams.r32 || []).slice(0, 8) as match, mi}
               {@const m = R32_MAP[mi]}
-              {@const isPlaceholder = m.t1g === '?'}
+              {@const isPlaceholder = m.t1g === WILDCARD}
               <div class="match-card" class:placeholder={isPlaceholder} class:path-highlight={isInPath('r32', mi)}>
                 {#each [0, 1] as ti}
                   {@const tid = match[ti]}
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
-                  {@const isThirdSlot = ti === 1 && m.t2g === '?'}
+                  {@const isThirdSlot = ti === 1 && m.t2g === WILDCARD}
                   {@const canClick = !data.isLocked && (tid !== null || isThirdSlot)}
                   <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => { if (!canClick) return; if (isThirdSlot && tid === null) { openThirdSelector(mi); } else { pickTeam('r32', mi, ti, tid); } }} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { if (tid) hoveredTeam = null; }}>
                     {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}
@@ -888,13 +936,13 @@
             {#each (teams.r32 || []).slice(8, 16) as match, idx}
               {@const mi = idx + 8}
               {@const m = R32_MAP[mi]}
-              {@const isPlaceholder = m.t1g === '?'}
+              {@const isPlaceholder = m.t1g === WILDCARD}
               <div class="match-card" class:placeholder={isPlaceholder} class:path-highlight={isInPath('r32', mi)}>
                 {#each [0, 1] as ti}
                   {@const tid = match[ti]}
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
-                  {@const isThirdSlot = ti === 1 && m.t2g === '?'}
+                  {@const isThirdSlot = ti === 1 && m.t2g === WILDCARD}
                   {@const canClick = !data.isLocked && (tid !== null || isThirdSlot)}
                   <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => { if (!canClick) return; if (isThirdSlot && tid === null) { openThirdSelector(mi); } else { pickTeam('r32', mi, ti, tid); } }} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { if (tid) hoveredTeam = null; }}>
                     {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}
@@ -924,13 +972,13 @@
         <div class="match-list r32-list">
           {#each (teams.r32 || []) as match, mi}
             {@const m = R32_MAP[mi]}
-            {@const isPlaceholder = m.t1g === '?'}
+            {@const isPlaceholder = m.t1g === WILDCARD}
             <div class="match-card" class:placeholder={isPlaceholder} class:path-highlight={isInPath('r32', mi)}>
               {#each [0, 1] as ti}
                 {@const tid = match[ti]}
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.r32?.[mi]?.[ti]}
-                {@const isThirdSlot = ti === 1 && m.t2g === '?'}
+                {@const isThirdSlot = ti === 1 && m.t2g === WILDCARD}
                 {@const canClick = !data.isLocked && (tid !== null || isThirdSlot)}
                 <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => { if (!canClick) return; if (isThirdSlot && tid === null) { openThirdSelector(mi); } else { pickTeam('r32', mi, ti, tid); } }} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { if (tid) hoveredTeam = null; }}>
                   {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}

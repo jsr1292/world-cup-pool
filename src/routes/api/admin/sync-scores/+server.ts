@@ -5,25 +5,9 @@ import { query } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
+import { runWithConcurrency } from '$lib/server/concurrency.js';
 
 const SCORE_CONCURRENCY = 3;
-
-// §3.7 — Bounded-concurrency worker pool. Caps in-flight calculateAllScores
-// calls so two concurrent syncs don't pile up dozens of contenders for the
-// per-pool advisory lock.
-async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
-  const queue = items.slice();
-  const runners: Promise<void>[] = [];
-  for (let i = 0; i < Math.min(limit, queue.length); i++) {
-    runners.push((async () => {
-      while (queue.length > 0) {
-        const item = queue.shift()!;
-        try { await worker(item); } catch (e) { console.error('[worker]', e); }
-      }
-    })());
-  }
-  await Promise.all(runners);
-}
 
 // POST /api/admin/sync-scores
 export const POST: RequestHandler = async ({ locals }) => {

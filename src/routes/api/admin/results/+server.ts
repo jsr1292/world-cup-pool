@@ -5,6 +5,7 @@ import type { RequestHandler } from './$types.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
 import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
 import { logAudit } from '$lib/server/audit.js';
+import { runWithConcurrency } from '$lib/server/concurrency.js';
 
 // POST /api/admin/results
 // Body: { match_id, home_score, away_score }
@@ -69,11 +70,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     await logAudit('update_result', locals.user.id, 'match', match_id, { home_score: match.home_score, away_score: match.away_score }, { home_score, away_score });
 
-    // Sync rescoring — score all pools before responding
+    // §2.6 — Score pools concurrently (cap 3) so manual results don't
+    // produce a request that blocks for the sequential sum of all pools.
     const { rows: pools } = await query('SELECT id FROM pools WHERE is_active = true');
     const poolIds = pools.map((p: any) => p.id);
 
-    for (const poolId of poolIds) {
+    await runWithConcurrency(poolIds, 3, async (poolId) => {
+      // §2.9 — Re-check is_active to match sync-scores semantics.
+      const { rows: stillActive } = await query(
+        'SELECT 1 FROM pools WHERE id = $1 AND is_active = true',
+        [poolId]
+      );
+      if (stillActive.length === 0) return;
       try {
         await calculateAllScores(poolId);
         invalidateCachedPoolLeaderboard(poolId);
@@ -81,7 +89,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       } catch (e) {
         console.error(`[score] admin/results pool ${poolId}:`, e);
       }
-    }
+    });
     invalidateGlobalLeaderboard();
 
     return json({ ok: true });

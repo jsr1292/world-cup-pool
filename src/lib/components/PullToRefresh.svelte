@@ -5,7 +5,6 @@
   let refreshing = $state(false);
   let startY = 0;
   let pulling = false;
-  let containerEl: HTMLElement | null = null;
 
   function onTouchStart(e: TouchEvent) {
     if (refreshing) return;
@@ -35,7 +34,7 @@
   }
 </script>
 
-<div bind:this={containerEl} ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd} style="min-height:100%;overflow-y:auto;">
+<div ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd} style="min-height:100%;overflow-y:auto;">
   <!-- Pull indicator -->
   <div style="display:flex;align-items:center;justify-content:center;height:{refreshing ? 44 : pullY}px;opacity:{refreshing || pullY > 10 ? 1 : 0};transition:{pullY === 0 ? 'height 0.3s ease-out,opacity 0.2s' : 'none'};pointer-events:none;">
     {#if refreshing}

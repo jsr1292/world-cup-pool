@@ -51,7 +51,11 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
 
   // Get selected prediction from query param or first one
   const selectedLabel = url.searchParams.get('entry') || '';
-  let selectedPrediction = predictions.find(p => p.label === selectedLabel) || predictions[0] || null;
+  // §7.3 — Match labels case-insensitively to mirror the /api/predictions/group
+  // uppercase normalization. Two entries differing only in case would otherwise
+  // be unselectable.
+  const selectedNorm = selectedLabel?.toLowerCase() ?? '';
+  let selectedPrediction = predictions.find(p => (p.label ?? '').toLowerCase() === selectedNorm) || predictions[0] || null;
   let selectedId: number | null = null;
 
   // Load knockout matches with both teams set (available for prediction)

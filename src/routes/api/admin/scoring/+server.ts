@@ -3,6 +3,8 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { getScoringRules } from '$lib/server/scoring.js';
 import { logAudit } from '$lib/server/audit.js';
+import { parseJsonBody } from '$lib/server/json-body.js';
+import { errCode } from '$lib/server/err-code.js';
 
 const VALID_RULES = new Set([
   'match_outcome', 'exact_score', 'group_position',
@@ -20,14 +22,16 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   try {
     const { rows: poolRows } = await query('SELECT created_by FROM pools WHERE id = $1', [poolId]);
     const pool = poolRows[0] ?? null;
-    if (!pool || pool.created_by !== locals.user.id) {
+    // §1.7 — Pool creator OR site admin can manage scoring rules.
+    if (!pool || (pool.created_by !== locals.user.id && !locals.user.is_admin)) {
       return json({ error: 'Prohibido' }, { status: 403 });
     }
 
     return json(await getScoringRules(poolId));
   } catch (e) {
-    console.error('[api/admin/scoring] GET error:', e);
-    return json({ error: 'Internal server error' }, { status: 500 });
+    const code = errCode();
+    console.error(`[api/admin/scoring] ${code}:`, e);
+    return json({ error: 'Internal server error', code }, { status: 500 });
   }
 };
 
@@ -36,12 +40,15 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
-  const body = await request.json() as {
+  const parsed = await parseJsonBody(request);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body as {
     pool_id: number;
     rules?: Record<string, number>;
     deadline_group?: string | null;
     deadline_knockout?: string | null;
   };
+  if (!body) return json({ error: 'Cuerpo JSON inválido' }, { status: 400 });
   const { pool_id, rules } = body;
 
   if (!pool_id) return json({ error: 'Falta pool_id' }, { status: 400 });
@@ -93,7 +100,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     return json({ ok: true });
   } catch (e) {
-    console.error('[api/admin/scoring] POST error:', e);
-    return json({ error: 'Internal server error' }, { status: 500 });
+    const code = errCode();
+    console.error(`[api/admin/scoring] ${code}:`, e);
+    return json({ error: 'Internal server error', code }, { status: 500 });
   }
 };

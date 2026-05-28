@@ -60,12 +60,17 @@ export async function fetchFromApiFootball(leagueId = 1, season = 2026): Promise
     const matches: LiveMatch[] = [];
 
     for (const fixture of (data.response || [])) {
+      // §2.4 — Upstream "finished" matches can still arrive with null goals
+      // (abandoned, walkover, ingestion lag). Skip rather than write 0-0.
+      const homeScore = fixture.goals?.home;
+      const awayScore = fixture.goals?.away;
+      if (homeScore == null || awayScore == null) continue;
       matches.push({
         fifa_id: String(fixture.fixture.id),
         home_team: fixture.teams.home.name,
         away_team: fixture.teams.away.name,
-        home_score: fixture.goals.home ?? 0,
-        away_score: fixture.goals.away ?? 0,
+        home_score: homeScore,
+        away_score: awayScore,
         status: 'finished',
         phase: mapRoundToPhase(fixture.fixture.round),
         kickoff_time: fixture.fixture.date ? new Date(fixture.fixture.date) : null,
@@ -110,12 +115,16 @@ export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
 		const matches: LiveMatch[] = [];
 
 		for (const m of data.results) {
+      // §2.4 — Skip rows missing a score rather than coercing to 0.
+      const homeScore = m.home?.score;
+      const awayScore = m.away?.score;
+      if (homeScore == null || awayScore == null) continue;
       matches.push({
         fifa_id: String(m.idMatch),
         home_team: m.home?.teamName ?? '',
         away_team: m.away?.teamName ?? '',
-        home_score: m.home?.score ?? 0,
-        away_score: m.away?.score ?? 0,
+        home_score: homeScore,
+        away_score: awayScore,
         status: m.matchStatus === 'Completed' ? 'finished' : 'live',
         phase: mapFifaStageToPhase(m.idStage),
         kickoff_time: m.date ? new Date(m.date) : null,
@@ -151,6 +160,10 @@ export async function syncScores(): Promise<{ updated: number; skipped: number; 
 
   for (const m of matches) {
     if (m.status !== 'finished') { skipped++; continue; }
+    // §2.5 — Refuse imports with an unmapped FIFA stage ID; otherwise the
+    // unknown phase would silently slip past scoring queries that filter
+    // by phase. Replace the stub stage IDs in FIFA_STAGE_MAP before kickoff.
+    if (m.phase === 'unknown') { skipped++; continue; }
 
     // Find match by FIFA ID or team names
     let dbMatch: any = null;

@@ -11,8 +11,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   try {
 		const { code } = await request.json();
 		if (!code || typeof code !== 'string') return json({ error: 'Código requerido' }, { status: 400 });
-		// B3-3: Validar formato del código antes de consultar la BD (16 chars base64url)
-		if (!/^[A-Za-z0-9_-]{16}$/.test(code)) {
+		// §1.14 — Match generateInviteCode() which now emits 24-char uppercase
+		// base64url. Anything else is malformed.
+		if (!/^[A-Z0-9_-]{24}$/.test(code.toUpperCase())) {
 			return json({ error: 'Código de invitación inválido' }, { status: 400 });
 		}
 

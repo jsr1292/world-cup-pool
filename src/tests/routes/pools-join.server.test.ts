@@ -27,7 +27,7 @@ describe('POST /api/pools/join', () => {
 
 	it('returns 401 when not authenticated', async () => {
 		const res = await POST({
-			request: mockRequest({ code: 'AbCdEfGhIjKlMnOp' }),
+			request: mockRequest({ code: 'ABCDEFGHIJKLMNOPQRSTUVWX' }),
 			locals: {} as any,
 		});
 		const data = await res.json();
@@ -67,7 +67,7 @@ describe('POST /api/pools/join', () => {
 
 	it('returns 400 when invite code has invalid characters', async () => {
 		const res = await POST({
-			request: mockRequest({ code: 'AbCdEfGhIjKlMn!' }),
+			request: mockRequest({ code: 'ABCDEFGHIJKLMNOPQRSTUVW!' }),
 			locals: mockLocals(1),
 		});
 		const data = await res.json();
@@ -78,7 +78,7 @@ describe('POST /api/pools/join', () => {
 	it('returns 404 when pool is not found', async () => {
 		(getPoolByInvite as any).mockResolvedValueOnce(null);
 		const res = await POST({
-			request: mockRequest({ code: 'AbCdEfGhIjKlMnOp' }),
+			request: mockRequest({ code: 'ABCDEFGHIJKLMNOPQRSTUVWX' }),
 			locals: mockLocals(1),
 		});
 		const data = await res.json();
@@ -92,7 +92,7 @@ describe('POST /api/pools/join', () => {
 			is_active: false,
 		});
 		const res = await POST({
-			request: mockRequest({ code: 'AbCdEfGhIjKlMnOp' }),
+			request: mockRequest({ code: 'ABCDEFGHIJKLMNOPQRSTUVWX' }),
 			locals: mockLocals(1),
 		});
 		const data = await res.json();
@@ -107,7 +107,7 @@ describe('POST /api/pools/join', () => {
 		});
 		(query as any).mockResolvedValueOnce({ rows: [{ cnt: 200 }] });
 		const res = await POST({
-			request: mockRequest({ code: 'AbCdEfGhIjKlMnOp' }),
+			request: mockRequest({ code: 'ABCDEFGHIJKLMNOPQRSTUVWX' }),
 			locals: mockLocals(1),
 		});
 		const data = await res.json();
@@ -123,7 +123,7 @@ describe('POST /api/pools/join', () => {
 		(query as any).mockResolvedValueOnce({ rows: [{ cnt: 10 }] });
 		(joinPool as any).mockResolvedValueOnce(false);
 		const res = await POST({
-			request: mockRequest({ code: 'AbCdEfGhIjKlMnOp' }),
+			request: mockRequest({ code: 'ABCDEFGHIJKLMNOPQRSTUVWX' }),
 			locals: mockLocals(1),
 		});
 		const data = await res.json();
@@ -139,13 +139,13 @@ describe('POST /api/pools/join', () => {
 		(query as any).mockResolvedValueOnce({ rows: [{ cnt: 10 }] });
 		(joinPool as any).mockResolvedValueOnce(true);
 		const res = await POST({
-			request: mockRequest({ code: 'AbCdEfGhIjKlMnOp' }),
+			request: mockRequest({ code: 'ABCDEFGHIJKLMNOPQRSTUVWX' }),
 			locals: mockLocals(42),
 		});
 		const data = await res.json();
 		expect(res.status).toBe(200);
 		expect(data).toEqual({ pool_id: 5 });
-		expect(getPoolByInvite).toHaveBeenCalledWith('ABCDEFGHIJKLMNOP');
+expect(getPoolByInvite).toHaveBeenCalledWith('ABCDEFGHIJKLMNOPQRSTUVWX')
 		expect(joinPool).toHaveBeenCalledWith(5, 42);
 	});
 });

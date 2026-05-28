@@ -3,6 +3,7 @@ import { verifyPwd, hashPwd } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { checkAuthRate } from '$lib/server/rate-limit.js';
+import { invalidateCachedSession } from '$lib/server/cache.js';
 
 export const POST: RequestHandler = async ({ request, locals, cookies }) => {
   if (!locals.user) return json({ error: 'Inicia sesión' }, { status: 401 });
@@ -22,8 +23,18 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
       return json({ error: 'Contraseña actual incorrecta' }, { status: 401 });
 
     await query('UPDATE users SET password_hash = $1 WHERE id = $2', [await hashPwd(new_password), locals.user.id]);
-    // Invalidate all other sessions (keep current one alive)
-    await query('DELETE FROM sessions WHERE user_id = $1 AND token != $2', [locals.user.id, cookies.get('session')]);
+    // §1.3 — Capture other sessions BEFORE deletion so we can clear their
+    // entries from the in-process session cache (otherwise a stolen cookie
+    // remains "valid" against the cache for up to 60s after this call).
+    const currentToken = cookies.get('session');
+    const { rows: otherTokens } = await query(
+      'SELECT token FROM sessions WHERE user_id = $1 AND token != $2',
+      [locals.user.id, currentToken]
+    );
+    await query('DELETE FROM sessions WHERE user_id = $1 AND token != $2', [locals.user.id, currentToken]);
+    for (const row of otherTokens) {
+      invalidateCachedSession(row.token);
+    }
     return json({ ok: true });
   } catch (e) {
     const code = errCode();

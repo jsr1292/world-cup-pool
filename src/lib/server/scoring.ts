@@ -61,17 +61,67 @@ export async function calculateGroupScores(
     else { h.points += 1; a.points += 1; }
   }
 
-  // Rank teams per group (by points, then GD, then GF)
-  const actualPositions: Record<string, number[]> = {}; // group -> [pos1_teamId, pos2, pos3, pos4]
+  // §2.3 — FIFA tiebreaker: points → H2H points → H2H GD → H2H GF →
+  // overall GD → overall GF. We compute H2H only across the subset of teams
+  // tied on overall points, then fall back to the global stats.
+  function rankGroup(group: string, teams: Record<number, { points: number; gf: number; ga: number }>): number[] {
+    const ids = Object.keys(teams).map(Number);
+    // Cluster teams by their overall points.
+    const groupMatches = matches.filter(m => m.group_name === group);
+
+    function h2hStats(subset: Set<number>): Map<number, { points: number; gf: number; ga: number }> {
+      const out = new Map<number, { points: number; gf: number; ga: number }>();
+      for (const id of subset) out.set(id, { points: 0, gf: 0, ga: 0 });
+      for (const m of groupMatches) {
+        if (!subset.has(m.home_team_id) || !subset.has(m.away_team_id)) continue;
+        const h = out.get(m.home_team_id)!;
+        const a = out.get(m.away_team_id)!;
+        h.gf += m.home_score; h.ga += m.away_score;
+        a.gf += m.away_score; a.ga += m.home_score;
+        if (m.home_score > m.away_score) h.points += 3;
+        else if (m.home_score < m.away_score) a.points += 3;
+        else { h.points += 1; a.points += 1; }
+      }
+      return out;
+    }
+
+    // First sort by overall points only; then break ties via H2H within
+    // each cluster, then fall back to overall GD/GF.
+    const initial = ids.map(id => ({ id, ...teams[id], gd: teams[id].gf - teams[id].ga }));
+    initial.sort((a, b) => b.points - a.points);
+
+    const finalOrder: number[] = [];
+    let i = 0;
+    while (i < initial.length) {
+      let j = i + 1;
+      while (j < initial.length && initial[j].points === initial[i].points) j++;
+      const cluster = initial.slice(i, j);
+      if (cluster.length === 1) {
+        finalOrder.push(cluster[0].id);
+      } else {
+        const subset = new Set(cluster.map(c => c.id));
+        const h2h = h2hStats(subset);
+        cluster.sort((a, b) => {
+          const ah = h2h.get(a.id)!;
+          const bh = h2h.get(b.id)!;
+          if (bh.points !== ah.points) return bh.points - ah.points;
+          const ahGd = ah.gf - ah.ga;
+          const bhGd = bh.gf - bh.ga;
+          if (bhGd !== ahGd) return bhGd - ahGd;
+          if (bh.gf !== ah.gf) return bh.gf - ah.gf;
+          if (b.gd !== a.gd) return b.gd - a.gd;
+          return b.gf - a.gf;
+        });
+        for (const c of cluster) finalOrder.push(c.id);
+      }
+      i = j;
+    }
+    return finalOrder;
+  }
+
+  const actualPositions: Record<string, number[]> = {};
   for (const [group, teams] of Object.entries(standings)) {
-    // TODO (B6-6): La clasificación usa puntos → dif. de goles → goles a favor.
-    // El desempate oficial de la FIFA incluye resultados directos entre los equipos empatados
-    // antes de aplicar las diferencias globales. Implementar desempate H2H requiere
-    // una PR dedicada con casos de prueba para ciclos de 3/4 equipos.
-    const sorted = Object.entries(teams)
-      .map(([id, s]) => ({ id: Number(id), ...s, gd: s.gf - s.ga }))
-      .sort((a, b) => b.points - a.points || b.gd - a.gd || b.gf - a.gf);
-    actualPositions[group] = sorted.map(t => t.id);
+    actualPositions[group] = rankGroup(group, teams);
   }
 
   // Bulk fetch all group predictions for this pool

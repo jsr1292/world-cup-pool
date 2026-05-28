@@ -43,6 +43,24 @@ export const handle: Handle = async ({ event, resolve }) => {
             url.hostname = 'localhost';
             url.protocol = 'http:';
           }
+          // Also collapse private LAN IPs to localhost so that accessing via
+          // http://192.168.x.x:3000 from another machine on the same network
+          // doesn't trigger a cross-origin rejection.
+          // §1.12 — Only in non-production. In prod the app may sit behind a
+          // reverse proxy whose IP looks like a 10.x.x.x address; without this
+          // gate, an Origin spoofed to a private IP would bypass the check.
+          if (process.env.NODE_ENV !== 'production') {
+            const parts = url.hostname.split('.');
+            if (parts.length === 4 && parts.every(p => /^\d+$/.test(p))) {
+              const octets = parts.map(Number);
+              if (octets[0] === 10 ||
+                  (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+                  (octets[0] === 192 && octets[1] === 168)) {
+                url.hostname = 'localhost';
+                url.protocol = 'http:';
+              }
+            }
+          }
           return url.origin; // scheme + hostname + port — full comparison
         } catch {
           return u;

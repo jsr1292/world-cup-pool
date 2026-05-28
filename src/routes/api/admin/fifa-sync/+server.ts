@@ -3,6 +3,8 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
 import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
+import { runWithConcurrency } from '$lib/server/concurrency.js';
+import { errCode } from '$lib/server/err-code.js';
 
 // POST /api/admin/fifa-sync
 // Triggers a manual FIFA API sync from the admin page
@@ -22,11 +24,12 @@ export const POST: RequestHandler = async ({ locals }) => {
 
     // Recalculate scores regardless (useful after manual edits)
     const { rows: pools } = await query('SELECT id FROM pools WHERE is_active = true');
-    for (const p of pools) {
-      await calculateAllScores(p.id);
-      invalidateCachedPoolLeaderboard(p.id);
-      invalidateCachedPoolResults(p.id);
-    }
+    const poolIds = pools.map((p: any) => p.id);
+    await runWithConcurrency(poolIds, 3, async (poolId) => {
+      await calculateAllScores(poolId);
+      invalidateCachedPoolLeaderboard(poolId);
+      invalidateCachedPoolResults(poolId);
+    });
     invalidateGlobalLeaderboard();
 
     return json({
@@ -36,7 +39,8 @@ export const POST: RequestHandler = async ({ locals }) => {
       pools: pools.length,
     });
   } catch (e) {
-    console.error('FIFA sync error:', e);
-    return json({ error: 'Error en sincronización' }, { status: 500 });
+    const code = errCode();
+    console.error(`[api/admin/fifa-sync] ${code}:`, e);
+    return json({ error: 'Error en sincronización', code }, { status: 500 });
   }
 };

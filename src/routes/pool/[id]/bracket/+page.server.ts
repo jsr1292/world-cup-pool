@@ -36,7 +36,9 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 
   // Get selected entry from query param
   const selectedLabel = url.searchParams.get('entry') || '';
-  const selectedPrediction = predictions.find(p => p.label === selectedLabel) || predictions[0] || null;
+  // §7.3 — see predict/+page.server.ts for rationale.
+  const selectedNorm = selectedLabel?.toLowerCase() ?? '';
+  const selectedPrediction = predictions.find(p => (p.label ?? '').toLowerCase() === selectedNorm) || predictions[0] || null;
   const predictionId = selectedPrediction ? Number(selectedPrediction.id) : null;
 
   // Load group predictions

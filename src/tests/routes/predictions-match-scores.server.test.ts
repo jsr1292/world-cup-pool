@@ -128,7 +128,14 @@ describe('POST /api/predictions/match-scores', () => {
 		expect(body.error).toBeDefined();
 	});
 
-	it('returns 400 when match already started', async () => {
+	it('drops started matches and returns 200 with dropped array', async () => {
+		// §2.8 — Started matches are silently dropped from the batch instead of
+		// rejecting the whole request, so autosave doesn't lose unrelated edits.
+		const mockClient = {
+			query: vi.fn().mockResolvedValue(undefined),
+			release: vi.fn()
+		};
+		mockGetClient.mockResolvedValueOnce(mockClient);
 		mockQuery
 			.mockResolvedValueOnce({
 				rows: [{ user_id: 1, pool_id: 5 }]
@@ -146,9 +153,10 @@ describe('POST /api/predictions/match-scores', () => {
 			request: mockRequest({ prediction_id: 1, scores: { '10': { home_score: 2, away_score: 1 } } }),
 			locals: mockLocals(1) as any
 		});
-		expect(response.status).toBe(400);
+		expect(response.status).toBe(200);
 		const body = await response.json();
-		expect(body.error).toBeDefined();
+		expect(body.ok).toBe(true);
+		expect(body.dropped).toEqual([10]);
 	});
 
 	it('returns 403 when group deadline passed', async () => {

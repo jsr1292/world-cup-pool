@@ -49,6 +49,7 @@ export type PoolResultsCache = {
 
 // ─── Teams ─────────────────────────────────────────────────────────────────
 // Teams are static during a tournament. Load once per process.
+// If team data changes (re-seed, migration), call invalidateTeamsCache() or restart.
 let _teams: any[] | null = null;
 let _teamsMap: Record<number, any> | null = null;
 
@@ -136,12 +137,12 @@ export function getCachedPoolResults(poolId: number): any | null {
 }
 
 export function setCachedPoolResults(poolId: number, data: any): void {
-	if (process.env.NODE_ENV !== 'production') {
-		const forbidden = ['userId', 'prediction_id', 'predictions', 'userGroupPreds', 'userBracketPreds'];
-		for (const key of forbidden) {
-			if (key in (data as Record<string, unknown>)) {
-				throw new Error(`[cache] setCachedPoolResults must not contain user-scoped key: ${key}`);
-			}
+	// §7.2 — Run unconditionally; throwing on a real regression in production
+	// is cheap and the only way to catch the misuse before users see leaked data.
+	const forbidden = ['userId', 'prediction_id', 'predictions', 'userGroupPreds', 'userBracketPreds'];
+	for (const key of forbidden) {
+		if (key in (data as Record<string, unknown>)) {
+			throw new Error(`[cache] setCachedPoolResults must not contain user-scoped key: ${key}`);
 		}
 	}
 	_poolResults.set(poolId, { data, expiresAt: Date.now() + POOL_RESULTS_TTL });
@@ -177,4 +178,29 @@ export function setCachedSession(token: string, user: any): void {
 
 export function invalidateCachedSession(token: string): void {
 	_sessionCache.delete(token);
+}
+
+// §1.1 — Invalidate every cached session row for a single user. Used by the
+// reset-password / change-password / promote-demote paths so a privilege
+// change (or forced logout) takes effect immediately rather than after the
+// 60s TTL expires.
+export function invalidateCachedSessionByUserId(userId: number): void {
+	for (const [token, e] of _sessionCache) {
+		if (e.data?.id === userId) _sessionCache.delete(token);
+	}
+}
+
+// §6.5 — Surface cache occupancy for /api/health.
+export function getCacheStats(): {
+	sessions: number;
+	poolLeaderboard: number;
+	poolResults: number;
+	teams: number;
+} {
+	return {
+		sessions: _sessionCache.size,
+		poolLeaderboard: _poolLeaderboard.size,
+		poolResults: _poolResults.size,
+		teams: _teams?.length ?? 0,
+	};
 }

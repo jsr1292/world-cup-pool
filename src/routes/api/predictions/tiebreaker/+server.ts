@@ -38,21 +38,38 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'Demasiadas peticiones. Espera un momento.' }, { status: 429 });
   }
 
-  const body = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Cuerpo JSON inválido' }, { status: 400 });
+  }
+  if (!body || typeof body !== 'object') {
+    return json({ error: 'Cuerpo inválido' }, { status: 400 });
+  }
   const { prediction_id, home_score, away_score } = body as {
-    prediction_id: number;
-    home_score: number | null;
-    away_score: number | null;
+    prediction_id?: number;
+    home_score?: number | null;
+    away_score?: number | null;
   };
 
   if (!prediction_id) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
+  // §1.6 — Reject mixed-null state. The caller must either set both goals
+  // or clear both; otherwise the save branch would silently delete the row
+  // and surface a misleading "saved" status to the client.
+  const h = home_score ?? null;
+  const a = away_score ?? null;
+  if ((h === null) !== (a === null)) {
+    return json({ error: 'Debes indicar ambos goles o ninguno' }, { status: 400 });
+  }
+
   // Validate scores
-  if (home_score !== null && away_score !== null) {
-    if (!Number.isInteger(home_score) || !Number.isInteger(away_score)) {
+  if (h !== null && a !== null) {
+    if (!Number.isInteger(h) || !Number.isInteger(a)) {
       return json({ error: 'Los goles deben ser números enteros' }, { status: 400 });
     }
-    if (home_score < 0 || away_score < 0 || home_score > 30 || away_score > 30) {
+    if (h < 0 || a < 0 || h > 30 || a > 30) {
       return json({ error: 'Goles fuera de rango (0-30)' }, { status: 400 });
     }
   }
@@ -84,12 +101,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     // §3.9 — Surface whether we saved or deleted so the UI can show the right
     // confirmation toast.
     let action: 'saved' | 'deleted';
-    if (home_score !== null && away_score !== null) {
+    if (h !== null && a !== null) {
       await query(`
         INSERT INTO tiebreaker (prediction_id, home_score, away_score)
         VALUES ($1, $2, $3)
         ON CONFLICT(prediction_id) DO UPDATE SET home_score = $2, away_score = $3
-      `, [prediction_id, home_score, away_score]);
+      `, [prediction_id, h, a]);
       action = 'saved';
     } else {
       await query('DELETE FROM tiebreaker WHERE prediction_id = $1', [prediction_id]);

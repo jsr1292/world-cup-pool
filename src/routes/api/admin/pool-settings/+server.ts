@@ -2,12 +2,16 @@ import { errCode } from '$lib/server/err-code.js';
 import { query } from '$lib/server/db.js';
 import { getPoolById } from '$lib/server/queries.js';
 import { json, type RequestHandler } from '@sveltejs/kit';
+import { parseJsonBody } from '$lib/server/json-body.js';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
   try {
-    const body = await request.json();
+    const parsed = await parseJsonBody(request);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.body as { pool_id?: number; allow_multiple_predictions?: boolean };
+    if (!body) return json({ error: 'Cuerpo JSON inválido' }, { status: 400 });
     const { pool_id, allow_multiple_predictions } = body;
 
     if (!pool_id) return json({ error: 'pool_id required' }, { status: 400 });

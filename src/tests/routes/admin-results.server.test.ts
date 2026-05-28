@@ -15,6 +15,17 @@ vi.mock('$lib/server/cache.js', () => ({
 vi.mock('$lib/server/audit.js', () => ({
 	logAudit: vi.fn()
 }));
+vi.mock('$lib/server/err-code.js', () => ({
+	errCode: vi.fn().mockReturnValue('T-XXXX')
+}));
+vi.mock('$lib/server/concurrency.js', () => ({
+	runWithConcurrency: vi.fn(async (items: any[], limit: number, worker: (item: any) => Promise<void>) => {
+		// Execute sequentially in tests to keep mock ordering predictable
+		for (const item of items) {
+			await worker(item);
+		}
+	})
+}));
 
 import { query as _mockQuery } from '$lib/server/db.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
@@ -258,6 +269,9 @@ describe('POST /api/admin/results', () => {
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 3, home_score: 0, away_score: 0, home_team_id: 1, away_team_id: 2 }] });
 		mockQuery.mockResolvedValueOnce({ rows: [] });
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 100 }, { id: 200 }] });
+		// §2.6 — runWithConcurrency worker re-checks is_active per pool
+		mockQuery.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }); // pool 100 active
+		mockQuery.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }); // pool 200 active
 
 		(calculateAllScores as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 		(invalidateCachedPoolLeaderboard as ReturnType<typeof vi.fn>).mockReturnValue(undefined);

@@ -1,6 +1,12 @@
 import { errCode } from '$lib/server/err-code.js';
 import { query, getClient } from '$lib/server/db.js';
-import { getTeamsMapCached } from '$lib/server/cache.js';
+import {
+  getTeamsMapCached,
+  invalidateCachedPoolLeaderboard,
+  invalidateCachedPoolResults,
+  invalidateGlobalLeaderboard,
+} from '$lib/server/cache.js';
+import { calculateAllScores } from '$lib/server/scoring.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 import { checkPredictionRate } from '$lib/server/rate-limit.js';
@@ -159,6 +165,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     if (!teamsMap[id]) return json({ error: `Equipo inválido (id: ${id})` }, { status: 400 });
   }
 
+  // §2.2 — Reject duplicate team picks within a single phase. A crafted
+  // payload could otherwise place the same team in N slots and collect Nx
+  // the per-pick points when that team wins.
+  for (const [phase, slots] of Object.entries(picks)) {
+    const seen = new Set<number>();
+    for (const teamId of Object.values(slots)) {
+      if (teamId === null) continue;
+      if (seen.has(teamId)) {
+        return json({ error: `Equipo repetido en fase ${phase}` }, { status: 400 });
+      }
+      seen.add(teamId);
+    }
+  }
+
   // B5-3: Cross-phase consistency check.
   // Any team picked in a later phase must also appear in the immediately preceding phase.
   const PHASE_PROGRESSION: Record<string, string> = {
@@ -240,6 +260,28 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       }
     }
     await client.query('COMMIT');
+
+    // §2.11 — If any knockout match is already finished, the user just edited
+    // a pick that affects total_score. Rescore inline so the UI reflects
+    // the new total immediately, matching the match-scores POST behaviour.
+    try {
+      const { rows: anyFinished } = await query(
+        `SELECT 1 FROM matches
+         WHERE phase IN ('r32','r16','qf','sf','final','3rd')
+           AND status = 'finished'
+         LIMIT 1`
+      );
+      if (anyFinished.length > 0) {
+        await calculateAllScores(pred.pool_id);
+        invalidateCachedPoolLeaderboard(pred.pool_id);
+        invalidateCachedPoolResults(pred.pool_id);
+        invalidateGlobalLeaderboard();
+      }
+    } catch (e) {
+      const code = errCode();
+      console.error(`[api/predictions/bracket] rescore ${code}:`, e);
+    }
+
     return json({ ok: true, dropped: droppedPhases });
   } catch (e) {
     await client.query('ROLLBACK');

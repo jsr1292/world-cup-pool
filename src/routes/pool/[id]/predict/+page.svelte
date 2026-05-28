@@ -61,12 +61,15 @@
     return init;
   });
   let selections = $state(JSON.parse(JSON.stringify(selectionsInit)));
-  const _dirtyGroups = new Set();
+
+  // Active drag/save operations track which groups are being actively edited
+  // so we don't overwrite user's in-flight changes with stale server data
+  const _activeEdits = new Set();
 
   $effect(() => {
     const fresh = JSON.parse(JSON.stringify(selectionsInit));
     for (const [group, ranks] of Object.entries(fresh)) {
-      if (!_dirtyGroups.has(group)) {
+      if (!_activeEdits.has(group)) {
         selections[group] = ranks;
       }
     }
@@ -87,8 +90,9 @@
     const currentPos = arr.findIndex(t => Number(t) === Number(teamId));
 
     if (currentPos >= 0) {
-      // Unrank this team
-      arr[currentPos] = null;
+      // Unrank this team — compact remaining picks to avoid interior nulls
+      arr.splice(currentPos, 1);
+      arr.push(null);
     } else {
       // Assign to next available slot
       const slot = arr.findIndex(s => !s);
@@ -97,13 +101,13 @@
       }
     }
     selections[group] = arr;
-    _dirtyGroups.add(group);
+    _activeEdits.add(group);
     autoSave();
   }
 
   function resetGroup(group) {
     selections[group] = [null, null, null, null];
-    _dirtyGroups.delete(group);
+    _activeEdits.delete(group);
     autoSave();
   }
 
@@ -159,6 +163,7 @@
       if (target === -1) return;
       arr[target] = teamId;
       selections[group] = arr;
+      _activeEdits.add(group);
       autoSave();
     } else {
       // Dragging from another slot
@@ -177,6 +182,7 @@
       arr.splice(srcSlot, 1);
       arr.splice(adjustedTarget, 0, movingTeamId);
       selections[group] = arr;
+      _activeEdits.add(group);
       autoSave();
     }
 
@@ -222,7 +228,11 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prediction_id: data.selectedId, groups }),
       });
-      if (res.ok) { saved = true; _dirtyGroups.clear(); setTimeout(() => saved = false, 2000); }
+      if (res.ok) { saved = true; _activeEdits.clear(); setTimeout(() => saved = false, 2000); }
+      else {
+        const body = await res.json().catch(() => ({}));
+        showToast('⚠️ ' + (body.error || 'Error al guardar — inténtalo de nuevo'));
+      }
     } catch (e) {
       console.error(e);
       showToast('⚠️ Error al guardar — inténtalo de nuevo');
@@ -273,7 +283,21 @@
     return init;
   });
   let matchScores = $state({});
-  $effect(() => { matchScores = JSON.parse(JSON.stringify(matchScoresInit)); });
+  // §4.1 — Mirror the _activeEdits guard used for `selections`. Only overwrite
+  // entries the user is not currently editing so a soft navigation
+  // invalidate doesn't blow away unsaved typing.
+  const _activeMatchEdits = new Set();
+  $effect(() => {
+    const fresh = JSON.parse(JSON.stringify(matchScoresInit));
+    const next = { ...matchScores };
+    for (const [matchIdStr, score] of Object.entries(fresh)) {
+      const matchId = Number(matchIdStr);
+      if (!_activeMatchEdits.has(matchId)) {
+        next[matchId] = score;
+      }
+    }
+    matchScores = next;
+  });
 
   // Cleanup timers on component destroy
   $effect(() => {
@@ -305,8 +329,19 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prediction_id: data.selectedId, scores }),
       });
-      if (res.ok) { matchSaved = true; setTimeout(() => matchSaved = false, 2000); }
-    } catch (e) { console.error(e); }
+      if (res.ok) {
+        matchSaved = true;
+        _activeMatchEdits.clear();
+        setTimeout(() => matchSaved = false, 2000);
+      } else {
+        // §4.3 — Surface the save failure to the user instead of swallowing it.
+        const body = await res.json().catch(() => ({}));
+        showToast('⚠️ ' + (body.error || 'Error al guardar marcadores'));
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('⚠️ Error al guardar marcadores — inténtalo de nuevo');
+    }
     finally { matchSaving = false; }
   }
 
@@ -315,6 +350,7 @@
     if (side === 'home') score.home = value;
     else score.away = value;
     matchScores[matchId] = score;
+    _activeMatchEdits.add(Number(matchId));
     autoSaveMatchScores();
   }
 

@@ -56,32 +56,48 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   );
   const poolCheck = poolRows[0] ?? null;
 
+  // §3.3 — Validate each match id is a positive integer up-front so a non-numeric
+  // key cannot cascade into a NaN INSERT later.
+  for (const k of Object.keys(scores)) {
+    const n = Number(k);
+    if (!Number.isInteger(n) || n < 1) {
+      return json({ error: `match id inválido: ${k}` }, { status: 400 });
+    }
+  }
   const matchIds = Object.keys(scores).map(Number);
+  const droppedMatches: number[] = [];
   if (matchIds.length > 0) {
-    // Per-match kickoff deadline: reject if any match has already started
+    // §2.8 — Drop matches that have already started instead of rejecting
+    // the whole batch. Mirrors the group/bracket pattern so the autosave
+    // path doesn't lose unrelated edits.
     const { rows: started } = await query(
       'SELECT id FROM matches WHERE id = ANY($1::int[]) AND kickoff_time IS NOT NULL AND kickoff_time <= NOW()',
       [matchIds]
     );
-    if (started.length > 0) {
-      return json({ error: 'Algunos partidos ya comenzaron' }, { status: 400 });
+    const startedSet = new Set(started.map((r: any) => Number(r.id)));
+    for (const id of startedSet) {
+      delete (scores as Record<string, unknown>)[String(id)];
+      droppedMatches.push(id);
     }
+    const remainingIds = Object.keys(scores).map(Number);
 
-    // Also check pool-level phase deadlines
-    const { rows: phaseRows } = await query(`
-      SELECT
-        MAX(CASE WHEN phase = 'group' THEN 1 ELSE 0 END) AS has_group,
-        MAX(CASE WHEN phase != 'group' THEN 1 ELSE 0 END) AS has_knockout
-      FROM matches WHERE id = ANY($1::int[])
-    `, [matchIds]);
-    const phaseRow = phaseRows[0] ?? null;
+    // Also check pool-level phase deadlines (against remaining matches).
+    if (remainingIds.length > 0) {
+      const { rows: phaseRows } = await query(`
+        SELECT
+          MAX(CASE WHEN phase = 'group' THEN 1 ELSE 0 END) AS has_group,
+          MAX(CASE WHEN phase != 'group' THEN 1 ELSE 0 END) AS has_knockout
+        FROM matches WHERE id = ANY($1::int[])
+      `, [remainingIds]);
+      const phaseRow = phaseRows[0] ?? null;
 
-    const now = new Date();
-    if (phaseRow?.has_group && poolCheck?.deadline_group && new Date(poolCheck.deadline_group) <= now) {
-      return json({ error: 'La fecha límite de fase de grupos ha pasado' }, { status: 403 });
-    }
-    if (phaseRow?.has_knockout && poolCheck?.deadline_knockout && new Date(poolCheck.deadline_knockout) <= now) {
-      return json({ error: 'La fecha límite de eliminatorias ha pasado' }, { status: 403 });
+      const now = new Date();
+      if (phaseRow?.has_group && poolCheck?.deadline_group && new Date(poolCheck.deadline_group) <= now) {
+        return json({ error: 'La fecha límite de fase de grupos ha pasado' }, { status: 403 });
+      }
+      if (phaseRow?.has_knockout && poolCheck?.deadline_knockout && new Date(poolCheck.deadline_knockout) <= now) {
+        return json({ error: 'La fecha límite de eliminatorias ha pasado' }, { status: 403 });
+      }
     }
   }
 
@@ -153,5 +169,5 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ ok: false, error: 'Predicción guardada, pero el cálculo de puntos falló', scoring: 'failed' }, { status: 500 });
   }
 
-  return json({ ok: true });
+  return json({ ok: true, dropped: droppedMatches });
 };
