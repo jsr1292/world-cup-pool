@@ -56,7 +56,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     prediction_id: number;
     groups: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }>;
   };
-  const groups = { ...rawGroups }; // mutable copy so we can delete started groups
+  // Normalize keys to uppercase so 'a' and 'A' are treated identically
+  const groups: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }> = {};
+  for (const [k, v] of Object.entries(rawGroups)) {
+    groups[k.toUpperCase()] = v;
+  }
 
   if (!prediction_id || !groups) {
     return json({ error: 'Falta prediction_id o grupos' }, { status: 400 });
@@ -95,7 +99,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     const { rows: startedRows } = await query(
       `SELECT DISTINCT group_name FROM matches
        WHERE group_name = ANY($1::text[])
-         AND kickoff_time IS NOT NULL AND kickoff_time <= NOW()`,
+         AND (
+           (kickoff_time IS NOT NULL AND kickoff_time <= NOW())
+           OR status = 'finished'
+         )`,
       [groupNames]
     );
     const startedGroupSet = new Set(startedRows.map((r: any) => r.group_name));

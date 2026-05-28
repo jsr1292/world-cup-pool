@@ -5,7 +5,12 @@
 
   let { data } = $props();
 
-  const GROUP_NAMES = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+  const GROUP_NAMES = $derived(
+    data.presentGroups?.length > 0
+      ? data.presentGroups
+      : ['A','B','C','D','E','F','G','H','I','J','K','L']
+  );
+  const totalGroups = $derived(GROUP_NAMES.length);
   const pool = $derived(data.pool);
   const allowMultiple = $derived(!!data.pool.allow_multiple_predictions);
 
@@ -16,7 +21,7 @@
       return arr[0] != null && arr[1] != null && arr[2] != null && arr[3] != null;
     }).length;
   });
-  const progressPct = $derived(Math.round((groupsCompleted / 12) * 100));
+  const progressPct = $derived(Math.round((groupsCompleted / totalGroups) * 100));
 
   // Deadline countdown
   let countdown = $state('');
@@ -377,8 +382,8 @@
       <div style="flex: 1; max-width: 280px; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden;">
         <div style="width: {progressPct}%; height: 100%; background: linear-gradient(90deg, var(--gold), #e8c96a); border-radius: 3px; transition: width 0.4s ease;"></div>
       </div>
-      <span style="font-size: 10px; color: {groupsCompleted === 12 ? 'var(--green)' : 'var(--text-dim)'}; font-weight: 500; white-space: nowrap;">
-        {groupsCompleted === 12 ? '✅' : ''} {groupsCompleted}/12 grupos
+      <span style="font-size: 10px; color: {groupsCompleted === totalGroups ? 'var(--green)' : 'var(--text-dim)'}; font-weight: 500; white-space: nowrap;">
+        {groupsCompleted === totalGroups ? '✅' : ''} {groupsCompleted}/{totalGroups} grupos
       </span>
     </div>
 

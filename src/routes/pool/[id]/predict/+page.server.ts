@@ -12,12 +12,14 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
 
   const teams = await getAllTeams() as any[];
 
-  // Group teams by group_name
+  // Group teams by group_name — skip teams with no group assigned
   const teamsByGroup: Record<string, any[]> = {};
   for (const team of teams) {
+    if (!team.group_name) continue;
     if (!teamsByGroup[team.group_name]) teamsByGroup[team.group_name] = [];
     teamsByGroup[team.group_name].push(team);
   }
+  const presentGroups = Object.keys(teamsByGroup).sort();
 
   // Get ALL user predictions for this pool
   let predictions = await getUserPredictions(poolId, locals.user.id) as any[];
@@ -101,6 +103,7 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   return {
     pool,
     teamsByGroup,
+    presentGroups,
     entries,
     selectedId,
     selectedLabel: selectedPrediction?.label || '',

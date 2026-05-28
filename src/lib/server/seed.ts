@@ -6,7 +6,7 @@ const teams = [
   // Group A
   { name: 'Mexico', flag_code: 'MX', group_name: 'A', fifa_rank: 15 },
   { name: 'South Africa', flag_code: 'ZA', group_name: 'A', fifa_rank: 55 },
-  { name: 'Scotland', flag_code: 'GB', group_name: 'A', fifa_rank: 36 },
+  { name: 'Scotland', flag_code: 'SCT', group_name: 'A', fifa_rank: 36 },
   { name: 'Panama', flag_code: 'PA', group_name: 'A', fifa_rank: 30 },
 
   // Group B
@@ -34,7 +34,7 @@ const teams = [
   { name: 'Cape Verde', flag_code: 'CV', group_name: 'E', fifa_rank: 72 },
 
   // Group F
-  { name: 'England', flag_code: 'GB', group_name: 'F', fifa_rank: 4 },
+  { name: 'England', flag_code: 'ENG', group_name: 'F', fifa_rank: 4 },
   { name: 'Norway', flag_code: 'NO', group_name: 'F', fifa_rank: 29 },
   { name: 'Uruguay', flag_code: 'UY', group_name: 'F', fifa_rank: 16 },
   { name: 'Paraguay', flag_code: 'PY', group_name: 'F', fifa_rank: 46 },
@@ -93,14 +93,16 @@ for (const [g, c] of Object.entries(groups)) {
 const insertSql = `
   INSERT INTO teams (name, flag_code, group_name, fifa_rank)
   VALUES ($1, $2, $3, $4)
+  ON CONFLICT (name) DO UPDATE SET
+    flag_code  = EXCLUDED.flag_code,
+    group_name = EXCLUDED.group_name,
+    fifa_rank  = EXCLUDED.fifa_rank
 `;
 
 async function seed() {
   const client = await getClient();
   try {
     await client.query('BEGIN');
-
-    await client.query('DELETE FROM teams');
 
     for (const row of teams) {
       await client.query(insertSql, [row.name, row.flag_code, row.group_name, row.fifa_rank]);
