@@ -15,129 +15,92 @@
   // are determined post-group-stage). Use this everywhere instead of the
   // bare '?' string literal so typos surface at compile time.
   const WILDCARD = '?';
+  // R32 matchups reordered to match FIFA bracket halves.
+  // Left wing (indices 0–7) → R16 left (M89–M94) → QF left (M97–M98) → SF M101
+  // Right wing (indices 8–15) → R16 right (M91–M96) → QF right (M99–M100) → SF M102
+  // Verified against Wikipedia "2026 FIFA World Cup knockout stage" (Match 73–104).
   const R32_MAP = [
-    // UPPER LEFT (feeds R16[2,3])
-    { t1g: 'E', t1p: 1, t2g: WILDCARD, t2p: 3 },  // R32-1: E1 vs 3rd(A/B/C/D/F)
-    { t1g: 'I', t1p: 1, t2g: WILDCARD, t2p: 3 },  // R32-2: I1 vs 3rd(C/D/F/G/H)
-    { t1g: 'A', t1p: 2, t2g: 'B', t2p: 2 },  // R32-3: 2A vs 2B
-    { t1g: 'F', t1p: 1, t2g: 'C', t2p: 2 },  // R32-4: F1 vs 2C
-    // LOWER LEFT (feeds R16[0,1])
-    { t1g: 'K', t1p: 2, t2g: 'L', t2p: 2 }, // R32-5: 2K vs 2L
-    { t1g: 'H', t1p: 1, t2g: 'J', t2p: 2 }, // R32-6: H1 vs 2J
-    { t1g: 'D', t1p: 1, t2g: WILDCARD, t2p: 3 }, // R32-7: D1 vs 3rd(B/E/F/I/J)
-    { t1g: 'G', t1p: 1, t2g: WILDCARD, t2p: 3 }, // R32-8: G1 vs 3rd(A/E/H/I/J)
-    // UPPER RIGHT (feeds R16[4,5])
-    { t1g: 'C', t1p: 1, t2g: 'F', t2p: 2 },  // R32-9: C1 vs 2F
-    { t1g: 'E', t1p: 2, t2g: 'I', t2p: 2 },  // R32-10: 2E vs 2I
-    { t1g: 'A', t1p: 1, t2g: WILDCARD, t2p: 3 },  // R32-11: A1 vs 3rd(C/E/F/H/I)
-    { t1g: 'L', t1p: 1, t2g: WILDCARD, t2p: 3 },  // R32-12: L1 vs 3rd(E/H/I/J/K)
-    // LOWER RIGHT (feeds R16[6,7])
-    { t1g: 'J', t1p: 1, t2g: 'H', t2p: 2 },  // R32-13: J1 vs 2H
-    { t1g: 'D', t1p: 2, t2g: 'G', t2p: 2 },  // R32-14: 2D vs 2G
-    { t1g: 'B', t1p: 1, t2g: WILDCARD, t2p: 3 },  // R32-15: B1 vs 3rd(E/F/G/I/J)
-    { t1g: 'K', t1p: 1, t2g: WILDCARD, t2p: 3 },  // R32-16: K1 vs 3rd(D/E/I/J/L)
+    // LEFT WING (→ SF M101)
+    { t1g: 'L', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M74: 1L vs 3rd(E/H/I/J/K)
+    { t1g: 'B', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M77: 1B vs 3rd(E/F/G/I/J)
+    { t1g: 'A', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M73: 1A vs 3rd(C/E/F/H/I)
+    { t1g: 'E', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M75: 1E vs 3rd(A/B/C/D/F)
+    { t1g: 'D', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M83: 1D vs 3rd(B/E/F/I/J)
+    { t1g: 'G', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M84: 1G vs 3rd(A/E/H/I/J)
+    { t1g: 'A', t1p: 2, t2g: 'B', t2p: 2 },        // M81: 2A vs 2B
+    { t1g: 'K', t1p: 2, t2g: 'L', t2p: 2 },        // M82: 2K vs 2L
+    // RIGHT WING (→ SF M102)
+    { t1g: 'I', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M76: 1I vs 3rd(C/D/F/G/H)
+    { t1g: 'K', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M78: 1K vs 3rd(D/E/I/J/L)
+    { t1g: 'F', t1p: 1, t2g: 'C', t2p: 2 },        // M79: 1F vs 2C
+    { t1g: 'H', t1p: 1, t2g: 'J', t2p: 2 },        // M80: 1H vs 2J
+    { t1g: 'J', t1p: 1, t2g: 'H', t2p: 2 },        // M86: 1J vs 2H
+    { t1g: 'D', t1p: 2, t2g: 'G', t2p: 2 },        // M88: 2D vs 2G
+    { t1g: 'C', t1p: 1, t2g: 'F', t2p: 2 },        // M85: 1C vs 2F
+    { t1g: 'E', t1p: 2, t2g: 'I', t2p: 2 },        // M87: 2E vs 2I
   ];
 
-  // R32 → R16 feed-in: R16[i] = winner of R32[R32_TO_R16[i*2]] vs R32[R32_TO_R16[i*2+1]]
-  // App index → FIFA match number:
-  //   0:M75 1:M76 2:M81 3:M79 4:M82 5:M80 6:M83 7:M84
-  //   8:M85 9:M87 10:M73 11:M74 12:M86 13:M88 14:M77 15:M78
-  // FIFA R16 pairings (adjacent FIFA matches): 73+74, 75+76, 77+78, 79+80,
-  //   81+82, 83+84, 85+86, 87+88
-  // → app index pairs:
-  //   (10,11)=M89, (0,1)=M90, (14,15)=M91, (3,5)=M92,
-  //   (2,4)=M93, (6,7)=M94, (8,12)=M95, (9,13)=M96
+  // R32 → R16: sequential — each adjacent R32 pair feeds one R16 slot.
+  // R16[i] = winner(R32[i*2]) vs winner(R32[i*2+1])
+  // Verified: R16[0]=M89=W(M74)+W(M77), R16[1]=M90=W(M73)+W(M75), ...
   const R32_TO_R16 = [
-     0, 1,    // R16[0] = M90 (left wing)
-     2, 4,    // R16[1] = M93 (left wing)
-     3, 5,    // R16[2] = M92 (left wing)
-     6, 7,    // R16[3] = M94 (left wing)
-    10, 11,   // R16[4] = M89 (right wing)
-     8, 12,   // R16[5] = M95 (right wing)
-     9, 13,   // R16[6] = M96 (right wing)
-    14, 15,   // R16[7] = M91 (right wing)
+     0, 1,   // R16[0] = M89 (left wing)
+     2, 3,   // R16[1] = M90 (left wing)
+     4, 5,   // R16[2] = M93 (left wing)
+     6, 7,   // R16[3] = M94 (left wing)
+     8, 9,   // R16[4] = M91 (right wing)
+    10, 11,  // R16[5] = M92 (right wing)
+    12, 13,  // R16[6] = M95 (right wing)
+    14, 15,  // R16[7] = M96 (right wing)
   ];
 
   // Match labels
   const R32_LABELS = [
-    '1E vs 3rd(A/B/C/D/F)', '1I vs 3rd(C/D/F/G/H)', '2A vs 2B', '1F vs 2C',
-    '2K vs 2L', '1H vs 2J', '1D vs 3rd(B/E/F/I/J)', '1G vs 3rd(A/E/H/I/J)',
-    '1C vs 2F', '2E vs 2I', '1A vs 3rd(C/E/F/H/I)', '1L vs 3rd(E/H/I/J/K)',
-    '1J vs 2H', '2D vs 2G', '1B vs 3rd(E/F/G/I/J)', '1K vs 3rd(D/E/I/J/L)',
+    '1L vs 3rd(E/H/I/J/K)', '1B vs 3rd(E/F/G/I/J)', '1A vs 3rd(C/E/F/H/I)', '1E vs 3rd(A/B/C/D/F)',
+    '1D vs 3rd(B/E/F/I/J)', '1G vs 3rd(A/E/H/I/J)', '2A vs 2B', '2K vs 2L',
+    '1I vs 3rd(C/D/F/G/H)', '1K vs 3rd(D/E/I/J/L)', '1F vs 2C', '1H vs 2J',
+    '1J vs 2H', '2D vs 2G', '1C vs 2F', '2E vs 2I',
   ];
   const R16_LABELS = [
-    'W(R32-1) vs W(R32-2)',   // M90
-    'W(R32-3) vs W(R32-5)',   // M93
-    'W(R32-4) vs W(R32-6)',   // M92
+    'W(R32-1) vs W(R32-2)',   // M89
+    'W(R32-3) vs W(R32-4)',   // M90
+    'W(R32-5) vs W(R32-6)',   // M93
     'W(R32-7) vs W(R32-8)',   // M94
-    'W(R32-11) vs W(R32-12)', // M89
-    'W(R32-9) vs W(R32-13)',  // M95
-    'W(R32-10) vs W(R32-14)', // M96
-    'W(R32-15) vs W(R32-16)', // M91
+    'W(R32-9) vs W(R32-10)',  // M91
+    'W(R32-11) vs W(R32-12)', // M92
+    'W(R32-13) vs W(R32-14)', // M95
+    'W(R32-15) vs W(R32-16)', // M96
   ];
-  // FIFA QFs: M97=M89+M90, M98=M91+M92, M99=M93+M94, M100=M95+M96
-  //   → R16-index pairs (using new order above): (4,0), (7,2), (1,3), (5,6)
+  // FIFA QFs: M97=M89+M90, M98=M93+M94, M99=M91+M92, M100=M95+M96
   const QF_LABELS = [
-    'W(R16-5) vs W(R16-1)',   // M97 (R16[4] + R16[0])
-    'W(R16-8) vs W(R16-3)',   // M98 (R16[7] + R16[2])
-    'W(R16-2) vs W(R16-4)',   // M99 (R16[1] + R16[3])
-    'W(R16-6) vs W(R16-7)',   // M100 (R16[5] + R16[6])
+    'W(R16-1) vs W(R16-2)',   // M97
+    'W(R16-3) vs W(R16-4)',   // M98
+    'W(R16-5) vs W(R16-6)',   // M99
+    'W(R16-7) vs W(R16-8)',   // M100
   ];
   const SF_LABELS = ['W(QF-1) vs W(QF-2)', 'W(QF-3) vs W(QF-4)'];
   const FINAL_LABEL = 'W(SF-1) vs W(SF-2)';
   const THIRD_LABEL = 'L(SF-1) vs L(SF-2)';
-
-  // Feed-origin tables for QF and R16 label helpers below.
-  // QF_FEED[qfIdx][teamSlot] = { idx: r16Index, cross: isOppositeWing }
-  // Left-wing QFs are 0–1 (template slice(0,2)); right-wing QFs are 2–3.
-  const QF_FEED = [
-    [{ idx: 4, cross: true  }, { idx: 0, cross: false }],  // QF[0] LEFT wing
-    [{ idx: 7, cross: true  }, { idx: 2, cross: false }],  // QF[1] LEFT wing
-    [{ idx: 1, cross: true  }, { idx: 3, cross: true  }],  // QF[2] RIGHT wing
-    [{ idx: 5, cross: false }, { idx: 6, cross: false }],  // QF[3] RIGHT wing
-  ];
-
-  // R16_FEED[r16Idx][teamSlot] = r32Index (0-based), all same-wing.
-  const R16_FEED = [
-    [0, 1], [2, 4], [3, 5], [6, 7],      // R16[0-3] left wing
-    [10, 11], [8, 12], [9, 13], [14, 15], // R16[4-7] right wing
-  ];
 
   function r32Label(mi) { return R32_LABELS[mi] || `R32-${mi + 1}`; }
   function r16Label(mi) { return R16_LABELS[mi] || `R16-${mi + 1}`; }
   function qfLabel(mi) { return QF_LABELS[mi] || `QF-${mi + 1}`; }
   function sfLabel(mi) { return SF_LABELS[mi] || `SF-${mi + 1}`; }
 
-  // Returns compact feed-origin label for a QF team slot.
-  // Desktop: cross-wing feeds get ← or → arrow. Mobile: suppress arrows.
-  function qfFeedLabel(mi, ti, mobile = false) {
-    const feed = QF_FEED[mi]?.[ti];
-    if (!feed) return null;
-    const n = feed.idx + 1;
-    if (mobile || !feed.cross) return `R16-${n}`;
-    return mi < 2 ? `← R16-${n}` : `R16-${n} →`;
-  }
-
-  // Returns compact feed-origin label for an R16 team slot (always same-wing).
-  function r16FeedLabel(mi, ti) {
-    const r32Idx = R16_FEED[mi]?.[ti];
-    if (r32Idx === undefined) return null;
-    return `R32-${r32Idx + 1}`;
-  }
-
   // Map each R32 "3rd from" slot to the groups whose 3rd-place teams feed into it.
   // §5.5 — Keys here MUST stay in lockstep with R32_MAP — if you reorder R32_MAP,
   // also update these keys. TODO: add an integration test that asserts every
   // wildcard slot in R32_MAP has a matching THIRD_GROUP_MAP entry.
+  // Reindexed for FIFA-correct bracket order (2026-05).
   const THIRD_GROUP_MAP = {
-    0: ['A', 'B', 'C', 'D', 'F'],   // E1 vs 3rd(A/B/C/D/F)
-    1: ['C', 'D', 'F', 'G', 'H'],   // I1 vs 3rd(C/D/F/G/H)
-    6: ['B', 'E', 'F', 'I', 'J'],   // D1 vs 3rd(B/E/F/I/J)
-    7: ['A', 'E', 'H', 'I', 'J'],   // G1 vs 3rd(A/E/H/I/J)
-    10: ['C', 'E', 'F', 'H', 'I'],  // A1 vs 3rd(C/E/F/H/I)
-    11: ['E', 'H', 'I', 'J', 'K'],  // L1 vs 3rd(E/H/I/J/K)
-    14: ['E', 'F', 'G', 'I', 'J'],  // B1 vs 3rd(E/F/G/I/J)
-    15: ['D', 'E', 'I', 'J', 'L'],  // K1 vs 3rd(D/E/I/J/L)
+    0: ['E', 'H', 'I', 'J', 'K'],   // M74: 1L vs 3rd(E/H/I/J/K)
+    1: ['E', 'F', 'G', 'I', 'J'],   // M77: 1B vs 3rd(E/F/G/I/J)
+    2: ['C', 'E', 'F', 'H', 'I'],   // M73: 1A vs 3rd(C/E/F/H/I)
+    3: ['A', 'B', 'C', 'D', 'F'],   // M75: 1E vs 3rd(A/B/C/D/F)
+    4: ['B', 'E', 'F', 'I', 'J'],   // M83: 1D vs 3rd(B/E/F/I/J)
+    5: ['A', 'E', 'H', 'I', 'J'],   // M84: 1G vs 3rd(A/E/H/I/J)
+    8: ['C', 'D', 'F', 'G', 'H'],   // M76: 1I vs 3rd(C/D/F/G/H)
+    9: ['D', 'E', 'I', 'J', 'L'],   // M78: 1K vs 3rd(D/E/I/J/L)
   };
 
   // Return 3rd-place teams from relevant groups based on user's group predictions
@@ -362,7 +325,7 @@
     }
     // Cascade: R16 → QF uses an explicit FIFA-correct mapping;
     // QF → SF and SF → Final remain sequential pair-of-two.
-    const R16_TO_QF = [4, 0, 7, 2, 1, 3, 5, 6]; // QF[i] = (R16[R16_TO_QF[i*2]], R16[R16_TO_QF[i*2+1]])
+    const R16_TO_QF = [0, 1, 2, 3, 4, 5, 6, 7]; // Sequential — bracket halves are correct
     for (let i = 0; i < _teams.qf.length; i++) {
       for (let j = 0; j < 2; j++) {
         const winner = getWinner('r16', R16_TO_QF[i * 2 + j]);
@@ -826,9 +789,8 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  {@const feedLbl = r16FeedLabel(mi, ti)}
                   <button id={"btn-r16-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} class:path-pinned={pinnedTeam === tid && tid !== null} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }} ontouchstart={() => { if (tid) pinnedTeam = (pinnedTeam === tid) ? null : tid; }}>
-                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if feedLbl}<span class="feed-label">{feedLbl}</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
                 <div class="match-label">R16-{mi + 1}</div>
@@ -846,10 +808,8 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  {@const feedLbl = qfFeedLabel(mi, ti)}
-                  {@const feedCross = QF_FEED[mi]?.[ti]?.cross}
                   <button id={"btn-qf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} class:path-pinned={pinnedTeam === tid && tid !== null} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }} ontouchstart={() => { if (tid) pinnedTeam = (pinnedTeam === tid) ? null : tid; }}>
-                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if feedLbl}<span class="feed-label" class:feed-label-cross={feedCross}>{feedLbl}</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
                 <div class="match-label">QF-{mi + 1}</div>
@@ -939,10 +899,8 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  {@const feedLbl = qfFeedLabel(mi, ti)}
-                  {@const feedCross = QF_FEED[mi]?.[ti]?.cross}
                   <button id={"btn-qf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} class:path-pinned={pinnedTeam === tid && tid !== null} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }} ontouchstart={() => { if (tid) pinnedTeam = (pinnedTeam === tid) ? null : tid; }}>
-                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if feedLbl}<span class="feed-label" class:feed-label-cross={feedCross}>{feedLbl}</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
                 <div class="match-label">QF-{mi + 1}</div>
@@ -961,9 +919,8 @@
                   {@const t = teamMap[tid]}
                   {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
                   {@const canClick = !data.isLocked && tid !== null}
-                  {@const feedLbl = r16FeedLabel(mi, ti)}
                   <button id={"btn-r16-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} class:path-pinned={pinnedTeam === tid && tid !== null} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }} ontouchstart={() => { if (tid) pinnedTeam = (pinnedTeam === tid) ? null : tid; }}>
-                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if feedLbl}<span class="feed-label">{feedLbl}</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                    {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                   </button>
                 {/each}
                 <div class="match-label">R16-{mi + 1}</div>
@@ -1049,9 +1006,8 @@
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.r16?.[mi]?.[ti]}
                 {@const canClick = !data.isLocked && tid !== null}
-                {@const feedLbl = r16FeedLabel(mi, ti)}
                 <button id={"btn-r16-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r16?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r16', mi, ti)} class:path-pinned={pinnedTeam === tid && tid !== null} disabled={!canClick} onclick={() => canClick && pickTeam('r16', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }} ontouchstart={() => { if (tid) pinnedTeam = (pinnedTeam === tid) ? null : tid; }}>
-                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if feedLbl}<span class="feed-label">{feedLbl}</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
               <div class="match-label">R16-{mi + 1}</div>
@@ -1069,10 +1025,8 @@
                 {@const t = teamMap[tid]}
                 {@const isPicked = explicitPicks.qf?.[mi]?.[ti]}
                 {@const canClick = !data.isLocked && tid !== null}
-                {@const feedLbl = qfFeedLabel(mi, ti, true)}
-                {@const feedCross = QF_FEED[mi]?.[ti]?.cross}
                 <button id={"btn-qf-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.qf?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('qf', mi, ti)} class:path-pinned={pinnedTeam === tid && tid !== null} disabled={!canClick} onclick={() => canClick && pickTeam('qf', mi, ti, tid)} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { hoveredTeam = null; }} ontouchstart={() => { if (tid) pinnedTeam = (pinnedTeam === tid) ? null : tid; }}>
-                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if feedLbl}<span class="feed-label" class:feed-label-cross={feedCross}>{feedLbl}</span>{/if}{:else}<span class="team-empty">—</span>{/if}
+                  {#if t}<span class="team-flag">{flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{:else}<span class="team-empty">—</span>{/if}
                 </button>
               {/each}
               <div class="match-label">QF-{mi + 1}</div>
@@ -1762,44 +1716,10 @@
   .team-tbd-btn { cursor: pointer; color: var(--gold) !important; }
   .team-tbd-btn:hover { text-decoration: underline; }
 
-  /* Feed-origin labels: tiny R32/R16 source tags inside team slots */
-  .feed-label {
-    font-size: 7px;
-    color: var(--text-dim);
-    letter-spacing: 0.04em;
-    flex-shrink: 0;
-    white-space: nowrap;
-    opacity: 0.65;
-    font-variant-numeric: tabular-nums;
-    margin-left: auto;
-  }
-  .feed-label-cross {
-    color: var(--gold);
-    opacity: 0.85;
-    font-weight: 600;
-  }
-
   /* Tap-pinned state: gold outline on the team whose path is locked */
   .team-btn.path-pinned {
     outline: 1.5px solid rgba(201, 168, 76, 0.6);
     outline-offset: -1px;
-  }
-
-  /* Feed-origin labels: tiny R32/R16 source tags inside team slots */
-  .feed-label {
-    font-size: 7px;
-    color: var(--text-dim);
-    letter-spacing: 0.04em;
-    flex-shrink: 0;
-    white-space: nowrap;
-    opacity: 0.65;
-    font-variant-numeric: tabular-nums;
-    margin-left: auto;
-  }
-  .feed-label-cross {
-    color: var(--gold);
-    opacity: 0.85;
-    font-weight: 600;
   }
 
   /* Tap-pinned state: gold outline on the team whose path is locked */
