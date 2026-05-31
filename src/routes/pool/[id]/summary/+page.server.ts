@@ -1,6 +1,7 @@
 import { getPoolById, getUserPredictions } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
 import { getTeamsMapCached } from '$lib/server/cache.js';
+import { isEmailConfigured } from '$lib/server/email.js';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
 
@@ -74,5 +75,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     }
   }
 
-  return { pool: safePool, entries, groupPreds, bracketPreds, teams };
+  return {
+    pool: safePool, entries, groupPreds, bracketPreds, teams,
+    emailEnabled: isEmailConfigured() && !!locals.user.email,
+  };
 };

@@ -21,6 +21,26 @@
   // primary entry ("Entrada principal"), not "Entrada <db-id>".
   function entryLabel(e: any) { return e?.label || 'Entrada principal'; }
 
+  let emailing = $state(false);
+  let emailMsg = $state('');
+  async function emailMyPicks() {
+    if (!selectedEntry || emailing) return;
+    emailing = true; emailMsg = '';
+    try {
+      const res = await fetch('/api/predictions/email-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prediction_id: selectedEntry }),
+      });
+      const d = await res.json().catch(() => ({}));
+      emailMsg = res.ok ? `✓ Enviado a ${d.sent_to}` : `✗ ${d.error || 'Error'}`;
+    } catch {
+      emailMsg = '✗ Error de conexión';
+    }
+    emailing = false;
+    setTimeout(() => { emailMsg = ''; }, 4000);
+  }
+
   function getGroupPreds() {
     if (!selectedEntry) return [];
     return data.groupPreds[selectedEntry] || [];
@@ -66,6 +86,17 @@
     {#if entry}
       <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">
         {entryLabel(entry)} · {data.pool.name}
+      </div>
+    {/if}
+
+    {#if data.emailEnabled}
+      <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <button onclick={emailMyPicks} disabled={emailing} class="btn-ghost" style="font-size: 10px; padding: 6px 12px;">
+          {emailing ? 'Enviando…' : '📧 Recibir por email'}
+        </button>
+        {#if emailMsg}
+          <span style="font-size: 10px; color: {emailMsg.startsWith('✓') ? 'var(--green)' : 'var(--red)'};">{emailMsg}</span>
+        {/if}
       </div>
     {/if}
 

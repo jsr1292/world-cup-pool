@@ -3,10 +3,12 @@ import { query } from '$lib/server/db.js';
 import { cleanSessions } from '$lib/server/queries.js';
 import { getCachedSession, setCachedSession } from '$lib/server/cache.js';
 import { startSyncScheduler } from '$lib/server/sync-runner.js';
+import { startNotificationScheduler } from '$lib/server/notifications.js';
 
-// Start the hands-off live-score scheduler once per server process (no-op
-// unless AUTO_SYNC_MINUTES > 0 and a provider is configured).
+// Background workers, started once per server process. Each is a no-op unless
+// its prerequisites are configured (a live-score provider / SMTP).
 startSyncScheduler();
+startNotificationScheduler();
 
 // §4.5 — `/api/auth` matches /api/auth/login, /register, /logout
 // AND /api/auth/change-password. The change-password handler self-guards

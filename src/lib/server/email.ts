@@ -10,6 +10,7 @@
  * a clearly-typed error (callers decide how to surface that).
  */
 import nodemailer, { type Transporter } from 'nodemailer';
+import type { PredictionSummary } from './prediction-summary.js';
 
 let _transport: Transporter | null = null;
 
@@ -60,6 +61,72 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
 		to,
 		subject: 'Restablecer contraseña — Mundial 2026',
 		text,
+		html,
+	});
+}
+
+const esc = (s: string) =>
+	s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/**
+ * Send a confirmation of the user's predictions ("here's what you bet"). Throws
+ * EMAIL_DISABLED if SMTP isn't set up.
+ */
+export async function sendPredictionSummaryEmail(
+	to: string,
+	summary: PredictionSummary,
+	opts: { locked?: boolean } = {}
+): Promise<void> {
+	const transport = getTransport();
+	const lead = opts.locked
+		? `Las predicciones de "${summary.poolName}" se han cerrado. Esto es lo que has pronosticado:`
+		: `Esto es lo que has pronosticado en "${summary.poolName}":`;
+
+	// ── Plain text ──
+	const tLines: string[] = [lead, ''];
+	if (summary.groups.length) {
+		tLines.push('FASE DE GRUPOS');
+		for (const g of summary.groups) {
+			tLines.push(`  Grupo ${g.group}: ` + g.teams.map(t => `${t.pos}. ${t.name}`).join('  '));
+		}
+		tLines.push('');
+	}
+	if (summary.bracket.length) {
+		tLines.push('ELIMINATORIAS');
+		for (const ph of summary.bracket) {
+			tLines.push(`  ${ph.phaseLabel}: ` + ph.teams.map(t => t.name).join(', '));
+		}
+		tLines.push('');
+	}
+	if (!summary.groups.length && !summary.bracket.length) {
+		tLines.push('(Aún no has registrado predicciones.)');
+	}
+	tLines.push('¡Suerte! — Mundial 2026 · Quiniela');
+
+	// ── HTML ──
+	const groupHtml = summary.groups.map(g =>
+		`<div style="margin:6px 0;"><strong>Grupo ${esc(g.group)}</strong>: ` +
+		g.teams.map(t => `${t.flag} ${t.pos}. ${esc(t.name)}`).join(' &nbsp; ') + `</div>`
+	).join('');
+	const bracketHtml = summary.bracket.map(ph =>
+		`<div style="margin:6px 0;"><strong>${esc(ph.phaseLabel)}</strong>: ` +
+		ph.teams.map(t => `${t.flag} ${esc(t.name)}`).join(', ') + `</div>`
+	).join('');
+	const html =
+		`<div style="font-family:system-ui,Arial,sans-serif;max-width:560px;">` +
+		`<h2 style="color:#c9a84c;margin-bottom:4px;">📋 Tus predicciones</h2>` +
+		`<p style="color:#555;font-size:14px;">${esc(lead)} <em>(${esc(summary.label)})</em></p>` +
+		(summary.groups.length ? `<h3 style="margin:14px 0 4px;">🏆 Fase de Grupos</h3>${groupHtml}` : '') +
+		(summary.bracket.length ? `<h3 style="margin:14px 0 4px;">⚔️ Eliminatorias</h3>${bracketHtml}` : '') +
+		(!summary.groups.length && !summary.bracket.length ? `<p>(Aún no has registrado predicciones.)</p>` : '') +
+		`<p style="color:#888;font-size:12px;margin-top:16px;">¡Suerte! — Mundial 2026 · Quiniela</p>` +
+		`</div>`;
+
+	await transport.sendMail({
+		from: fromAddress(),
+		to,
+		subject: `Tus predicciones — ${summary.poolName}`,
+		text: tLines.join('\n'),
 		html,
 	});
 }
