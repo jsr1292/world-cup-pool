@@ -43,11 +43,14 @@
     return flag(data.teamCache[id]?.flag_code);
   }
 
-  // Get user's predicted winner for a knockout match
-  function getPredictedWinner(phase, matchIdx) {
-    const lookup = bracketLookup[phase]?.[matchIdx];
-    if (!lookup) return null;
-    return lookup;
+  // For a finished knockout match, return the user's bracket pick (with points)
+  // IF they predicted the actual winner to advance in that phase. Bracket
+  // predictions are by-phase team SETS, not by-match, so we match on team_id —
+  // the old lookup keyed an array index (0-15) against DB slot keys (1-32) and
+  // therefore never matched correctly, and it ignored penalty winners.
+  function getPredictionForWinner(phase, winnerId) {
+    if (!winnerId) return null;
+    return data.userBracketPreds.find(bp => bp.phase === phase && bp.team_id === winnerId) || null;
   }
 
   // Check if a group position prediction was correct
@@ -175,7 +178,6 @@
         {:else}
           <!-- Knockout matches -->
           {#each matches as match, mi}
-            {@const pred = getPredictedWinner(phase, mi)}
             {@const isFinished = match.status === 'finished'}
             {@const homeWin = isFinished && match.home_score > match.away_score}
             {@const awayWin = isFinished && match.away_score > match.home_score}
@@ -217,17 +219,14 @@
                 · <span style="color: {resultColor}; font-weight: 600;">{ptsLabel}</span>
                 · {#if mp.points_earned >= 7}<span style="color: var(--green);">✓ Exact</span>{:else if mp.points_earned >= 2}<span style="color: #ffc800;">✓ Resultado</span>{:else}<span style="color: var(--red);">✗</span>{/if}
               </div>
-            {:else if pred && isFinished}
-              {@const actualWinner = homeWin ? match.home_team_id : awayWin ? match.away_team_id : null}
-              {@const correct = actualWinner && pred.team_id === actualWinner}
-              <div style="font-size: 9px; padding: 0 0 6px 0; text-align: center;">
-                Tu predicción: {getTeamFlag(pred.team_id)} {getTeamName(pred.team_id)}
-                {#if correct}
-                  <span style="color: var(--green);"> ✓ +{pred.points_earned}pts</span>
-                {:else}
-                  <span style="color: var(--red);"> ✗</span>
-                {/if}
-              </div>
+            {:else if isFinished}
+              {@const actualWinner = homeWin ? match.home_team_id : awayWin ? match.away_team_id : (match.penalty_winner_id || null)}
+              {@const myHit = getPredictionForWinner(phase, actualWinner)}
+              {#if myHit}
+                <div style="font-size: 9px; padding: 0 0 6px 0; text-align: center; color: var(--green);">
+                  ✓ Acertaste el ganador: {getTeamFlag(actualWinner)} {getTeamName(actualWinner)} +{myHit.points_earned}pts
+                </div>
+              {/if}
             {/if}
           {/each}
         {/if}
