@@ -1,14 +1,25 @@
 /**
  * Live Score Integration
- * 
- * Supports:
- * 1. API-Football (api-football.com) - free tier: 100 req/day
- * 2. Manual entry via admin panel (fallback)
- * 
- * Config: Set API_FOOTBALL_KEY env var or store in .env
+ *
+ * Pulls finished match results from an external provider and writes them into
+ * our `matches` table, including:
+ *   - group results (preserving our home/away orientation so users' match-score
+ *     predictions still resolve correctly),
+ *   - knockout matchups (auto-assigning the two teams to a free placeholder
+ *     slot of the right phase, since knockout teams aren't known until the
+ *     bracket fills),
+ *   - penalty-shootout winners for knockout matches level after extra time.
+ *
+ * Providers:
+ *   1. API-Football (api-sports.io) — set API_FOOTBALL_KEY. Free tier 100 req/day.
+ *   2. FIFA public API — set ENABLE_FIFA_FALLBACK=1 (stub stage IDs, verify first).
+ *
+ * Idempotent: a match is "owned" by the sync once its fifa_id is stored; re-syncs
+ * update by fifa_id and no-op when nothing changed, so polling is cheap.
  */
 
 import { query } from './db.js';
+import { normalizeTeamName } from './team-normalize.js';
 
 const _provider = process.env.API_FOOTBALL_KEY
 	? 'api-football'
@@ -16,14 +27,11 @@ const _provider = process.env.API_FOOTBALL_KEY
 		? 'fifa-stub'
 		: 'none';
 console.log(`[live-scores] provider: ${_provider}`);
-if (_provider === 'none') {
-	console.warn('[live-scores] No API_FOOTBALL_KEY and ENABLE_FIFA_FALLBACK not set — syncScores() will return 0 matches.');
-}
 
 const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
 const FIFA_BASE = 'https://api.fifa.com/api/v3';
 
-interface LiveMatch {
+export interface LiveMatch {
   fifa_id: string;
   home_team: string;
   away_team: string;
@@ -32,13 +40,23 @@ interface LiveMatch {
   status: 'scheduled' | 'live' | 'finished';
   phase: string;
   kickoff_time: Date | null;
+  /** For knockouts level after ET: which side won (penalties). null otherwise. */
+  winner_side: 'home' | 'away' | null;
 }
 
-/**
- * Fetch finished matches from API-Football
- * Requires API_FOOTBALL_KEY env var
- */
-export async function fetchFromApiFootball(leagueId = 1, season = 2026): Promise<LiveMatch[]> {
+export interface SyncResult {
+  updated: number;
+  skipped: number;
+  errors: number;
+  /** External "Home vs Away" names we couldn't resolve to our teams. */
+  unmatched: string[];
+}
+
+/** Fetch finished matches from API-Football. */
+export async function fetchFromApiFootball(
+  leagueId = Number(process.env.API_FOOTBALL_LEAGUE) || 1,
+  season = Number(process.env.API_FOOTBALL_SEASON) || 2026,
+): Promise<LiveMatch[]> {
   const apiKey = process.env.API_FOOTBALL_KEY;
   if (!apiKey) {
     console.warn('[live-scores] No API_FOOTBALL_KEY set, skipping API fetch');
@@ -47,10 +65,10 @@ export async function fetchFromApiFootball(leagueId = 1, season = 2026): Promise
 
   try {
     const res = await fetch(
-      `${API_FOOTBALL_BASE}/fixtures?league=${leagueId}&season=${season}&status=FT`,
+      `${API_FOOTBALL_BASE}/fixtures?league=${leagueId}&season=${season}&status=FT-AET-PEN`,
       { headers: { 'x-apisports-key': apiKey } }
     );
-    
+
     if (!res.ok) {
       console.error(`[live-scores] API-Football error: ${res.status}`);
       return [];
@@ -65,6 +83,8 @@ export async function fetchFromApiFootball(leagueId = 1, season = 2026): Promise
       const homeScore = fixture.goals?.home;
       const awayScore = fixture.goals?.away;
       if (homeScore == null || awayScore == null) continue;
+      const hw = fixture.teams?.home?.winner === true;
+      const aw = fixture.teams?.away?.winner === true;
       matches.push({
         fifa_id: String(fixture.fixture.id),
         home_team: fixture.teams.home.name,
@@ -74,6 +94,7 @@ export async function fetchFromApiFootball(leagueId = 1, season = 2026): Promise
         status: 'finished',
         phase: mapRoundToPhase(fixture.fixture.round),
         kickoff_time: fixture.fixture.date ? new Date(fixture.fixture.date) : null,
+        winner_side: hw ? 'home' : aw ? 'away' : null,
       });
     }
 
@@ -84,17 +105,14 @@ export async function fetchFromApiFootball(leagueId = 1, season = 2026): Promise
   }
 }
 
-/**
- * Fetch from FIFA's public API (no key required, but may be rate-limited)
- */
+/** Fetch from FIFA's public API (no key, but stub stage IDs — verify first). */
 export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
 	if (!process.env.ENABLE_FIFA_FALLBACK) {
 		console.warn('[live-scores] FIFA fallback disabled. Set ENABLE_FIFA_FALLBACK=1 to enable.');
 		return [];
 	}
 	try {
-		// FIFA World Cup 2026 competition ID — verify this before the tournament starts
-		// TODO: update '254648' once FIFA publishes 2026 WC official API endpoints
+		// FIFA World Cup 2026 competition ID — verify before the tournament.
 		const res = await fetch(
 			`${FIFA_BASE}/matches/competitions/254648?status=completed`,
 			{ headers: { 'Accept': 'application/json' } }
@@ -115,10 +133,14 @@ export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
 		const matches: LiveMatch[] = [];
 
 		for (const m of data.results) {
-      // §2.4 — Skip rows missing a score rather than coercing to 0.
       const homeScore = m.home?.score;
       const awayScore = m.away?.score;
       if (homeScore == null || awayScore == null) continue;
+      const hp = m.home?.penalties, ap = m.away?.penalties;
+      let winner_side: 'home' | 'away' | null = null;
+      if (homeScore === awayScore && hp != null && ap != null && hp !== ap) {
+        winner_side = hp > ap ? 'home' : 'away';
+      }
       matches.push({
         fifa_id: String(m.idMatch),
         home_team: m.home?.teamName ?? '',
@@ -128,6 +150,7 @@ export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
         status: m.matchStatus === 'Completed' ? 'finished' : 'live',
         phase: mapFifaStageToPhase(m.idStage),
         kickoff_time: m.date ? new Date(m.date) : null,
+        winner_side,
       });
     }
 
@@ -138,101 +161,138 @@ export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
   }
 }
 
-/**
- * Sync live scores into our DB. Only updates finished matches.
- */
-export async function syncScores(): Promise<{ updated: number; skipped: number; errors: number }> {
-  let matches: LiveMatch[] = [];
-  
-  // Try API-Football first, then FIFA
-  matches = await fetchFromApiFootball();
-  if (matches.length === 0) {
-    matches = await fetchFromFifaApi();
-  }
-
-  if (matches.length === 0) {
-    return { updated: 0, skipped: 0, errors: 0 };
-  }
-
-  let updated = 0;
-  let skipped = 0;
-  let errors = 0;
-
-  for (const m of matches) {
-    if (m.status !== 'finished') { skipped++; continue; }
-    // §2.5 — Refuse imports with an unmapped FIFA stage ID; otherwise the
-    // unknown phase would silently slip past scoring queries that filter
-    // by phase. Replace the stub stage IDs in FIFA_STAGE_MAP before kickoff.
-    if (m.phase === 'unknown') { skipped++; continue; }
-
-    // Find match by FIFA ID or team names
-    let dbMatch: any = null;
-
-    if (m.fifa_id) {
-      const res = await query('SELECT * FROM matches WHERE fifa_id = $1', [m.fifa_id]);
-      dbMatch = res.rows[0] ?? null;
-    }
-
-    if (!dbMatch) {
-      // §2.4 — Resolve API team names through teams.name AND team_aliases,
-      // using a normalized form (lower + strip diacritics + collapse spaces).
-      const norm = (s: string) =>
-        s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-         .toLowerCase().trim().replace(/\s+/g, ' ');
-      const homeN = norm(m.home_team);
-      const awayN = norm(m.away_team);
-
-      const res = await query(
-        `
-        WITH resolver AS (
-          SELECT id, lower(name) AS canon FROM teams
-          UNION ALL
-          SELECT team_id AS id, alias_normalized AS canon FROM team_aliases
-        )
-        SELECT m.*
-        FROM matches m
-        JOIN resolver rh ON rh.id = m.home_team_id AND rh.canon = $1
-        JOIN resolver ra ON ra.id = m.away_team_id AND ra.canon = $2
-        WHERE m.status != 'finished'
-        LIMIT 1
-        `,
-        [homeN, awayN]
-      );
-      dbMatch = res.rows[0] ?? null;
-
-      if (!dbMatch) {
-        console.warn(
-          `[live-scores] No DB match for "${m.home_team}" (norm "${homeN}") ` +
-          `vs "${m.away_team}" (norm "${awayN}") — consider adding an alias.`
-        );
-      }
-    }
-
-    if (!dbMatch) { skipped++; continue; }
-
-    try {
-      const result = await query(`
-        UPDATE matches 
-        SET home_score = $1, away_score = $2, status = 'finished',
-            kickoff_time = COALESCE(kickoff_time, $4)
-        WHERE id = $3 AND status != 'finished'
-      `, [m.home_score, m.away_score, dbMatch.id, m.kickoff_time]);
-
-      if ((result.rowCount ?? 0) > 0) {
-        updated++;
-      } else {
-        skipped++;
-      }
-    } catch (e) {
-      console.error(`[live-scores] Error updating match ${dbMatch.id}:`, e);
-      errors++;
-    }
-  }
-
-  return { updated, skipped, errors };
+/** Build a normalized-name → team_id resolver from teams + team_aliases. */
+async function buildTeamResolver(): Promise<Map<string, number>> {
+  const { rows } = await query(`
+    SELECT id, name AS canon FROM teams
+    UNION ALL
+    SELECT team_id AS id, alias_normalized AS canon FROM team_aliases
+  `);
+  const map = new Map<string, number>();
+  for (const r of rows) map.set(normalizeTeamName(r.canon), r.id);
+  return map;
 }
 
-function mapRoundToPhase(round: string): string {
+type IngestOutcome = 'updated' | 'unchanged' | 'unmatched';
+
+/** Resolve + write a single finished external match. */
+async function ingestMatch(m: LiveMatch, resolver: Map<string, number>): Promise<IngestOutcome> {
+  const homeId = resolver.get(normalizeTeamName(m.home_team));
+  const awayId = resolver.get(normalizeTeamName(m.away_team));
+  if (!homeId || !awayId || homeId === awayId) return 'unmatched';
+
+  // 1) Idempotent: a match we already own carries the fifa_id.
+  let dbm = (await query('SELECT * FROM matches WHERE fifa_id = $1', [m.fifa_id])).rows[0] ?? null;
+
+  if (!dbm) {
+    if (m.phase === 'group') {
+      // The group fixture already has both teams assigned by the seeder; find it
+      // by the unordered team pair.
+      dbm = (await query(
+        `SELECT * FROM matches WHERE phase = 'group'
+           AND ((home_team_id = $1 AND away_team_id = $2) OR (home_team_id = $2 AND away_team_id = $1))
+         LIMIT 1`,
+        [homeId, awayId]
+      )).rows[0] ?? null;
+    } else {
+      // Knockout: maybe a prior run already placed this exact pairing…
+      dbm = (await query(
+        `SELECT * FROM matches WHERE phase = $1
+           AND ((home_team_id = $2 AND away_team_id = $3) OR (home_team_id = $3 AND away_team_id = $2))
+         LIMIT 1`,
+        [m.phase, homeId, awayId]
+      )).rows[0] ?? null;
+      // …otherwise claim a free placeholder slot of this phase. (Slot identity
+      // doesn't affect scoring, which keys on per-phase team membership.)
+      if (!dbm) {
+        dbm = (await query(
+          `SELECT * FROM matches WHERE phase = $1
+             AND home_team_id IS NULL AND away_team_id IS NULL AND fifa_id IS NULL
+           ORDER BY sort_order LIMIT 1`,
+          [m.phase]
+        )).rows[0] ?? null;
+      }
+    }
+  }
+
+  if (!dbm) return 'unmatched';
+
+  // Orientation + scores.
+  let homeTeam: number, awayTeam: number, hs: number, as: number;
+  if (m.phase === 'group' && dbm.home_team_id && dbm.away_team_id) {
+    // Preserve our existing orientation (users predicted home/away against it).
+    homeTeam = dbm.home_team_id;
+    awayTeam = dbm.away_team_id;
+    if (dbm.home_team_id === homeId) { hs = m.home_score; as = m.away_score; }
+    else { hs = m.away_score; as = m.home_score; }
+  } else {
+    // Knockout / unassigned: adopt the API orientation.
+    homeTeam = homeId; awayTeam = awayId; hs = m.home_score; as = m.away_score;
+  }
+
+  // Penalty winner only for knockout matches level after regulation/ET.
+  let penaltyWinner: number | null = null;
+  if (m.phase !== 'group' && hs === as && m.winner_side) {
+    penaltyWinner = m.winner_side === 'home' ? homeId : awayId;
+  }
+
+  // No-op if nothing changed (keeps polling cheap and avoids needless rescoring).
+  if (
+    dbm.status === 'finished' &&
+    dbm.fifa_id === m.fifa_id &&
+    dbm.home_team_id === homeTeam && dbm.away_team_id === awayTeam &&
+    dbm.home_score === hs && dbm.away_score === as &&
+    (dbm.penalty_winner_id ?? null) === penaltyWinner
+  ) {
+    return 'unchanged';
+  }
+
+  await query(
+    `UPDATE matches SET
+       home_team_id = $1, away_team_id = $2, home_score = $3, away_score = $4,
+       penalty_winner_id = $5, status = 'finished', fifa_id = $6,
+       kickoff_time = COALESCE(kickoff_time, $7)
+     WHERE id = $8`,
+    [homeTeam, awayTeam, hs, as, penaltyWinner, m.fifa_id, m.kickoff_time, dbm.id]
+  );
+  return 'updated';
+}
+
+/** Sync finished results from the configured provider into our DB. */
+export async function syncScores(): Promise<SyncResult> {
+  let matches = await fetchFromApiFootball();
+  if (matches.length === 0) matches = await fetchFromFifaApi();
+
+  const result: SyncResult = { updated: 0, skipped: 0, errors: 0, unmatched: [] };
+  if (matches.length === 0) return result;
+
+  const resolver = await buildTeamResolver();
+
+  for (const m of matches) {
+    if (m.status !== 'finished') { result.skipped++; continue; }
+    // §2.5 — Refuse imports with an unmapped phase; an 'unknown' phase would
+    // slip past phase-filtered scoring queries.
+    if (m.phase === 'unknown') { result.skipped++; continue; }
+    try {
+      const outcome = await ingestMatch(m, resolver);
+      if (outcome === 'updated') result.updated++;
+      else if (outcome === 'unmatched') {
+        result.skipped++;
+        result.unmatched.push(`${m.home_team} vs ${m.away_team}`);
+        console.warn(`[live-scores] Unresolved fixture: "${m.home_team}" vs "${m.away_team}" (${m.phase}) — add a team alias.`);
+      } else {
+        result.skipped++; // unchanged
+      }
+    } catch (e) {
+      console.error(`[live-scores] Error ingesting fixture ${m.fifa_id}:`, e);
+      result.errors++;
+    }
+  }
+
+  return result;
+}
+
+export function mapRoundToPhase(round: string): string {
   if (!round) return 'group';
   const r = round.toLowerCase();
   if (r.includes('group')) return 'group';
@@ -245,21 +305,10 @@ function mapRoundToPhase(round: string): string {
   return 'group';
 }
 
-// §4.7 — FIFA World Cup 2026 numeric stage IDs. The IDs below are STUBS placed
-// during scaffolding and were never confirmed against a live FIFA API
-// response. Before the tournament kicks off:
-//   1. Hit `${FIFA_BASE}/competitions/{competitionId}/stages` from a one-off
-//      script (or use the live response from `${FIFA_BASE}/matches/...`).
-//   2. Replace each value below with the real `idStage`.
-//   3. Add a unit test that pins these IDs.
+// §4.7 — FIFA World Cup 2026 numeric stage IDs (STUBS — verify before kickoff).
 const FIFA_STAGE_MAP: Record<string, string> = {
-	'285063': 'group',  // Group Stage    — STUB
-	'285064': 'r32',    // Round of 32    — STUB
-	'285065': 'r16',    // Round of 16    — STUB
-	'285066': 'qf',     // Quarter-finals — STUB
-	'285067': 'sf',     // Semi-finals    — STUB
-	'285068': '3rd',    // Third Place    — STUB
-	'285069': 'final',  // Final          — STUB
+	'285063': 'group', '285064': 'r32', '285065': 'r16', '285066': 'qf',
+	'285067': 'sf', '285068': '3rd', '285069': 'final',
 };
 
 function mapFifaStageToPhase(stageId: string): string {

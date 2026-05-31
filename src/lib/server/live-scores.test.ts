@@ -284,6 +284,23 @@ describe('fetchFromApiFootball', () => {
 	});
 });
 
+describe('fetchFromApiFootball winner extraction', () => {
+	beforeEach(() => { process.env.API_FOOTBALL_KEY = 'test-key'; vi.restoreAllMocks(); });
+	afterEach(() => { delete process.env.API_FOOTBALL_KEY; });
+
+	it('captures the penalty winner side from teams.*.winner', async () => {
+		const fixture = {
+			fixture: { id: 1, round: 'Final', date: '2026-07-19T19:00:00Z' },
+			teams: { home: { name: 'Team A', winner: false }, away: { name: 'Team B', winner: true } },
+			goals: { home: 1, away: 1 },
+		};
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ response: [fixture] }) }));
+		const [m] = await fetchFromApiFootball();
+		expect(m.winner_side).toBe('away');
+		expect(m.phase).toBe('final');
+	});
+});
+
 describe('syncScores', () => {
 	it('returns zeros when no matches fetched from either source', async () => {
 		delete process.env.API_FOOTBALL_KEY;
@@ -296,7 +313,7 @@ describe('syncScores', () => {
 		}));
 
 		const result = await syncScores();
-		expect(result).toEqual({ updated: 0, skipped: 0, errors: 0 });
+		expect(result).toEqual({ updated: 0, skipped: 0, errors: 0, unmatched: [] });
 	});
 });
 
@@ -310,202 +327,114 @@ describe('syncScores write path', () => {
 	});
 
 	afterEach(() => {
-		if (originalKey) {
-			process.env.API_FOOTBALL_KEY = originalKey;
-		} else {
-			delete process.env.API_FOOTBALL_KEY;
-		}
+		if (originalKey) process.env.API_FOOTBALL_KEY = originalKey;
+		else delete process.env.API_FOOTBALL_KEY;
 	});
 
-	it('updates match found by fifa_id', async () => {
-		// API-Football returns one finished match
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ response: [apiFixture('Group Stage - Matchday 1', { home: 3, away: 2 })] })
-		}));
+	// Route the mocked `query` by SQL content, modelling a tiny DB. Defaults
+	// resolve "Team A"→1, "Team B"→2.
+	function routeDb(opts: {
+		resolver?: { id: number; canon: string }[];
+		byFifa?: any; groupPair?: any; koPair?: any; placeholder?: any;
+		update?: () => Promise<any>;
+	} = {}) {
+		const resolver = opts.resolver ?? [{ id: 1, canon: 'Team A' }, { id: 2, canon: 'Team B' }];
+		dbQuery.mockImplementation((sql: string) => {
+			const s = sql.trim();
+			if (sql.includes('team_aliases')) return Promise.resolve({ rows: resolver });
+			if (s.startsWith('UPDATE matches')) return opts.update ? opts.update() : Promise.resolve({ rowCount: 1 });
+			if (sql.includes('WHERE fifa_id =')) return Promise.resolve({ rows: opts.byFifa ? [opts.byFifa] : [] });
+			if (sql.includes("phase = 'group'")) return Promise.resolve({ rows: opts.groupPair ? [opts.groupPair] : [] });
+			if (sql.includes('home_team_id IS NULL')) return Promise.resolve({ rows: opts.placeholder ? [opts.placeholder] : [] });
+			if (sql.includes('phase = $1')) return Promise.resolve({ rows: opts.koPair ? [opts.koPair] : [] });
+			return Promise.resolve({ rows: [] });
+		});
+	}
+	const stubFetch = (fixtures: any[]) =>
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ response: fixtures }) }));
+	const updateParams = () =>
+		dbQuery.mock.calls.filter(c => String(c[0]).trim().startsWith('UPDATE matches')).map(c => c[1]);
 
-		// query is called twice: SELECT by fifa_id (returns match), then UPDATE
-		dbQuery
-			.mockResolvedValueOnce({ rows: [{ id: 10, fifa_id: '1001' }] }) // SELECT by fifa_id
-			.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
+	it('imports a group result, preserving our home/away orientation', async () => {
+		stubFetch([apiFixture('Group Stage - Matchday 1', { home: 3, away: 2 })]); // home=Team A, away=Team B
+		routeDb({ groupPair: { id: 10, phase: 'group', home_team_id: 1, away_team_id: 2, status: 'scheduled', fifa_id: null, home_score: null, away_score: null, penalty_winner_id: null } });
 
 		const result = await syncScores();
-		expect(result).toEqual({ updated: 1, skipped: 0, errors: 0 });
-
-		// Verify the SELECT used fifa_id
-		expect(dbQuery).toHaveBeenNthCalledWith(1, expect.stringContaining('fifa_id'), ['1001']);
-		// Verify the UPDATE set scores
-		expect(dbQuery).toHaveBeenNthCalledWith(2, expect.stringContaining('UPDATE matches'), [3, 2, 10, expect.any(Date)]);
+		expect(result).toEqual({ updated: 1, skipped: 0, errors: 0, unmatched: [] });
+		const [home, away, hs, as, pen, , , id] = updateParams()[0];
+		expect([home, away, hs, as, pen, id]).toEqual([1, 2, 3, 2, null, 10]);
 	});
 
-	it('skips match when already finished (UPDATE returns rowCount 0)', async () => {
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ response: [apiFixture('Group Stage')] })
-		}));
-
-		dbQuery
-			.mockResolvedValueOnce({ rows: [{ id: 10, fifa_id: '1001' }] }) // SELECT
-			.mockResolvedValueOnce({ rowCount: 0 }); // UPDATE — already finished
-
-		const result = await syncScores();
-		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0 });
-	});
-
-	it('falls back to team name alias CTE match when no fifa_id match', async () => {
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ response: [apiFixture('Group Stage', { home: 1, away: 0 })] })
-		}));
-
-		dbQuery
-			.mockResolvedValueOnce({ rows: [] }) // SELECT by fifa_id — no match
-			.mockResolvedValueOnce({ rows: [{ id: 20 }] }) // SELECT by CTE resolver — found
-			.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
-
-		const result = await syncScores();
-		expect(result).toEqual({ updated: 1, skipped: 0, errors: 0 });
-
-		// Second query should be the CTE resolver query
-		expect(dbQuery).toHaveBeenNthCalledWith(2, expect.stringContaining('resolver'), expect.arrayContaining(['team a', 'team b']));
-	});
-
-	it('skips live matches (status !== finished)', async () => {
-		// Return a match that is NOT finished (use FIFA API format with non-Completed status)
-		delete process.env.API_FOOTBALL_KEY; // skip API-Football, go to FIFA
-		process.env.ENABLE_FIFA_FALLBACK = '1';
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ results: [fifaMatch('285063', { home: 1, away: 1, status: 'Live' })] })
-		}));
-
-		const result = await syncScores();
-		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0 });
-		// No DB queries should have been made
-		expect(dbQuery).not.toHaveBeenCalled();
-		delete process.env.ENABLE_FIFA_FALLBACK;
-	});
-
-	it('skips when no match found at all', async () => {
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ response: [apiFixture('Group Stage')] })
-		}));
-
-		dbQuery
-			.mockResolvedValueOnce({ rows: [] }) // SELECT by fifa_id — no match
-			.mockResolvedValueOnce({ rows: [] }); // SELECT by CTE resolver — no match
-
-		const result = await syncScores();
-		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0 });
-	});
-
-	it('increments error count when UPDATE throws', async () => {
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ response: [apiFixture('Final', { home: 2, away: 1 })] })
-		}));
-
-		dbQuery
-			.mockResolvedValueOnce({ rows: [{ id: 5, fifa_id: '1001' }] }) // SELECT
-			.mockRejectedValueOnce(new Error('DB write failed')); // UPDATE throws
-
-		const result = await syncScores();
-		expect(result).toEqual({ updated: 0, skipped: 0, errors: 1 });
-		expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('5'), expect.any(Error));
-	});
-
-	it('processes multiple matches and returns correct totals', async () => {
-		const fixture1 = apiFixture('Group Stage - Matchday 1', { home: 2, away: 0 });
-		const fixture2 = apiFixture('Group Stage - Matchday 2', { home: 1, away: 1 });
-		// Give different fixture IDs so they have different fifa_ids
-		fixture2.fixture.id = 1002;
-
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ response: [fixture1, fixture2] })
-		}));
-
-		// Match 1: found by fifa_id, updated
-		dbQuery
-			.mockResolvedValueOnce({ rows: [{ id: 10 }] }) // SELECT match1 by fifa_id
-			.mockResolvedValueOnce({ rowCount: 1 }) // UPDATE match1
-			// Match 2: not found by fifa_id, not found by CTE resolver either
-			.mockResolvedValueOnce({ rows: [] }) // SELECT match2 by fifa_id
-			.mockResolvedValueOnce({ rows: [] }); // SELECT match2 by CTE resolver
-
-		const result = await syncScores();
-		expect(result).toEqual({ updated: 1, skipped: 1, errors: 0 });
-	});
-
-	it('sets kickoff_time via COALESCE when available', async () => {
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ response: [apiFixture('Semi-finals', { home: 1, away: 0 })] })
-		}));
-
-		dbQuery
-			.mockResolvedValueOnce({ rows: [{ id: 42 }] }) // SELECT
-			.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
+	it('swaps the score when our stored group orientation is reversed', async () => {
+		stubFetch([apiFixture('Group Stage', { home: 3, away: 2 })]); // API home=Team A(1)
+		routeDb({ groupPair: { id: 10, phase: 'group', home_team_id: 2, away_team_id: 1, status: 'scheduled', fifa_id: null, home_score: null, away_score: null, penalty_winner_id: null } });
 
 		await syncScores();
-
-		// Verify UPDATE was called with a Date object for kickoff_time
-		const updateCall = dbQuery.mock.calls[1];
-		expect(updateCall[1][3]).toBeInstanceOf(Date);
-		expect(updateCall[0]).toContain('COALESCE(kickoff_time');
+		const [home, away, hs, as] = updateParams()[0];
+		// Our home is team 2, so the 3-2 (A-B) result is stored as 2-3.
+		expect([home, away, hs, as]).toEqual([2, 1, 2, 3]);
 	});
 
-	it('handles null kickoff_time correctly', async () => {
-		// Build a fixture with no date → kickoff_time should be null
-		const fixture = apiFixture('Final', { home: 0, away: 0 });
-		fixture.fixture.date = null;
-
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ response: [fixture] })
-		}));
-
-		dbQuery
-			.mockResolvedValueOnce({ rows: [{ id: 99 }] }) // SELECT
-			.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
-
-		await syncScores();
-
-		const updateCall = dbQuery.mock.calls[1];
-		// kickoff_time parameter should be null
-		expect(updateCall[1][3]).toBeNull();
-	});
-
-	it('escapes LIKE wildcards in team names via CTE resolver', async () => {
-		// Create fixture with team names containing special characters
+	it('assigns a knockout matchup to a free placeholder and records the penalty winner', async () => {
 		const fixture = {
-			fixture: { id: 3001, round: 'Group Stage', date: '2026-06-14T20:00:00Z' },
-			teams: { home: { name: '100% Winners_FC' }, away: { name: 'Team_B' } },
-			goals: { home: 2, away: 1 }
+			fixture: { id: 9001, round: 'Final', date: '2026-07-19T19:00:00Z' },
+			teams: { home: { name: 'Team A', winner: false }, away: { name: 'Team B', winner: true } },
+			goals: { home: 1, away: 1 }, // level → decided on penalties, Team B wins
 		};
-
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ response: [fixture] })
-		}));
-
-		dbQuery
-			.mockResolvedValueOnce({ rows: [] }) // SELECT by fifa_id — no match
-			.mockResolvedValueOnce({ rows: [{ id: 50 }] }) // SELECT by CTE resolver — found
-			.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE
+		stubFetch([fixture]);
+		routeDb({ placeholder: { id: 50, phase: 'final', home_team_id: null, away_team_id: null, status: 'scheduled', fifa_id: null } });
 
 		const result = await syncScores();
-		expect(result).toEqual({ updated: 1, skipped: 0, errors: 0 });
+		expect(result.updated).toBe(1);
+		const [home, away, hs, as, pen, fifaId, , id] = updateParams()[0];
+		expect([home, away, hs, as, pen, fifaId, id]).toEqual([1, 2, 1, 1, 2, '9001', 50]);
+	});
 
-		// Verify the CTE resolver query was called with normalized team names
-		const resolverCall = dbQuery.mock.calls[1];
-		expect(resolverCall[0]).toContain('resolver');
-		// The normalization lowercases, strips diacritics, collapses spaces
-		// but does NOT escape LIKE wildcards (CTE uses exact match, not LIKE)
-		const params = resolverCall[1] as string[];
-		expect(params[0]).toBe('100% winners_fc');
-		expect(params[1]).toBe('team_b');
+	it('no-ops on an unchanged finished match (idempotent re-sync)', async () => {
+		stubFetch([apiFixture('Group Stage', { home: 3, away: 2 })]); // fifa_id 1001
+		routeDb({ byFifa: { id: 10, phase: 'group', home_team_id: 1, away_team_id: 2, home_score: 3, away_score: 2, status: 'finished', fifa_id: '1001', penalty_winner_id: null } });
+
+		const result = await syncScores();
+		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0, unmatched: [] });
+		expect(updateParams()).toHaveLength(0); // no write
+	});
+
+	it('reports unmatched fixtures when a team name cannot be resolved', async () => {
+		stubFetch([apiFixture('Group Stage', { home: 1, away: 0 })]);
+		routeDb({ resolver: [{ id: 1, canon: 'Team A' }] }); // Team B missing
+
+		const result = await syncScores();
+		expect(result.updated).toBe(0);
+		expect(result.unmatched).toEqual(['Team A vs Team B']);
+		expect(updateParams()).toHaveLength(0);
+	});
+
+	it('reports unmatched when no DB match or free placeholder is found', async () => {
+		stubFetch([apiFixture('Round of 16', { home: 2, away: 1 })]);
+		routeDb({}); // no byFifa, no koPair, no placeholder
+
+		const result = await syncScores();
+		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0, unmatched: ['Team A vs Team B'] });
+	});
+
+	it('counts an error when the write throws', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		stubFetch([apiFixture('Final', { home: 2, away: 1 })]);
+		routeDb({ groupPair: null, placeholder: { id: 7, phase: 'final', home_team_id: null, away_team_id: null, fifa_id: null }, update: () => Promise.reject(new Error('DB write failed')) });
+
+		const result = await syncScores();
+		expect(result).toEqual({ updated: 0, skipped: 0, errors: 1, unmatched: [] });
+	});
+
+	it('skips live matches without writing', async () => {
+		delete process.env.API_FOOTBALL_KEY;
+		process.env.ENABLE_FIFA_FALLBACK = '1';
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ results: [fifaMatch('285063', { home: 1, away: 1, status: 'Live' })] }) }));
+		routeDb({});
+
+		const result = await syncScores();
+		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0, unmatched: [] });
+		expect(updateParams()).toHaveLength(0);
+		delete process.env.ENABLE_FIFA_FALLBACK;
 	});
 });

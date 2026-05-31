@@ -1,13 +1,13 @@
 import { query } from '$lib/server/db.js';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { calculateAllScores } from '$lib/server/scoring.js';
-import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
-import { runWithConcurrency } from '$lib/server/concurrency.js';
+import { syncAndRescore } from '$lib/server/sync-runner.js';
 import { errCode } from '$lib/server/err-code.js';
 
 // POST /api/admin/fifa-sync
-// Triggers a manual FIFA API sync from the admin page
+// Manually trigger a live-score sync + full rescore from the admin page.
+// If no provider (API_FOOTBALL_KEY / FIFA fallback) is configured, syncScores
+// returns 0 matches and this is effectively just a rescore.
 export const POST: RequestHandler = async ({ locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
@@ -16,27 +16,15 @@ export const POST: RequestHandler = async ({ locals }) => {
   const user = userRows[0] ?? null;
   if (!user?.is_admin) return json({ error: 'Prohibido' }, { status: 403 });
 
-  // TODO: When FIFA publishes 2026 WC API endpoints, activate this
-  // For now, return a placeholder response
   try {
-    // In production, this would call the FIFA sync script
-    // const updated = await syncFromFifa();
-
-    // Recalculate scores regardless (useful after manual edits)
-    const { rows: pools } = await query('SELECT id FROM pools WHERE is_active = true');
-    const poolIds = pools.map((p: any) => p.id);
-    await runWithConcurrency(poolIds, 3, async (poolId) => {
-      await calculateAllScores(poolId);
-      invalidateCachedPoolLeaderboard(poolId);
-      invalidateCachedPoolResults(poolId);
-    });
-    invalidateGlobalLeaderboard();
-
+    const r = await syncAndRescore();
     return json({
       ok: true,
-      updated: 0,
-      message: 'FIFA sync will be active closer to the tournament. Scores recalculated.',
-      pools: pools.length,
+      updated: r.updated,
+      skipped: r.skipped,
+      errors: r.errors,
+      unmatched: r.unmatched,
+      pools: r.pools,
     });
   } catch (e) {
     const code = errCode();

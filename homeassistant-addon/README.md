@@ -43,6 +43,25 @@ each start, `run.sh`:
 | `allowed_email_domain` | string (optional) | — | Restrict sign-ups to this email domain (e.g. `typsa.es`). Blank = any domain. |
 | `public_base_url` | string (optional) | — | Public HTTPS base URL for password-reset links, e.g. `https://you.duckdns.org`. |
 | `smtp_host` / `smtp_port` / `smtp_user` / `smtp_pass` / `smtp_from` | string / int / masked | — / `587` / — | SMTP settings for password-reset emails. Leave `smtp_host` blank to disable self-service reset (use admin reset instead). |
+| `api_football_key` | masked (optional) | — | API-Football (api-sports.io) key. With this set, the app can import results automatically. |
+| `auto_sync_minutes` | int | `0` | How often to auto-import results, in minutes. `0` = off. Floored to 5 min. Suggested `15`–`30` during the tournament. |
+
+### Hands-off results (automatic scoring)
+
+By default you enter results yourself on a pool's **admin → Resultados** page
+(group scores; for knockouts you also pick the two teams and, on a draw, the
+penalty winner). To run **fully hands-off**:
+
+1. Create a free **API-Football** account at api-sports.io and copy your key.
+2. Put it in `api_football_key` and set `auto_sync_minutes` (e.g. `20`).
+
+The app then polls for finished matches and writes them in automatically —
+group scores (keeping your home/away orientation), knockout matchups (assigning
+the two teams to the right round), and penalty-shootout winners — then rescopes
+every pool. The free tier (100 req/day) is ample at a 15–30 min interval. You can
+also press **🔄 Sincronizar ahora** on the admin page to pull immediately. Team
+names that don't resolve are listed so you can add an alias; most are covered
+out of the box (USA, Czechia, Korea Republic, Côte d'Ivoire, Türkiye, …).
 
 ### Login & password reset
 

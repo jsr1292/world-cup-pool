@@ -18,6 +18,8 @@ SMTP_PORT="$(bashio::config 'smtp_port')"
 SMTP_USER="$(bashio::config 'smtp_user')"
 SMTP_PASS="$(bashio::config 'smtp_pass')"
 SMTP_FROM="$(bashio::config 'smtp_from')"
+API_FOOTBALL_KEY="$(bashio::config 'api_football_key')"
+AUTO_SYNC_MINUTES="$(bashio::config 'auto_sync_minutes')"
 
 # database_url is required.
 if bashio::var.is_empty "${DATABASE_URL}" || [ "${DATABASE_URL}" = "null" ]; then
@@ -55,6 +57,11 @@ export NODE_OPTIONS="--max-old-space-size=256"
 [ "${SMTP_FROM}" = "null" ] && SMTP_FROM=""
 export ALLOWED_EMAIL_DOMAIN PUBLIC_BASE_URL
 export SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM
+
+# Hands-off live results: API-Football key + auto-sync interval (0 = off).
+[ "${API_FOOTBALL_KEY}" = "null" ] && API_FOOTBALL_KEY=""
+[ "${AUTO_SYNC_MINUTES}" = "null" ] && AUTO_SYNC_MINUTES="0"
+export API_FOOTBALL_KEY AUTO_SYNC_MINUTES
 
 cd /app
 

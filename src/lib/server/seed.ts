@@ -1,5 +1,6 @@
 import './load-env.js';
 import { query, getClient } from './db.js';
+import { normalizeTeamName, TEAM_ALIASES } from './team-normalize.js';
 
 // 48 confirmed qualified teams for FIFA World Cup 2026.
 // Groups based on December 5, 2025 FIFA draw.
@@ -113,6 +114,24 @@ async function seed() {
 
     for (const row of teams) {
       await client.query(insertSql, [row.name, row.flag_code, row.group_name, row.fifa_rank]);
+    }
+
+    // Seed team_aliases so the live-score sync can resolve external (API-Football
+    // / FIFA) team names that differ from ours. Idempotent: upsert by alias.
+    for (const [canonical, aliases] of Object.entries(TEAM_ALIASES)) {
+      const { rows: tr } = await client.query('SELECT id FROM teams WHERE name = $1', [canonical]);
+      if (tr.length === 0) continue; // alias for a team not in this seed — skip
+      const teamId = tr[0].id;
+      for (const alias of aliases) {
+        const norm = normalizeTeamName(alias);
+        if (!norm) continue;
+        await client.query(
+          `INSERT INTO team_aliases (team_id, alias_normalized, source)
+           VALUES ($1, $2, 'seed')
+           ON CONFLICT (alias_normalized) DO UPDATE SET team_id = EXCLUDED.team_id`,
+          [teamId, norm]
+        );
+      }
     }
 
     await client.query('COMMIT');

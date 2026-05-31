@@ -497,11 +497,14 @@
         try {
           const res = await fetch('/api/admin/fifa-sync', { method: 'POST' });
           const data = await res.json();
-          if (res.ok) alert(`Puntuaciones recalculadas (${data.pools ?? 0} quinielas).`);
-          else alert('Error: ' + (data.error ?? 'desconocido'));
+          if (res.ok) {
+            let msg = `Sincronización completa.\n${data.updated ?? 0} partido(s) actualizado(s); puntuaciones recalculadas (${data.pools ?? 0} quinielas).`;
+            if (data.unmatched?.length) msg += `\n\n⚠️ Sin resolver (añade un alias de equipo):\n• ${data.unmatched.join('\n• ')}`;
+            alert(msg);
+          } else alert('Error: ' + (data.error ?? 'desconocido'));
         } catch { alert('Error de conexión'); }
-      }} style="font-size: 9px; padding: 8px 16px;">🔄 Recalcular puntuaciones</button>
-      <span style="font-size: 9px; color: var(--text-dim);">Vuelve a calcular todas las puntuaciones con los resultados actuales</span>
+      }} style="font-size: 9px; padding: 8px 16px;">🔄 Sincronizar ahora</button>
+      <span style="font-size: 9px; color: var(--text-dim);">Importa los resultados publicados (si hay proveedor configurado) y recalcula</span>
     </div>
     {#if localMatches.length === 0}
       <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px;">
