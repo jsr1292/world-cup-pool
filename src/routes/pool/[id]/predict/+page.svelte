@@ -1,6 +1,7 @@
 <script>
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
+  import { untrack } from 'svelte';
   import { showToast } from '$lib/toast';
   import { flagEmoji, shortName } from '$lib/teams.js';
 
@@ -67,12 +68,16 @@
   const _activeEdits = new Set();
 
   $effect(() => {
+    // Depend on selectionsInit only; mutate `selections` inside untrack so the
+    // write doesn't re-trigger this effect (which would loop infinitely).
     const fresh = JSON.parse(JSON.stringify(selectionsInit));
-    for (const [group, ranks] of Object.entries(fresh)) {
-      if (!_activeEdits.has(group)) {
-        selections[group] = ranks;
+    untrack(() => {
+      for (const [group, ranks] of Object.entries(fresh)) {
+        if (!_activeEdits.has(group)) {
+          selections[group] = ranks;
+        }
       }
-    }
+    });
   });
 
   // ─── Mobile: sequential tap-to-rank ───────────────────────────────
@@ -288,15 +293,21 @@
   // invalidate doesn't blow away unsaved typing.
   const _activeMatchEdits = new Set();
   $effect(() => {
+    // Depend on matchScoresInit only. Reading `matchScores` here (via the
+    // spread) AND writing it below previously made this effect self-triggering
+    // → "effect_update_depth_exceeded" (infinite loop, blank page). Do the
+    // read+merge+write inside untrack so only matchScoresInit is a dependency.
     const fresh = JSON.parse(JSON.stringify(matchScoresInit));
-    const next = { ...matchScores };
-    for (const [matchIdStr, score] of Object.entries(fresh)) {
-      const matchId = Number(matchIdStr);
-      if (!_activeMatchEdits.has(matchId)) {
-        next[matchId] = score;
+    untrack(() => {
+      const next = { ...matchScores };
+      for (const [matchIdStr, score] of Object.entries(fresh)) {
+        const matchId = Number(matchIdStr);
+        if (!_activeMatchEdits.has(matchId)) {
+          next[matchId] = score;
+        }
       }
-    }
-    matchScores = next;
+      matchScores = next;
+    });
   });
 
   // Cleanup timers on component destroy
