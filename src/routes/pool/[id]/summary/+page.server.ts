@@ -5,11 +5,36 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
+  if (!locals.user) throw error(401, 'Inicia sesión');
+
   const poolId = Number(params.id);
-  const pool = await getPoolById(poolId);
+  const pool = await getPoolById(poolId) as any;
   if (!pool) throw error(404, 'Quiniela no encontrada');
 
-  if (!locals.user) return { pool, entries: [], groupPreds: {}, bracketPreds: {}, teams: {} };
+  // #3 — Membership/creator gate (mirror the sibling pool pages). Without it,
+  // any authenticated user could load another pool's summary and read its
+  // invite_code / share_token from the serialized page data.
+  const { rows: gate } = await query(
+    'SELECT 1 FROM pool_members WHERE pool_id = $1 AND user_id = $2',
+    [poolId, locals.user.id]
+  );
+  if (gate.length === 0 && pool.created_by !== locals.user.id) {
+    throw error(403, 'No eres miembro de esta quiniela');
+  }
+
+  // #3 — Never serialize sensitive columns (invite_code, share_token) to the
+  // client; return only the fields the page needs.
+  const safePool = {
+    id: pool.id,
+    name: pool.name,
+    buy_in: pool.buy_in,
+    currency: pool.currency,
+    is_active: pool.is_active,
+    created_by: pool.created_by,
+    allow_multiple_predictions: pool.allow_multiple_predictions,
+    deadline_group: pool.deadline_group,
+    deadline_knockout: pool.deadline_knockout,
+  };
 
   const entries = await getUserPredictions(poolId, locals.user.id) as any[];
 
@@ -49,5 +74,5 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     }
   }
 
-  return { pool, entries, groupPreds, bracketPreds, teams };
+  return { pool: safePool, entries, groupPreds, bracketPreds, teams };
 };

@@ -40,10 +40,16 @@ export const load: PageServerLoad = async ({ locals }) => {
       FROM tiebreaker tb
     ),
     exact_hits AS (
-      SELECT prediction_id,
-        SUM(CASE WHEN points_earned >= 7 THEN 1 ELSE 0 END) as exact_score_hits
-      FROM match_predictions
-      GROUP BY prediction_id
+      -- #8 — true exact-scoreline hits (config-independent): a prediction whose
+      -- score equals the finished match actual score. The old points_earned
+      -- >= 7 threshold was unreachable under default rules (max 4), so this
+      -- tiebreaker never fired.
+      SELECT mp.prediction_id, COUNT(*) as exact_score_hits
+      FROM match_predictions mp
+      JOIN matches m ON m.id = mp.match_id
+        AND m.status = 'finished' AND m.home_score IS NOT NULL AND m.away_score IS NOT NULL
+      WHERE mp.home_score = m.home_score AND mp.away_score = m.away_score
+      GROUP BY mp.prediction_id
     ),
     group_correct AS (
       SELECT prediction_id, COUNT(*) as cnt
@@ -70,10 +76,14 @@ export const load: PageServerLoad = async ({ locals }) => {
     LEFT JOIN group_correct gc ON gc.prediction_id = p.id
     LEFT JOIN bracket_correct bc ON bc.prediction_id = p.id
     GROUP BY u.id
+    -- #10 — Canonical tiebreak chain, unified with the pool leaderboard, ending
+    -- in deterministic keys so equal users always order the same way.
     ORDER BY total_score DESC,
              exact_score_hits DESC,
              total_correct DESC,
-             MIN(tc.closeness) ASC NULLS LAST
+             MIN(tc.closeness) ASC NULLS LAST,
+             MAX(p.updated_at) ASC,
+             u.id ASC
     LIMIT 100
   `);
 

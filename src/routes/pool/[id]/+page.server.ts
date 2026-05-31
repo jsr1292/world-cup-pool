@@ -72,8 +72,23 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   let groupCorrectMap: Record<number, number> = {};
   let bracketByPredPhase: Record<number, Record<string, number>> = {};
   let tiebreakerMap: Record<number, any> = {};
+  let exactHitsMap: Record<number, number> = {};
 
   if (predIds.length > 0) {
+    // #8/#10 — true exact-scoreline hits (config-independent): predictions whose
+    // score equals a finished match's actual score. Used as a leaderboard
+    // tiebreaker, consistent with the global leaderboard.
+    const { rows: ehRows } = await query(`
+      SELECT mp.prediction_id, COUNT(*) AS cnt
+      FROM match_predictions mp
+      JOIN matches m ON m.id = mp.match_id
+        AND m.status = 'finished' AND m.home_score IS NOT NULL AND m.away_score IS NOT NULL
+      WHERE mp.prediction_id = ANY($1::int[])
+        AND mp.home_score = m.home_score AND mp.away_score = m.away_score
+      GROUP BY mp.prediction_id
+    `, [predIds]);
+    ehRows.forEach((r: any) => { exactHitsMap[r.prediction_id] = Number(r.cnt); });
+
     const { rows: gcRows } = await query(`
       SELECT prediction_id, COUNT(*) as cnt
       FROM group_predictions
@@ -119,21 +134,26 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       group_correct: groupCorrect,
       bracket_correct: bracketByPhase,
       total_correct: groupCorrect + Object.values(bracketByPhase).reduce((a: number, b: number) => a + b, 0),
+      exact_score_hits: exactHitsMap[predId] ?? 0,
       tiebreaker_close: tiebreakerClose,
     };
   });
 
-  // Sort: total_score DESC, total_correct DESC, tiebreaker closeness ASC,
-  // then updated_at ASC as final deterministic tiebreaker (first-submitted wins).
-  // 8d: updated_at is already returned via getPoolLeaderboard's SELECT *.
+  // #10 — Canonical tiebreak chain, unified with the global leaderboard:
+  // total_score DESC → exact_score_hits DESC → total_correct DESC →
+  // tiebreaker closeness ASC → updated_at ASC → id ASC (fully deterministic).
   enrichedLeaderboard.sort((a: any, b: any) => {
     if (b.total_score !== a.total_score) return b.total_score - a.total_score;
+    if (b.exact_score_hits !== a.exact_score_hits) return b.exact_score_hits - a.exact_score_hits;
     if (b.total_correct !== a.total_correct) return b.total_correct - a.total_correct;
     // §4.11 — null tiebreaker_close sorts after any numeric value.
     const at = a.tiebreaker_close ?? Number.POSITIVE_INFINITY;
     const bt = b.tiebreaker_close ?? Number.POSITIVE_INFINITY;
     if (at !== bt) return at - bt;
-    return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+    const au = new Date(a.updated_at).getTime();
+    const bu = new Date(b.updated_at).getTime();
+    if (au !== bu) return au - bu;
+    return a.id - b.id;
   });
 
   // F-20: Cache results data (phases, team cache, group standings).

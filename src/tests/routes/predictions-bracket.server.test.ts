@@ -118,6 +118,9 @@ describe('POST /api/predictions/bracket', () => {
 		(query as any).mockResolvedValueOnce({ rows: [{ 1: 1 }] });
 		(query as any).mockResolvedValueOnce({ rows: [{ deadline_knockout: null }] });
 		(query as any).mockResolvedValueOnce({ rows: [] });
+		// #4: existing-rows lookups (one per phase: r16, qf) — empty for a fresh save
+		(query as any).mockResolvedValueOnce({ rows: [] });
+		(query as any).mockResolvedValueOnce({ rows: [] });
 		// §2.6: getPrecedingTeams('r32') for R16 phase — not in body picks
 		(query as any).mockResolvedValueOnce({ rows: [{ team_id: 10 }] });
 		const res = await POST({
@@ -127,10 +130,30 @@ describe('POST /api/predictions/bracket', () => {
 		expect(res.status).toBe(400);
 	});
 
+	it('#4: Returns 400 when a team would be duplicated across slots in a phase', async () => {
+		(query as any).mockResolvedValueOnce({ rows: [{ user_id: 1, pool_id: 5 }] }); // ownership
+		(query as any).mockResolvedValueOnce({ rows: [{ 1: 1 }] });                   // membership
+		(query as any).mockResolvedValueOnce({ rows: [{ deadline_knockout: null }] }); // deadline
+		(query as any).mockResolvedValueOnce({ rows: [] });                            // started phases
+		// #4: existing 'final' rows already have team 10 in slot 1; this save adds
+		// team 10 to slot 2 → would duplicate → reject.
+		(query as any).mockResolvedValueOnce({ rows: [{ slot: 1, team_id: 10 }] });
+		const res = await POST({
+			request: mockRequest({ prediction_id: 1, picks: { final: { 2: 10 } } }),
+			locals: mockLocals(1),
+		});
+		expect(res.status).toBe(400);
+		const data = await res.json();
+		expect(data.error).toContain('repetido');
+	});
+
 	it('Returns 200 on successful save', async () => {
 		(query as any).mockResolvedValueOnce({ rows: [{ user_id: 1, pool_id: 5 }] });
 		(query as any).mockResolvedValueOnce({ rows: [{ 1: 1 }] });
 		(query as any).mockResolvedValueOnce({ rows: [{ deadline_knockout: null }] });
+		(query as any).mockResolvedValueOnce({ rows: [] });
+		// #4: existing-rows lookups (one per phase: r16, qf) — empty for a fresh save
+		(query as any).mockResolvedValueOnce({ rows: [] });
 		(query as any).mockResolvedValueOnce({ rows: [] });
 		// §2.6: getPrecedingTeams('r32') for r16 validation — r32 not in body picks
 		(query as any).mockResolvedValueOnce({ rows: [{ team_id: 10 }, { team_id: 20 }] });

@@ -34,13 +34,25 @@ export async function calculateGroupScores(
 ): Promise<void> {
 	const ptsPerPosition = rules.group_position;
 
+  // #7/#9 idempotency: zero ALL group points for the pool BEFORE the early
+  // returns below. If results are reverted (e.g. a group drops back under 6
+  // finished matches, or all matches un-finish), a recompute must clear stale
+  // points — which only happens if the reset runs unconditionally up front.
+  await client.query(`
+    UPDATE group_predictions gp
+    SET points_earned = 0
+    FROM predictions p
+    WHERE p.id = gp.prediction_id
+      AND p.pool_id = $1
+  `, [poolId]);
+
   // Get all finished group matches
   const { rows: matches } = await client.query(`
     SELECT group_name, home_team_id, away_team_id, home_score, away_score
     FROM matches WHERE phase = 'group' AND status = 'finished' AND home_score IS NOT NULL
   `);
 
-  if (matches.length === 0) return;
+  if (matches.length === 0) return; // already zeroed above
 
   // Build actual group standings from match results
   const standings: Record<string, Record<number, { points: number; gf: number; ga: number }>> = {};
@@ -61,12 +73,20 @@ export async function calculateGroupScores(
     else { h.points += 1; a.points += 1; }
   }
 
-  // §2.3 — FIFA tiebreaker: points → H2H points → H2H GD → H2H GF →
-  // overall GD → overall GF. We compute H2H only across the subset of teams
-  // tied on overall points, then fall back to the global stats.
+  // §2.3 — FIFA World Cup group ranking (regulations art. on ranking):
+  //   1. points (all group matches)
+  //   2. overall goal difference
+  //   3. overall goals scored
+  //   — if two+ teams are still equal on 1–3, apply head-to-head among ONLY
+  //     those teams:
+  //   4. H2H points  5. H2H goal difference  6. H2H goals scored
+  //   — then fair play / drawing of lots. We don't track fair-play points,
+  //     so the final fallback is a deterministic order by team id (stable).
+  //
+  // NOTE: overall GD/GF come BEFORE head-to-head. This is the FIFA World Cup
+  // procedure and differs from UEFA (which applies head-to-head first).
   function rankGroup(group: string, teams: Record<number, { points: number; gf: number; ga: number }>): number[] {
     const ids = Object.keys(teams).map(Number);
-    // Cluster teams by their overall points.
     const groupMatches = matches.filter(m => m.group_name === group);
 
     function h2hStats(subset: Set<number>): Map<number, { points: number; gf: number; ga: number }> {
@@ -85,42 +105,61 @@ export async function calculateGroupScores(
       return out;
     }
 
-    // First sort by overall points only; then break ties via H2H within
-    // each cluster, then fall back to overall GD/GF.
-    const initial = ids.map(id => ({ id, ...teams[id], gd: teams[id].gf - teams[id].ga }));
-    initial.sort((a, b) => b.points - a.points);
+    // Step 1 — sort by overall points, then overall GD, then overall GF.
+    const arr = ids.map(id => ({
+      id,
+      points: teams[id].points,
+      gf: teams[id].gf,
+      gd: teams[id].gf - teams[id].ga,
+    }));
+    arr.sort((a, b) =>
+      (b.points - a.points) || (b.gd - a.gd) || (b.gf - a.gf)
+    );
 
+    // Step 2 — break remaining ties (teams equal on points AND GD AND GF) by
+    // head-to-head among exactly those teams, then by id as the final fallback.
     const finalOrder: number[] = [];
     let i = 0;
-    while (i < initial.length) {
+    while (i < arr.length) {
       let j = i + 1;
-      while (j < initial.length && initial[j].points === initial[i].points) j++;
-      const cluster = initial.slice(i, j);
-      if (cluster.length === 1) {
-        finalOrder.push(cluster[0].id);
+      while (
+        j < arr.length &&
+        arr[j].points === arr[i].points &&
+        arr[j].gd === arr[i].gd &&
+        arr[j].gf === arr[i].gf
+      ) j++;
+      const tied = arr.slice(i, j);
+      if (tied.length === 1) {
+        finalOrder.push(tied[0].id);
       } else {
-        const subset = new Set(cluster.map(c => c.id));
+        const subset = new Set(tied.map(t => t.id));
         const h2h = h2hStats(subset);
-        cluster.sort((a, b) => {
+        tied.sort((a, b) => {
           const ah = h2h.get(a.id)!;
           const bh = h2h.get(b.id)!;
-          if (bh.points !== ah.points) return bh.points - ah.points;
           const ahGd = ah.gf - ah.ga;
           const bhGd = bh.gf - bh.ga;
-          if (bhGd !== ahGd) return bhGd - ahGd;
-          if (bh.gf !== ah.gf) return bh.gf - ah.gf;
-          if (b.gd !== a.gd) return b.gd - a.gd;
-          return b.gf - a.gf;
+          return (bh.points - ah.points) || (bhGd - ahGd) || (bh.gf - ah.gf) || (a.id - b.id);
         });
-        for (const c of cluster) finalOrder.push(c.id);
+        for (const t of tied) finalOrder.push(t.id);
       }
       i = j;
     }
     return finalOrder;
   }
 
+  // #6 — Only score a group once ALL 6 of its round-robin matches are
+  // finished. Ranking a partial table awards premature/incorrect position
+  // points that fluctuate until the group completes.
+  const finishedPerGroup: Record<string, number> = {};
+  for (const m of matches) {
+    if (!m.group_name) continue;
+    finishedPerGroup[m.group_name] = (finishedPerGroup[m.group_name] ?? 0) + 1;
+  }
+
   const actualPositions: Record<string, number[]> = {};
   for (const [group, teams] of Object.entries(standings)) {
+    if (finishedPerGroup[group] !== 6) continue; // group not complete yet
     actualPositions[group] = rankGroup(group, teams);
   }
 
@@ -134,20 +173,12 @@ export async function calculateGroupScores(
 
   if (allGP.length === 0) return;
 
-  // Collect (prediction_id, group_name, points) for bulk unnest UPDATE
+  // Collect (prediction_id, group_name, points) for bulk unnest UPDATE.
+  // (Points were already zeroed at the top of this function — see #7/#9 — so
+  // groups that are incomplete or have no actual standings stay at 0.)
   const predIds: number[] = [];
   const groupNames: string[] = [];
   const ptsArray: number[] = [];
-
-  // B6-5: Poner a cero todos los puntos de grupo antes de recalcular para que la función
-  // sea idempotente aunque un resultado se revierta de 'finished' a 'scheduled'.
-  await client.query(`
-    UPDATE group_predictions gp
-    SET points_earned = 0
-    FROM predictions p
-    WHERE p.id = gp.prediction_id
-      AND p.pool_id = $1
-  `, [poolId]);
 
   for (const gp of allGP) {
     const actual = actualPositions[gp.group_name];
@@ -185,6 +216,16 @@ export async function calculateBracketScores(
   rules: Record<string, number>,
   client: PoolClient
 ): Promise<void> {
+  // #7/#9 idempotency: zero all bracket points for the pool BEFORE the early
+  // return, so reverting all knockout results clears stale points.
+  await client.query(`
+    UPDATE bracket_predictions bp
+    SET points_earned = 0
+    FROM predictions p
+    WHERE p.id = bp.prediction_id
+      AND p.pool_id = $1
+  `, [poolId]);
+
   // Get all finished knockout matches
 	const { rows: matches } = await client.query(`
 		SELECT id, phase, home_team_id, away_team_id, home_score, away_score, penalty_winner_id
@@ -193,7 +234,7 @@ export async function calculateBracketScores(
 		  AND status = 'finished' AND home_score IS NOT NULL AND away_score IS NOT NULL
 	`);
 
-  if (matches.length === 0) return;
+  if (matches.length === 0) return; // already zeroed above
 
   // Determine winners per match
   const phaseWinners: Record<string, Set<number>> = {}; // phase -> set of winner team_ids
@@ -213,9 +254,9 @@ export async function calculateBracketScores(
 		phaseWinners[phase].add(winner);
 	}
 
-  // Bulk SELECT all bracket predictions for the pool
+  // Bulk SELECT all bracket predictions for the pool (by primary key id).
   const { rows: allBP } = await client.query(`
-    SELECT bp.prediction_id, bp.phase, bp.team_id
+    SELECT bp.id, bp.phase, bp.team_id
     FROM bracket_predictions bp
     JOIN predictions p ON p.id = bp.prediction_id
     WHERE p.pool_id = $1
@@ -223,10 +264,11 @@ export async function calculateBracketScores(
 
   if (allBP.length === 0) return;
 
-  // Collect ALL bracket predictions with computed points (0 for wrong, earned for correct)
-  const predIds: number[] = [];
-  const phases: string[] = [];
-  const teamIds: (number | null)[] = [];
+  // #4 — Key the UPDATE on the row id so each slot is scored exactly once
+  // (the old team_id join updated every same-team row in a phase, which could
+  // double-count a team duplicated across slots). Duplicate teams within a
+  // phase are also rejected at the API layer.
+  const ids: number[] = [];
   const ptsArray: number[] = [];
 
   for (const bp of allBP) {
@@ -239,19 +281,16 @@ export async function calculateBracketScores(
         pts += rules['knockout_winner'] ?? 0;
       }
     }
-    predIds.push(bp.prediction_id);
-    phases.push(bp.phase);
-    teamIds.push(bp.team_id);
+    ids.push(bp.id);
     ptsArray.push(pts);
   }
 
-  // M3: Single bulk UPDATE via unnest — replaces the old reset-all + per-row-update pattern
+  // Single bulk UPDATE via unnest, joined on the bracket_predictions id.
   await client.query(`
     UPDATE bracket_predictions bp SET points_earned = v.pts
-    FROM unnest($1::int[], $2::text[], $3::int[], $4::int[]) AS v(pred_id, phase, team_id, pts)
-    WHERE bp.prediction_id = v.pred_id AND bp.phase = v.phase
-      AND bp.team_id IS NOT DISTINCT FROM v.team_id
-  `, [predIds, phases, teamIds, ptsArray]);
+    FROM unnest($1::int[], $2::int[]) AS v(id, pts)
+    WHERE bp.id = v.id
+  `, [ids, ptsArray]);
 }
 
 /**
@@ -269,6 +308,17 @@ export async function calculateMatchScores(
 	const outcomePts = rules.match_outcome;
 	const exactPts = rules.exact_score;
 
+  // #7/#9 idempotency: zero all match-prediction points for the pool BEFORE
+  // computing. Predictions whose match is no longer finished (reverted) are
+  // skipped below, so without this up-front reset they would keep stale points.
+  await client.query(`
+    UPDATE match_predictions mp
+    SET points_earned = 0
+    FROM predictions p
+    WHERE p.id = mp.prediction_id
+      AND p.pool_id = $1
+  `, [poolId]);
+
   // Get all finished matches (group or knockout) with scores
   const { rows: matches } = await client.query(`
     SELECT id, home_team_id, away_team_id, home_score, away_score
@@ -276,7 +326,7 @@ export async function calculateMatchScores(
     WHERE status = 'finished' AND home_score IS NOT NULL AND away_score IS NOT NULL
   `);
 
-  if (matches.length === 0) return;
+  if (matches.length === 0) return; // already zeroed above
 
   // Build a lookup: matchId -> { homeScore, awayScore, outcome }
   const matchMap: Record<number, { homeScore: number; awayScore: number; outcome: string }> = {};
@@ -356,18 +406,15 @@ export async function calculateAllScores(poolId: number): Promise<void> {
   try {
     await client.query('BEGIN');
 
-    // WCP-12/B6-3: Acquire a per-pool advisory lock (xact-scoped, released on COMMIT/ROLLBACK).
-    // pg_try_advisory_xact_lock returns false immediately if already held — no blocking.
-    // This serializes concurrent scoring runs for the same pool without queue contention.
-    const { rows: lockRows } = await client.query(
-      'SELECT pg_try_advisory_xact_lock($1) AS acquired',
-      [poolId]
-    );
-    if (!lockRows[0].acquired) {
-      // Another scoring run is already in progress for this pool — skip gracefully.
-      await client.query('ROLLBACK');
-      return;
-    }
+    // #5 — Acquire a BLOCKING per-pool advisory lock (xact-scoped, released on
+    // COMMIT/ROLLBACK). The old pg_try_advisory_xact_lock skipped the run when
+    // the lock was already held, which could silently drop a recalc: if a
+    // result was committed while another recalc held the lock, the skipped run
+    // meant that result never got scored until the next trigger. Blocking here
+    // serializes concurrent recalcs for the same pool instead — each waits, then
+    // recomputes against the latest committed data, so no result is lost.
+    // Different pools use different keys and never block each other.
+    await client.query('SELECT pg_advisory_xact_lock($1)', [poolId]);
 
     await calculateGroupScores(poolId, rules, client);
     await calculateBracketScores(poolId, rules, client);

@@ -121,11 +121,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       `SELECT DISTINCT phase FROM matches
        WHERE phase = ANY($1::text[])
          AND (
-           (kickoff_time IS NOT NULL AND kickoff_time <= NOW())
-           -- §2.3: if the row has no kickoff_time, treat it as gated by the
-           -- pool-level deadline, which we already enforced above. If we got
-           -- here, that deadline has NOT passed, so this branch contributes
-           -- nothing. We list it explicitly so the intent is documented.
+           -- #1 — a finished knockout match locks its phase even when
+           -- kickoff_time is NULL, so a player can't change bracket picks
+           -- after the result is known.
+           status = 'finished'
+           OR (kickoff_time IS NOT NULL AND kickoff_time <= NOW())
          )`,
       [phases]
     );
@@ -172,6 +172,35 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     const seen = new Set<number>();
     for (const teamId of Object.values(slots)) {
       if (teamId === null) continue;
+      if (seen.has(teamId)) {
+        return json({ error: `Equipo repetido en fase ${phase}` }, { status: 400 });
+      }
+      seen.add(teamId);
+    }
+  }
+
+  // #4 — Reject a team that would end up in two slots of the same phase once
+  // THIS save is applied. The §2.2 check only inspects the current request;
+  // a separate save (e.g. {final:{2:X}} when slot 1 already holds X) could
+  // otherwise leave a team duplicated across slots, which the scoring engine
+  // would double-count. We compute the resulting per-phase slot→team map from
+  // the DB overlaid with this request's changes and reject duplicates.
+  for (const [phase, slots] of Object.entries(picks)) {
+    const { rows: existingRows } = await query(
+      'SELECT slot, team_id FROM bracket_predictions WHERE prediction_id = $1 AND phase = $2',
+      [prediction_id, phase]
+    );
+    const finalMap = new Map<number, number>(); // slot -> team_id (non-null)
+    for (const r of existingRows) {
+      if (r.team_id !== null) finalMap.set(Number(r.slot), r.team_id as number);
+    }
+    for (const [slotStr, teamId] of Object.entries(slots)) {
+      const slot = Number(slotStr);
+      if (teamId === null) finalMap.delete(slot);
+      else finalMap.set(slot, teamId);
+    }
+    const seen = new Set<number>();
+    for (const teamId of finalMap.values()) {
       if (seen.has(teamId)) {
         return json({ error: `Equipo repetido en fase ${phase}` }, { status: 400 });
       }

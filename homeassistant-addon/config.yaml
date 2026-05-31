@@ -41,6 +41,7 @@ options:
   can_create_pools: admin
   admin_username: ""
   run_setup: false
+  xff_depth: 1
 schema:
   # Neon (or any Postgres) connection string. Required. Provided at runtime —
   # never baked into the image.
@@ -54,3 +55,12 @@ schema:
   # One-shot DB bootstrap: migrations + 48 teams + 104 fixtures. Idempotent, so
   # it's safe to leave on, but you can switch it back off after the first boot.
   run_setup: bool
+  # Number of trusted reverse proxies in front of the app, used to pick the real
+  # client IP from X-Forwarded-For (so login rate-limiting keys on the actual
+  # client, not the proxy). Set to the count of proxies on YOUR access path:
+  #   • HA ingress only ............................ 1
+  #   • DuckDNS reverse proxy → add-on port 3000 ... 1
+  #   • DuckDNS reverse proxy → HA ingress → app ... 2
+  # Too low collapses all users into one rate-limit bucket; too high lets the
+  # client spoof its IP. Default 1.
+  xff_depth: int(1,5)
