@@ -70,7 +70,18 @@ export const handle: Handle = async ({ event, resolve }) => {
       };
       const normOrigin = normalize(origin);
       const normExpected = normalize(event.url.origin);
-      if (normOrigin !== normExpected) {
+      // Same-origin guarantee: the browser's Origin host equals the Host it
+      // actually connected to. Accept that directly — it's robust to how the
+      // server derives event.url.origin behind HA ingress / a direct port
+      // mapping (where a missing x-forwarded-host would otherwise make the
+      // comparison fail for direct LAN/IP access). A cross-site attacker's
+      // Origin host never equals our Host, so CSRF protection is unchanged.
+      let sameHost = false;
+      try {
+        const reqHost = event.request.headers.get('host');
+        sameHost = !!reqHost && new URL(origin).host === reqHost;
+      } catch { /* malformed Origin → fall through to the strict check */ }
+      if (normOrigin !== normExpected && !sameHost) {
         return new Response(JSON.stringify({ error: 'Origin no permitido' }), {
           status: 403,
           headers: { 'Content-Type': 'application/json' },
