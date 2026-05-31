@@ -343,8 +343,15 @@
     try {
       const scores = {};
       for (const [matchIdStr, score] of Object.entries(matchScores)) {
+        // DATA-LOSS FIX (same class as the group bug): only send COMPLETE
+        // scores. The endpoint DELETEs a prediction when either side is null,
+        // so sending a half-typed/empty score (or a stale empty entry from
+        // another device) would wipe an already-saved prediction. Incomplete
+        // scores simply aren't transmitted.
+        if (score.home == null || score.away == null) continue;
         scores[matchIdStr] = { home_score: score.home, away_score: score.away };
       }
+      if (Object.keys(scores).length === 0) { matchSaving = false; return; }
       const res = await fetch('/api/predictions/match-scores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
