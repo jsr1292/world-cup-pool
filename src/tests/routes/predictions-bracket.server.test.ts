@@ -61,6 +61,18 @@ describe('POST /api/predictions/bracket', () => {
 		expect(res.status).toBe(400);
 	});
 
+	it('Returns 400 (not a 500) when a phase value is null', async () => {
+		// Regression: { picks: { r32: null } } previously crashed on
+		// Object.keys(null) before the try block → unhandled 500.
+		const res = await POST({
+			request: mockRequest({ prediction_id: 1, picks: { r32: null } }),
+			locals: mockLocals(1),
+		});
+		expect(res.status).toBe(400);
+		const body = await res.json();
+		expect(body.error).toMatch(/inválidas/i);
+	});
+
 	it('Returns 400 when too many picks (>64)', async () => {
 		const slots: Record<number, number> = {};
 		for (let i = 1; i <= 65; i++) slots[i] = 10;

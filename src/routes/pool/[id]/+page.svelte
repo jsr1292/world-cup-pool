@@ -407,7 +407,7 @@
           <div style="margin-bottom: 16px;">
             <select bind:value={summaryEntry} style="font-size: 11px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; color: var(--text);">
               {#each data.predictions as pred}
-                <option value={pred.id}>{pred.label || 'Entrada ' + pred.id}</option>
+                <option value={pred.id}>{pred.label || 'Entrada principal'}</option>
               {/each}
             </select>
           </div>

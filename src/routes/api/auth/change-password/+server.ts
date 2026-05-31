@@ -10,7 +10,13 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
   if (!checkAuthRate(locals.user.id)) {
     return json({ error: 'Demasiados intentos. Espera 15 minutos.' }, { status: 429 });
   }
-  const { current_password, new_password } = await request.json();
+  let body: any;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Cuerpo inválido' }, { status: 400 });
+  }
+  const { current_password, new_password } = body ?? {};
   if (!current_password || !new_password)
     return json({ error: 'Todos los campos son obligatorios' }, { status: 400 });
   if (new_password.length < 6)

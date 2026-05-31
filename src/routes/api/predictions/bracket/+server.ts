@@ -76,6 +76,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({ error: 'Falta prediction_id o selecciones' }, { status: 400 });
   }
 
+  // Validate each phase value is a non-null object before iterating. Without
+  // this, a crafted payload like { picks: { r32: null } } made Object.keys(null)
+  // throw an UNHANDLED 500 (this code runs before the try block below).
+  for (const [phase, slots] of Object.entries(picks)) {
+    if (typeof slots !== 'object' || slots === null || Array.isArray(slots)) {
+      return json({ error: `Selecciones inválidas para la fase ${phase}` }, { status: 400 });
+    }
+  }
+
   // Body size limit: count total pick entries across all phases
   let totalPicks = 0;
   for (const phaseSlots of Object.values(picks)) {

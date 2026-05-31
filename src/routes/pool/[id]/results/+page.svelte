@@ -101,7 +101,7 @@
       <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Tu entrada:</span>
       <select value={selectedEntry} onchange={(e) => goto(`?entry=${(e.target as HTMLSelectElement).value}`, { invalidateAll: true })} style="font-size: 11px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; color: var(--text);">
         {#each data.userPredictions as pred}
-          <option value={pred.id}>{pred.label || 'Entrada ' + pred.id}</option>
+          <option value={pred.id}>{pred.label || 'Entrada principal'}</option>
         {/each}
       </select>
       <span style="margin-left: auto; font-size: 14px; font-weight: 600; color: var(--gold);">{totalUserPoints} pts</span>
@@ -192,10 +192,13 @@
               <div style="min-width: 56px; text-align: center;">
                 {#if isFinished}
                   <span style="font-size: 14px; font-weight: 700; color: var(--gold);">{match.home_score} - {match.away_score}</span>
+                  {#if match.penalty_winner_id}
+                    <div style="font-size: 8px; color: var(--text-muted); white-space: nowrap;">pen. {getTeamName(match.penalty_winner_id)}</div>
+                  {/if}
                 {:else if match.status === 'live'}
                   <span style="font-size: 11px; color: var(--red); font-weight: 600;">EN JUEGO</span>
                 {:else}
-                  <span style="font-size: 9px; color: var(--text-muted);">{match.kickoff ? new Date(match.kickoff).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Pend.'}</span>
+                  <span style="font-size: 9px; color: var(--text-muted);">{match.kickoff_time ? new Date(match.kickoff_time).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Pend.'}</span>
                 {/if}
               </div>
 
