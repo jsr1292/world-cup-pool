@@ -1,4 +1,5 @@
 <script>
+  import { R32_LABELS, R16_LABELS, QF_LABELS, SF_LABELS, FINAL_LABEL, THIRD_LABEL } from '$lib/bracket-2026.js';
   let { data } = $props();
   let version = $state(0);
   let _scoring = { ...data.scoring };
@@ -22,6 +23,93 @@
   );
 
   const pool = $derived(data.pool);
+
+  // ── Match results entry (group + knockout) ─────────────────────────────────
+  const PHASE_ORDER = ['group', 'r32', 'r16', 'qf', 'sf', '3rd', 'final'];
+  const PHASE_TITLES = {
+    group: 'Fase de grupos', r32: 'Dieciseisavos (R32)', r16: 'Octavos de final',
+    qf: 'Cuartos de final', sf: 'Semifinales', '3rd': '3.º/4.º puesto', final: 'Final',
+  };
+  const teamOptions = data.teams ?? [];
+  const teamName = (id) => teamOptions.find(t => t.id === Number(id))?.name;
+
+  // Bracket-slot label for a knockout match (e.g. "1E vs 3rd(A/B/C/D/F)").
+  function koLabel(match) {
+    const s = (match.matchday ?? 1) - 1;
+    if (match.phase === 'r32') return R32_LABELS[s] || `R32-${s + 1}`;
+    if (match.phase === 'r16') return R16_LABELS[s] || `R16-${s + 1}`;
+    if (match.phase === 'qf') return QF_LABELS[s] || `QF-${s + 1}`;
+    if (match.phase === 'sf') return SF_LABELS[s] || `SF-${s + 1}`;
+    if (match.phase === 'final') return FINAL_LABEL;
+    if (match.phase === '3rd') return THIRD_LABEL;
+    return '';
+  }
+
+  const matchesByPhase = $derived.by(() => {
+    void version;
+    const by = {};
+    for (const m of localMatches) (by[m.phase] ||= []).push(m);
+    return by;
+  });
+
+  // True when a knockout match's two scores are entered and equal (needs a
+  // penalty-shootout winner to be decided).
+  function isKoDraw(match) {
+    const h = match.home_score, a = match.away_score;
+    if (h == null || a == null || h === '' || a === '') return false;
+    return Number(h) === Number(a);
+  }
+
+  async function saveResult(match) {
+    match._err = '';
+    const hs = Number(match.home_score), as2 = Number(match.away_score);
+    if (!Number.isFinite(hs) || !Number.isFinite(as2) || hs < 0 || as2 < 0) {
+      match._err = 'Marcador inválido'; version++; return;
+    }
+    const body = { pool_id: pool.id, match_id: match.id, home_score: hs, away_score: as2 };
+
+    if (match.phase !== 'group') {
+      const h = match.home_team_id ? Number(match.home_team_id) : null;
+      const a = match.away_team_id ? Number(match.away_team_id) : null;
+      if (!h || !a) { match._err = 'Selecciona ambos equipos'; version++; return; }
+      if (h === a) { match._err = 'Los equipos deben ser distintos'; version++; return; }
+      body.home_team_id = h; body.away_team_id = a;
+      if (hs === as2) {
+        const pw = match.penalty_winner_id ? Number(match.penalty_winner_id) : null;
+        if (!pw) { match._err = 'Empate: indica quién pasa en penaltis'; version++; return; }
+        if (pw !== h && pw !== a) { match._err = 'El ganador en penaltis debe ser uno de los dos equipos'; version++; return; }
+        body.penalty_winner_id = pw;
+      } else {
+        body.penalty_winner_id = null;
+        match.penalty_winner_id = null;
+      }
+    }
+
+    match._saving = true; version++;
+    try {
+      const res = await fetch('/api/admin/results', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        match.status = 'finished'; match.home_score = hs; match.away_score = as2;
+        if (match.phase !== 'group') {
+          const ht = teamOptions.find(t => t.id === body.home_team_id);
+          const at = teamOptions.find(t => t.id === body.away_team_id);
+          match.home_team_id = body.home_team_id; match.away_team_id = body.away_team_id;
+          match.home_name = ht?.name; match.home_flag = ht?.flag_code;
+          match.away_name = at?.name; match.away_flag = at?.flag_code;
+          match.penalty_winner_id = body.penalty_winner_id;
+        }
+        match._ok = true; setTimeout(() => { match._ok = false; version++; }, 1500);
+      } else {
+        match._err = d.error || 'Error al guardar';
+      }
+    } catch {
+      match._err = 'Error de conexión';
+    }
+    match._saving = false; version++;
+  }
 
   const prizeSplits = [
     { label: '1er puesto', pct: 0.6 },
@@ -416,48 +504,63 @@
     </div>
     {#if localMatches.length === 0}
       <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px;">
-        No hay partidos de grupo configurados aún.
+        No hay partidos configurados aún.
       </div>
     {:else}
-      <div style="display: flex; flex-direction: column; gap: 4px;">
-        {#each localMatches as match (match.id)}
-          {@const isFinished = match.status === 'finished'}
-          <div style="display: flex; align-items: center; gap: 6px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 11px;">
-            <span style="width: 20px; color: var(--text-dim); font-size: 9px; text-transform: uppercase;">{match.group_name}</span>
-            <span style="flex: 1; {isFinished ? '' : 'color: var(--text-muted);'}">{match.home_name ?? 'TBD'}</span>
-            <input
-              type="number"
-              min="0"
-              bind:value={match.home_score}
-              placeholder="-"
-              style="width: 40px; text-align: center; padding: 4px;"
-            />
-            <span style="color: var(--text-dim);">-</span>
-            <input
-              type="number"
-              min="0"
-              bind:value={match.away_score}
-              placeholder="-"
-              style="width: 40px; text-align: center; padding: 4px;"
-            />
-            <span style="flex: 1; text-align: right; {isFinished ? '' : 'color: var(--text-muted);'}">{match.away_name ?? 'TBD'}</span>
-            <button type="submit" class="btn-primary"
-      style="font-size: 8px; padding: 4px 8px;"
-      onclick={async () => {
-        const hs = Number(match.home_score);
-        const as2 = Number(match.away_score);
-        if (!Number.isFinite(hs) || !Number.isFinite(as2) || hs < 0 || as2 < 0) return;
-        const res = await fetch('/api/admin/results', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pool_id: pool.id, match_id: match.id, home_score: hs, away_score: as2 }),
-        });
-        if (res.ok) { match.status = 'finished'; match.home_score = hs; match.away_score = as2; }
-      }}
-    >Guardar</button>
+      {#each PHASE_ORDER as phase}
+        {@const ms = matchesByPhase[phase] || []}
+        {#if ms.length > 0}
+          {@const isKO = phase !== 'group'}
+          <h3 style="font-size: 9px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.1em; margin: 14px 0 6px;">{PHASE_TITLES[phase]}</h3>
+          {#if isKO}
+            <p style="font-size: 9px; color: var(--text-dim); margin: -2px 0 6px;">Asigna los dos equipos, el marcador y, si hay empate, quién pasa en penaltis.</p>
+          {/if}
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            {#each ms as match (match.id)}
+              {@const isFinished = match.status === 'finished'}
+              <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 11px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  {#if isKO}
+                    <span style="width: 70px; flex-shrink: 0; color: var(--text-dim); font-size: 8px; line-height: 1.2;">{koLabel(match)}</span>
+                    <select bind:value={match.home_team_id} style="flex: 1; min-width: 0; padding: 4px; font-size: 10px;">
+                      <option value={null}>— Local —</option>
+                      {#each teamOptions as t}<option value={t.id}>{t.name}</option>{/each}
+                    </select>
+                  {:else}
+                    <span style="width: 20px; color: var(--text-dim); font-size: 9px; text-transform: uppercase;">{match.group_name}</span>
+                    <span style="flex: 1; {isFinished ? '' : 'color: var(--text-muted);'}">{match.home_name ?? 'TBD'}</span>
+                  {/if}
+                  <input type="number" min="0" bind:value={match.home_score} placeholder="-" style="width: 40px; text-align: center; padding: 4px;" />
+                  <span style="color: var(--text-dim);">-</span>
+                  <input type="number" min="0" bind:value={match.away_score} placeholder="-" style="width: 40px; text-align: center; padding: 4px;" />
+                  {#if isKO}
+                    <select bind:value={match.away_team_id} style="flex: 1; min-width: 0; padding: 4px; font-size: 10px;">
+                      <option value={null}>— Visitante —</option>
+                      {#each teamOptions as t}<option value={t.id}>{t.name}</option>{/each}
+                    </select>
+                  {:else}
+                    <span style="flex: 1; text-align: right; {isFinished ? '' : 'color: var(--text-muted);'}">{match.away_name ?? 'TBD'}</span>
+                  {/if}
+                  <button type="button" class="btn-primary" style="font-size: 8px; padding: 4px 8px; flex-shrink: 0;" disabled={match._saving} onclick={() => saveResult(match)}>
+                    {match._saving ? '…' : match._ok ? '✓' : 'Guardar'}
+                  </button>
+                </div>
+                {#if isKO && isKoDraw(match)}
+                  <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 9px; color: var(--text-muted);">
+                    <span>🟰 Empate → pasa en penaltis:</span>
+                    <select bind:value={match.penalty_winner_id} style="padding: 3px; font-size: 10px;">
+                      <option value={null}>—</option>
+                      {#if match.home_team_id}<option value={Number(match.home_team_id)}>{teamName(match.home_team_id) ?? 'Local'}</option>{/if}
+                      {#if match.away_team_id}<option value={Number(match.away_team_id)}>{teamName(match.away_team_id) ?? 'Visitante'}</option>{/if}
+                    </select>
+                  </div>
+                {/if}
+                {#if match._err}<div style="margin-top: 4px; font-size: 9px; color: var(--red);">{match._err}</div>{/if}
+              </div>
+            {/each}
           </div>
-        {/each}
-      </div>
+        {/if}
+      {/each}
     {/if}
   </div>  {#if showConfirm}
     <div style="position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);"
