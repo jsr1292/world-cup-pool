@@ -1,4 +1,5 @@
 import { authenticateUser, createUser, createSession } from '$lib/server/queries.js';
+import { isValidEmail, isEmailDomainAllowed, allowedEmailDomain } from '$lib/server/email-policy.js';
 import { json, redirect, type RequestHandler } from '@sveltejs/kit';
 
 // NOTA (B1-3): Este Map reside en la memoria del proceso. Con múltiples instancias del
@@ -52,29 +53,33 @@ export const POST: RequestHandler = async ({ request, cookies, params, getClient
     if (!body || typeof body !== 'object') {
       return json({ error: 'Cuerpo inválido' }, { status: 400 });
     }
-    const { username, password, display_name } = body as Record<string, any>;
-    if (!username || !password) {
+    const { email, password, display_name } = body as Record<string, any>;
+    if (!email || !password || !display_name) {
       return json({ error: 'Todos los campos son obligatorios' }, { status: 400 });
     }
-    if (username.length < 3) return json({ error: 'El usuario debe tener al menos 3 caracteres' }, { status: 400 });
-    if (username.length > 20) return json({ error: 'El usuario debe tener máximo 20 caracteres' }, { status: 400 });
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) return json({ error: 'El usuario solo puede contener letras, números y _' }, { status: 400 });
+    if (!isValidEmail(email)) {
+      return json({ error: 'Correo electrónico no válido' }, { status: 400 });
+    }
+    if (!isEmailDomainAllowed(email)) {
+      const dom = allowedEmailDomain();
+      return json({ error: `Solo se permiten correos @${dom}` }, { status: 403 });
+    }
     if (password.length < 6) return json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 });
-
-    if (display_name && display_name.length > 50) {
-      return json({ error: 'El nombre no puede superar 50 caracteres' }, { status: 400 });
+    if (typeof display_name !== 'string' || display_name.trim().length < 1 || display_name.length > 50) {
+      return json({ error: 'El nombre es obligatorio (máximo 50 caracteres)' }, { status: 400 });
     }
 
     try {
-      const result = await createUser(username, password, display_name || username);
+      const result = await createUser(email, password, display_name.trim());
       const userId = result.rows[0].id;
       const token = await createSession(Number(userId));
       cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV !== 'development' });
       return json({ ok: true });
     } catch (e: any) {
-      if (e.code === '23505' || e.message?.includes('unique constraint') || e.message?.includes('UNIQUE constraint')) {
-        return json({ error: 'Nombre de usuario ya en uso' }, { status: 409 });
+      if (e.code === 'EMAIL_TAKEN') {
+        return json({ error: 'Ese correo ya está registrado' }, { status: 409 });
       }
+      console.error('[auth] Register error:', e);
       return json({ error: 'Error al registrar' }, { status: 500 });
     }
   }
@@ -83,11 +88,11 @@ export const POST: RequestHandler = async ({ request, cookies, params, getClient
     if (!body || typeof body !== 'object') {
       return json({ error: 'Cuerpo inválido' }, { status: 400 });
     }
-    const { username, password } = body as Record<string, any>;
-    if (!username || !password) return json({ error: 'Todos los campos son obligatorios' }, { status: 400 });
+    const { email, password } = body as Record<string, any>;
+    if (!email || !password) return json({ error: 'Todos los campos son obligatorios' }, { status: 400 });
 
     try {
-      const user = await authenticateUser(username, password);
+      const user = await authenticateUser(email, password);
       if (!user) return json({ error: 'Credenciales incorrectas' }, { status: 401 });
 
       const token = await createSession(user.id);

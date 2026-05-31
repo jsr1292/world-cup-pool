@@ -49,13 +49,24 @@ your shell — an exported value always takes precedence over `.env`.)
 After setup the database has: the full schema, **48 teams in 12 groups (A–L)**,
 and **104 matches** (72 group-stage round-robin + 32 knockout placeholders).
 
+### Authentication (email login)
+
+Accounts log in with their **email + password**. Registration asks for email,
+display name, and password; a public `@handle` is derived from the email (the
+email itself is never shown to other members). Self-service **password reset**
+is available at `/forgot` when SMTP is configured (see env vars); otherwise an
+admin can reset a password.
+
+- **Restrict sign-ups to one domain** with `ALLOWED_EMAIL_DOMAIN` (e.g.
+  `typsa.es`). Leave it blank to allow any domain.
+
 ### Become the first admin
 
-There is no UI to grant admin. Register a normal account in the app, then flip
-the flag directly in the database:
+There is no UI to grant admin. Register an account in the app, then flip the
+flag directly in the database (look the user up by email):
 
 ```sql
-UPDATE users SET is_admin = true WHERE username = 'your_username';
+UPDATE users SET is_admin = true WHERE email = 'you@example.com';
 ```
 
 Admins can enter match results, manage scoring rules and deadlines, and access
@@ -72,8 +83,9 @@ UPDATE site_settings SET value = 'admin' WHERE key = 'can_create_pools';
 -- 'anyone' lets any registered user create a pool.
 ```
 
-> Note: account **registration is always open** — anyone who can reach the URL
-> can sign up. Keep the deployment URL private among your group.
+> Note: account **registration is open to anyone whose email matches
+> `ALLOWED_EMAIL_DOMAIN`** (or anyone, if it's blank). Keep the deployment URL
+> private among your group.
 
 ---
 
@@ -96,6 +108,9 @@ NODE_ENV=production node build/index.js   # or: npm run start
 | `NODE_ENV`      | **yes (prod)**  | Set to `production`. Enables `Secure` session cookies and stricter cross-origin checks. |
 | `PORT`          | no (default 3000) | Port for the Node server (adapter-node). |
 | `HOST`          | no (default 0.0.0.0) | Bind address. |
+| `ALLOWED_EMAIL_DOMAIN` | no       | Restrict sign-ups to one email domain (e.g. `typsa.es`). Blank = any domain. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | no | SMTP settings for password-reset emails. If `SMTP_HOST` is blank, self-service reset is disabled (admins reset instead). |
+| `PUBLIC_BASE_URL` | no            | Public HTTPS base URL used in reset links, e.g. `https://you.duckdns.org`. Falls back to the request origin. |
 | `API_FOOTBALL_KEY` | no           | Optional live-score provider key. Live sync is otherwise disabled (see below). |
 
 > In production, set these as real environment variables on your host — do

@@ -45,10 +45,11 @@ afterEach(async () => {
 
 // Helper: insert a user and return id
 async function insertUser(username: string, isAdmin = false): Promise<number> {
+	// email is NOT NULL + unique (migration 0012); derive a unique test email.
 	const { rows } = await client.query(
-		`INSERT INTO users (username, password_hash, display_name, is_admin)
-		 VALUES ($1, 'fake:hash', $2, $3) RETURNING id`,
-		[username, username, isAdmin]
+		`INSERT INTO users (username, password_hash, display_name, email, is_admin)
+		 VALUES ($1, 'fake:hash', $2, $3, $4) RETURNING id`,
+		[username, username, `${username}@test.local`, isAdmin]
 	);
 	return rows[0].id;
 }
@@ -76,7 +77,7 @@ async function insertPool(name: string, createdBy: number): Promise<number> {
 // ─── Tests ───────────────────────────────────────────────────────────
 
 describe('Schema integrity', () => {
-	it('has all 16 required tables', async () => {
+	it('has all 17 required tables', async () => {
 		const { rows } = await client.query(
 			`SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`
 		);
@@ -86,8 +87,8 @@ describe('Schema integrity', () => {
 		const tables = rows.map((r) => r.tablename).filter((t) => t !== '_migrations');
 		const expected = [
 			'audit_log', 'bracket_predictions', 'group_predictions',
-			'match_predictions', 'matches', 'pool_creators', 'pool_members',
-			'pools', 'predictions', 'scoring_config', 'sessions',
+			'match_predictions', 'matches', 'password_reset_tokens', 'pool_creators',
+			'pool_members', 'pools', 'predictions', 'scoring_config', 'sessions',
 			'site_settings', 'team_aliases', 'teams', 'tiebreaker', 'users'
 		];
 		for (const t of expected) {
@@ -136,20 +137,29 @@ describe('User CRUD', () => {
 	it('enforces unique usernames', async () => {
 		await insertUser('bob');
 		await expect(
-			client.query(`INSERT INTO users (username, password_hash, display_name) VALUES ('bob', 'x', 'Bob')`)
+			client.query(`INSERT INTO users (username, password_hash, display_name, email) VALUES ('bob', 'x', 'Bob', 'bob2@test.local')`)
 		).rejects.toThrow(/unique/i);
 	});
 
-	it('stores email as nullable', async () => {
-		const id1 = await insertUser('user_noemail');
-		const id2 = await insertUser('user_withemail');
-		await client.query('UPDATE users SET email = $1 WHERE id = $2', ['a@b.com', id2]);
+	it('requires a unique, case-insensitive email (migration 0012)', async () => {
+		// A failed statement poisons the surrounding test transaction, so wrap
+		// each expected-failure in a savepoint and roll back to it.
+		// NOT NULL: an account with no email is rejected.
+		await client.query('SAVEPOINT sp_noemail');
+		await expect(
+			client.query(`INSERT INTO users (username, password_hash, display_name) VALUES ('no_email','x','No Email')`)
+		).rejects.toThrow();
+		await client.query('ROLLBACK TO SAVEPOINT sp_noemail');
 
-		const { rows } = await client.query('SELECT id, email FROM users WHERE id = ANY($1)', [[id1, id2]]);
-		const noEmail = rows.find((r) => r.id === id1);
-		const withEmail = rows.find((r) => r.id === id2);
-		expect(noEmail!.email).toBeNull();
-		expect(withEmail!.email).toBe('a@b.com');
+		// Case-insensitive uniqueness: same email differing only in case is rejected.
+		await client.query(
+			`INSERT INTO users (username, password_hash, display_name, email) VALUES ('u1','x','U1','Dup@Test.Local')`
+		);
+		await client.query('SAVEPOINT sp_dup');
+		await expect(
+			client.query(`INSERT INTO users (username, password_hash, display_name, email) VALUES ('u2','x','U2','dup@test.local')`)
+		).rejects.toThrow(/unique/i);
+		await client.query('ROLLBACK TO SAVEPOINT sp_dup');
 	});
 });
 
@@ -520,15 +530,15 @@ describe('queries.ts SQL patterns', () => {
 	it('createUser pattern: INSERT user with hashed password returns id', async () => {
 		const { rows } = await client.query(
 			'INSERT INTO users (username, password_hash, display_name, email) VALUES ($1, $2, $3, $4) RETURNING id',
-			['q_user_create', 'saltdeadbeef:hashdeadbeef', 'Query User', null]
+			['q_user_create', 'saltdeadbeef:hashdeadbeef', 'Query User', 'q_user_create@test.local']
 		);
 		expect(rows[0].id).toBeGreaterThan(0);
 
-		// Duplicate username must fail
+		// Duplicate username must fail (distinct email, so it's the username that clashes)
 		await expect(
 			client.query(
-				'INSERT INTO users (username, password_hash, display_name) VALUES ($1, $2, $3)',
-				['q_user_create', 'x', 'Dup']
+				'INSERT INTO users (username, password_hash, display_name, email) VALUES ($1, $2, $3, $4)',
+				['q_user_create', 'x', 'Dup', 'q_user_create_dup@test.local']
 			)
 		).rejects.toThrow(/unique/i);
 	});
@@ -548,18 +558,18 @@ describe('queries.ts SQL patterns', () => {
 		expect(rows[0]).toHaveProperty('created_at');
 	});
 
-	// 3. authenticateUser pattern
-	it('authenticateUser pattern: lookup by username then verify password_hash', async () => {
+	// 3. authenticateUser pattern (lookup by EMAIL — matches getUserForAuth)
+	it('authenticateUser pattern: lookup by email then verify password_hash', async () => {
 		const fakeHash = 'abcd1234:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
 		await client.query(
-			'INSERT INTO users (username, password_hash, display_name) VALUES ($1, $2, $3)',
-			['q_auth_user', fakeHash, 'Auth User']
+			'INSERT INTO users (username, password_hash, display_name, email) VALUES ($1, $2, $3, $4)',
+			['q_auth_user', fakeHash, 'Auth User', 'q_auth_user@test.local']
 		);
 
-		// Step 1: lookup — same SQL as getUserForAuth
+		// Step 1: lookup — same SQL as getUserForAuth (case-insensitive email)
 		const { rows } = await client.query(
-			'SELECT id, username, password_hash, display_name, is_admin FROM users WHERE username = $1',
-			['q_auth_user']
+			'SELECT id, username, password_hash, display_name, is_admin FROM users WHERE lower(email) = lower($1)',
+			['Q_Auth_User@Test.Local']
 		);
 		expect(rows).toHaveLength(1);
 		expect(rows[0].password_hash).toBe(fakeHash);
@@ -591,8 +601,8 @@ describe('queries.ts SQL patterns', () => {
 			await inner.query('BEGIN');
 
 			const u = await inner.query(
-				`INSERT INTO users (username, password_hash, display_name, is_admin)
-				 VALUES ('q_pool_tx', 'fake:hash', 'q_pool_tx', false) RETURNING id`
+				`INSERT INTO users (username, password_hash, display_name, email, is_admin)
+				 VALUES ('q_pool_tx', 'fake:hash', 'q_pool_tx', 'q_pool_tx@test.local', false) RETURNING id`
 			);
 			userId = u.rows[0].id as number;
 

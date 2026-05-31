@@ -43,9 +43,11 @@ try {
 	}
 
 	// 2. Bootstrap admin (parameterized — no SQL injection from the option value).
+	//    Matches by username (handle) OR email, since accounts log in by email
+	//    and the username is an auto-derived handle.
 	if (adminUser && adminUser !== 'null') {
 		const res = await pool.query(
-			'UPDATE users SET is_admin = true WHERE username = $1',
+			'UPDATE users SET is_admin = true WHERE username = $1 OR lower(email) = lower($1)',
 			[adminUser]
 		);
 		if (res.rowCount > 0) {

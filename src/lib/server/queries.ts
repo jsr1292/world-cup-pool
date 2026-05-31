@@ -39,13 +39,58 @@ export function generateToken(): string {
 }
 
 // User CRUD
-export async function createUser(username: string, password: string, displayName: string, email?: string) {
+
+/** Normalize an email for storage/lookup (trim + lowercase). */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+/** Derive a safe public @handle (username) from an email's local part. The
+ *  handle is shown to other members; the email is NEVER exposed to clients. */
+function deriveHandle(email: string): string {
+  const local = email.split('@')[0] ?? 'user';
+  let h = local.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 16);
+  if (h.length < 3) h = `user${h}`;
+  return h.slice(0, 20);
+}
+
+/**
+ * Create a user from an email (the login identifier). A unique public handle
+ * is derived from the email; the raw email is stored lowercased and unique.
+ * Throws an Error with code 'EMAIL_TAKEN' if the email already exists.
+ */
+export async function createUser(email: string, password: string, displayName: string) {
+  const normEmail = normalizeEmail(email);
   const hash = await hashPwd(password);
-  const result = await query(
-    'INSERT INTO users (username, password_hash, display_name, email) VALUES ($1, $2, $3, $4) RETURNING id',
-    [username, hash, displayName, email ?? null]
-  );
-  return result;
+  const base = deriveHandle(normEmail);
+
+  // Retry a few times to resolve handle collisions (email collisions are fatal).
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const username = attempt === 0 ? base : `${base.slice(0, 14)}_${crypto.randomBytes(2).toString('hex')}`;
+    try {
+      const result = await query(
+        'INSERT INTO users (username, password_hash, display_name, email) VALUES ($1, $2, $3, $4) RETURNING id',
+        [username, hash, displayName, normEmail]
+      );
+      return result;
+    } catch (e: any) {
+      // 23505 = unique_violation. Distinguish email vs username collision.
+      if (e?.code === '23505') {
+        const detail = String(e.detail ?? '') + String(e.constraint ?? '');
+        if (detail.includes('email')) {
+          const err = new Error('Email already registered');
+          (err as any).code = 'EMAIL_TAKEN';
+          throw err;
+        }
+        // username collision → try another handle
+        continue;
+      }
+      throw e;
+    }
+  }
+  const err = new Error('Could not allocate a unique handle');
+  (err as any).code = 'HANDLE_EXHAUSTED';
+  throw err;
 }
 
 export async function getUserById(id: number): Promise<User | null> {
@@ -53,8 +98,11 @@ export async function getUserById(id: number): Promise<User | null> {
   return (rows[0] as User) ?? null;
 }
 
-export async function getUserForAuth(username: string): Promise<(User & { password_hash: string }) | null> {
-  const { rows } = await query('SELECT id, username, password_hash, display_name, is_admin FROM users WHERE username = $1', [username]);
+export async function getUserForAuth(email: string): Promise<(User & { password_hash: string }) | null> {
+  const { rows } = await query(
+    'SELECT id, username, password_hash, display_name, is_admin FROM users WHERE lower(email) = lower($1)',
+    [normalizeEmail(email)]
+  );
   return (rows[0] as (User & { password_hash: string })) ?? null;
 }
 
@@ -63,11 +111,62 @@ export async function getUserByUsername(username: string): Promise<User | null> 
   return (rows[0] as User) ?? null;
 }
 
-export async function authenticateUser(username: string, password: string) {
-  const user = await getUserForAuth(username);
+/** Authenticate by EMAIL + password. */
+export async function authenticateUser(email: string, password: string) {
+  const user = await getUserForAuth(email);
   if (!user) return null;
   if (!await verifyPwd(password, user.password_hash)) return null;
   return { id: user.id, username: user.username, display_name: user.display_name, is_admin: user.is_admin };
+}
+
+// ── Password reset tokens ───────────────────────────────────────────────────
+
+function hashResetToken(raw: string): string {
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+/** Look up a user id by email (for the forgot-password flow). */
+export async function getUserIdByEmail(email: string): Promise<number | null> {
+  const { rows } = await query('SELECT id FROM users WHERE lower(email) = lower($1)', [normalizeEmail(email)]);
+  return rows[0]?.id ?? null;
+}
+
+/** Create a single-use reset token (default 1-hour expiry). Returns the RAW
+ *  token to embed in the emailed link; only its hash is stored. */
+export async function createPasswordResetToken(userId: number, ttlMs = 60 * 60 * 1000): Promise<string> {
+  const raw = generateToken();
+  const tokenHash = hashResetToken(raw);
+  const expires = new Date(Date.now() + ttlMs).toISOString();
+  // Invalidate any prior outstanding tokens for this user.
+  await query('DELETE FROM password_reset_tokens WHERE user_id = $1 AND used_at IS NULL', [userId]);
+  await query(
+    'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
+    [userId, tokenHash, expires]
+  );
+  return raw;
+}
+
+/**
+ * Atomically consume a reset token: returns the user_id if the token is valid
+ * (exists, unused, unexpired) and marks it used; otherwise null.
+ */
+export async function consumePasswordResetToken(raw: string): Promise<number | null> {
+  const tokenHash = hashResetToken(raw);
+  const { rows } = await query(
+    `UPDATE password_reset_tokens
+       SET used_at = NOW()
+     WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()
+     RETURNING user_id`,
+    [tokenHash]
+  );
+  return rows[0]?.user_id ?? null;
+}
+
+/** Set a user's password and invalidate all of their sessions. */
+export async function setUserPassword(userId: number, newPassword: string): Promise<void> {
+  const hash = await hashPwd(newPassword);
+  await query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, userId]);
+  await query('DELETE FROM sessions WHERE user_id = $1', [userId]);
 }
 
 // Pool CRUD

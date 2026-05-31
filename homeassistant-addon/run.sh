@@ -11,6 +11,13 @@ NODE_ENV="$(bashio::config 'node_env')"
 CAN_CREATE_POOLS="$(bashio::config 'can_create_pools')"
 ADMIN_USERNAME="$(bashio::config 'admin_username')"
 XFF_DEPTH="$(bashio::config 'xff_depth')"
+ALLOWED_EMAIL_DOMAIN="$(bashio::config 'allowed_email_domain')"
+PUBLIC_BASE_URL="$(bashio::config 'public_base_url')"
+SMTP_HOST="$(bashio::config 'smtp_host')"
+SMTP_PORT="$(bashio::config 'smtp_port')"
+SMTP_USER="$(bashio::config 'smtp_user')"
+SMTP_PASS="$(bashio::config 'smtp_pass')"
+SMTP_FROM="$(bashio::config 'smtp_from')"
 
 # database_url is required.
 if bashio::var.is_empty "${DATABASE_URL}" || [ "${DATABASE_URL}" = "null" ]; then
@@ -36,6 +43,17 @@ export XFF_DEPTH="${XFF_DEPTH:-1}"
 
 # Gentle heap cap — this add-on shares the Raspberry Pi with Home Assistant.
 export NODE_OPTIONS="--max-old-space-size=256"
+
+# Email-auth: signup-domain restriction (blank = any) and password-reset email.
+# bashio returns 'null' for unset optional values — normalize those to empty.
+[ "${ALLOWED_EMAIL_DOMAIN}" = "null" ] && ALLOWED_EMAIL_DOMAIN=""
+[ "${PUBLIC_BASE_URL}" = "null" ] && PUBLIC_BASE_URL=""
+[ "${SMTP_HOST}" = "null" ] && SMTP_HOST=""
+[ "${SMTP_USER}" = "null" ] && SMTP_USER=""
+[ "${SMTP_PASS}" = "null" ] && SMTP_PASS=""
+[ "${SMTP_FROM}" = "null" ] && SMTP_FROM=""
+export ALLOWED_EMAIL_DOMAIN PUBLIC_BASE_URL
+export SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM
 
 cd /app
 

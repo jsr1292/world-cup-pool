@@ -1,7 +1,7 @@
 <script>
   let { data } = $props();
   let mode = $state('login');
-  let username = $state('');
+  let email = $state('');
   let password = $state('');
   let displayName = $state('');
   let error = $state('');
@@ -14,8 +14,8 @@
 
     const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
     const body = mode === 'login'
-      ? { username, password }
-      : { username, password, display_name: displayName };
+      ? { email, password }
+      : { email, password, display_name: displayName };
 
     try {
       const res = await fetch(endpoint, {
@@ -75,8 +75,8 @@
 
     <form onsubmit={handleSubmit} style="display: flex; flex-direction: column; gap: 14px;">
       <div>
-        <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Usuario</label>
-        <input bind:value={username} placeholder="usuario" required autocomplete="username" />
+        <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Correo</label>
+        <input type="email" bind:value={email} placeholder="tu@correo.com" required autocomplete="email" />
       </div>
 
       {#if mode === 'register'}
@@ -98,6 +98,10 @@
       <button type="submit" class="btn-primary" style="width: 100%;" disabled={loading}>
         {loading ? '...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
       </button>
+
+      {#if mode === 'login'}
+        <a href="/forgot" style="font-size: 10px; color: var(--text-muted); text-align: center; text-decoration: none; margin-top: 4px;">¿Olvidaste tu contraseña?</a>
+      {/if}
     </form>
     </div>
   </div>

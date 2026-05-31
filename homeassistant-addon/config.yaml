@@ -42,6 +42,13 @@ options:
   admin_username: ""
   run_setup: false
   xff_depth: 1
+  allowed_email_domain: ""
+  public_base_url: ""
+  smtp_host: ""
+  smtp_port: 587
+  smtp_user: ""
+  smtp_pass: ""
+  smtp_from: ""
 schema:
   # Neon (or any Postgres) connection string. Required. Provided at runtime —
   # never baked into the image.
@@ -64,3 +71,18 @@ schema:
   # Too low collapses all users into one rate-limit bucket; too high lets the
   # client spoof its IP. Default 1.
   xff_depth: int(1,5)
+  # Restrict sign-ups to one email domain, e.g. "typsa.es" (no leading @).
+  # Leave BLANK to allow any domain.
+  allowed_email_domain: str?
+  # Public HTTPS base URL used in password-reset email links, e.g.
+  # "https://yourname.duckdns.org". Needed for self-service password reset to
+  # produce clickable links. Leave blank to derive from the request (ingress).
+  public_base_url: str?
+  # ── SMTP (password-reset emails). Leave smtp_host blank to disable email; ──
+  # ── users then recover passwords via an admin reset instead.              ──
+  smtp_host: str?
+  smtp_port: int(1,65535)?
+  smtp_user: str?
+  smtp_pass: password?
+  # From header, e.g. "Mundial 2026 <no-reply@typsa.es>".
+  smtp_from: str?
