@@ -29,8 +29,15 @@ RUN if [ ! -x /usr/bin/bashio ]; then \
 # Fetch the application source and build the production server.
 # NODE_ENV is intentionally NOT set here so devDependencies (vite/svelte/tsx)
 # install for the build. Build needs no DATABASE_URL (db init is lazy).
+#
+# BUILD_VERSION (passed by HA as the add-on version) is referenced in the RUN
+# command so a version bump CHANGES this layer's cache key — otherwise Docker
+# could reuse a cached clone of old code and a Rebuild would silently ship the
+# previous version. Bump the add-on version whenever app code changes.
+ARG BUILD_VERSION="dev"
 WORKDIR /app
-RUN git clone --depth 1 --branch "${REPO_REF}" "${REPO_URL}" /app \
+RUN echo "Building world-cup-pool ${BUILD_VERSION} from ${REPO_URL}@${REPO_REF}" \
+    && git clone --depth 1 --branch "${REPO_REF}" "${REPO_URL}" /app \
     && npm ci \
     && npm run build \
     && npm cache clean --force \
