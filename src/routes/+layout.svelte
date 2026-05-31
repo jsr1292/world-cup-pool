@@ -4,6 +4,7 @@
   import '../app.css';
   import { page } from '$app/stores';
   import { toast } from '$lib/toast.js';
+  import { logout } from '$lib/logout.js';
   import { WORLD_CUP_KICKOFF_MS, WORLD_CUP_DURATION_MS } from '$lib/constants.js';
 
   let fading = $state(false);
@@ -189,11 +190,9 @@
           <div style="font-size: 9px; color: var(--text-dim);">@{data.user?.username}</div>
         </div>
       </div>
-      <form method="POST" action="/api/auth/logout">
-        <button type="submit" class="btn-ghost" style="width: 100%; font-size: 9px; padding: 8px;">
-          Cerrar sesión
-        </button>
-      </form>
+      <button type="button" onclick={logout} class="btn-ghost" style="width: 100%; font-size: 9px; padding: 8px;">
+        Cerrar sesión
+      </button>
     </div>
   </nav>
   {/if}

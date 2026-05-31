@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PageData } from './$types.js';
+  import { logout } from '$lib/logout.js';
   let { data }: { data: PageData } = $props();
 
   let currentPassword = $state('');
@@ -125,7 +126,5 @@
   </div>
 
   <!-- Logout -->
-  <form method="POST" action="/api/auth/logout">
-    <button type="submit" class="btn-ghost" style="width: 100%;">Cerrar sesión</button>
-  </form>
+  <button type="button" onclick={logout} class="btn-ghost" style="width: 100%;">Cerrar sesión</button>
 </div>
