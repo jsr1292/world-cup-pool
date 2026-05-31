@@ -98,7 +98,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     if (!user) {
       try {
         const { rows } = await query(
-          "SELECT u.id, u.username, u.display_name, u.is_admin, u.created_at FROM users u JOIN sessions s ON s.user_id = u.id WHERE s.token = $1 AND s.expires_at > NOW()",
+          "SELECT u.id, u.username, u.email, u.display_name, u.is_admin, u.created_at FROM users u JOIN sessions s ON s.user_id = u.id WHERE s.token = $1 AND s.expires_at > NOW()",
           [token]
         );
         user = rows[0] as any ?? null;

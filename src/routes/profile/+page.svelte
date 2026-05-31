@@ -69,8 +69,8 @@
   <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px;">
     <div style="display: flex; flex-direction: column; gap: 12px;">
       <div>
-        <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 3px;">Usuario</div>
-        <div style="font-size: 13px; color: var(--text);">{data.user.username}</div>
+        <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 3px;">Email</div>
+        <div style="font-size: 13px; color: var(--text);">{data.user.email || data.user.username}</div>
       </div>
       <div>
         <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 3px;">Nombre</div>

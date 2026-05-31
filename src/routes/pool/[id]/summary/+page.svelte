@@ -17,6 +17,10 @@
 
   function getEntry() { return data.entries.find((e: any) => e.id === selectedEntry); }
 
+  // Friendly entry name — mirror the predict page: an empty label is the
+  // primary entry ("Entrada principal"), not "Entrada <db-id>".
+  function entryLabel(e: any) { return e?.label || 'Entrada principal'; }
+
   function getGroupPreds() {
     if (!selectedEntry) return [];
     return data.groupPreds[selectedEntry] || [];
@@ -52,7 +56,7 @@
       <div style="margin: 12px 0 20px;">
         <select bind:value={selectedEntry} style="font-size: 11px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; color: var(--text);">
           {#each data.entries as pred}
-            <option value={pred.id}>{pred.label || 'Entrada ' + pred.id}</option>
+            <option value={pred.id}>{entryLabel(pred)}</option>
           {/each}
         </select>
       </div>
@@ -61,7 +65,7 @@
     {@const entry = getEntry()}
     {#if entry}
       <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">
-        {entry.label || 'Entrada ' + entry.id} · {data.pool.name}
+        {entryLabel(entry)} · {data.pool.name}
       </div>
     {/if}
 
