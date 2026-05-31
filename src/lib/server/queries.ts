@@ -98,12 +98,12 @@ export async function getUserById(id: number): Promise<User | null> {
   return (rows[0] as User) ?? null;
 }
 
-export async function getUserForAuth(email: string): Promise<(User & { password_hash: string }) | null> {
+export async function getUserForAuth(email: string): Promise<(User & { password_hash: string; email_verified_at: string | null }) | null> {
   const { rows } = await query(
-    'SELECT id, username, password_hash, display_name, is_admin FROM users WHERE lower(email) = lower($1)',
+    'SELECT id, username, password_hash, display_name, is_admin, email_verified_at FROM users WHERE lower(email) = lower($1)',
     [normalizeEmail(email)]
   );
-  return (rows[0] as (User & { password_hash: string })) ?? null;
+  return (rows[0] as (User & { password_hash: string; email_verified_at: string | null })) ?? null;
 }
 
 export async function getUserByUsername(username: string): Promise<User | null> {
@@ -111,12 +111,61 @@ export async function getUserByUsername(username: string): Promise<User | null> 
   return (rows[0] as User) ?? null;
 }
 
-/** Authenticate by EMAIL + password. */
+/** Authenticate by EMAIL + password. Includes email_verified_at so callers can
+ *  enforce verification when SMTP is configured. */
 export async function authenticateUser(email: string, password: string) {
   const user = await getUserForAuth(email);
   if (!user) return null;
   if (!await verifyPwd(password, user.password_hash)) return null;
-  return { id: user.id, username: user.username, display_name: user.display_name, is_admin: user.is_admin };
+  return {
+    id: user.id, username: user.username, display_name: user.display_name,
+    is_admin: user.is_admin, email_verified_at: user.email_verified_at,
+  };
+}
+
+// ── Email verification tokens ───────────────────────────────────────────────
+
+/** Create a single-use email-verification token (default 24-hour expiry).
+ *  Returns the RAW token for the emailed link; only its hash is stored. */
+export async function createEmailVerificationToken(userId: number, ttlMs = 24 * 60 * 60 * 1000): Promise<string> {
+  const raw = generateToken();
+  const tokenHash = hashResetToken(raw); // same SHA-256 helper
+  const expires = new Date(Date.now() + ttlMs).toISOString();
+  await query('DELETE FROM email_verification_tokens WHERE user_id = $1 AND used_at IS NULL', [userId]);
+  await query(
+    'INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
+    [userId, tokenHash, expires]
+  );
+  return raw;
+}
+
+/** Atomically consume a verification token AND mark the user verified.
+ *  Returns the user_id on success, else null. */
+export async function consumeEmailVerificationToken(raw: string): Promise<number | null> {
+  const tokenHash = hashResetToken(raw);
+  const { rows } = await query(
+    `UPDATE email_verification_tokens
+       SET used_at = NOW()
+     WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()
+     RETURNING user_id`,
+    [tokenHash]
+  );
+  const userId = rows[0]?.user_id ?? null;
+  if (userId) {
+    await query('UPDATE users SET email_verified_at = NOW() WHERE id = $1 AND email_verified_at IS NULL', [userId]);
+  }
+  return userId;
+}
+
+/** Mark a user's email verified immediately (used when SMTP is disabled). */
+export async function markEmailVerified(userId: number): Promise<void> {
+  await query('UPDATE users SET email_verified_at = NOW() WHERE id = $1 AND email_verified_at IS NULL', [userId]);
+}
+
+/** Look up id + email for an unverified-resend, by email. */
+export async function getUserEmailById(userId: number): Promise<string | null> {
+  const { rows } = await query('SELECT email FROM users WHERE id = $1', [userId]);
+  return rows[0]?.email ?? null;
 }
 
 // ── Password reset tokens ───────────────────────────────────────────────────

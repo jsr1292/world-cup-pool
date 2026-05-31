@@ -16,7 +16,7 @@ startNotificationScheduler();
 // security hole — just a documentation note. If a future route under
 // /api/auth/* assumes the publicPaths prefix means "unauthenticated", add
 // an explicit auth check.
-const publicPaths = new Set(['/login', '/register', '/forgot', '/reset', '/leaderboard', '/api/health']);
+const publicPaths = new Set(['/login', '/register', '/forgot', '/reset', '/verify-email', '/leaderboard', '/api/health']);
 const publicPathPrefixes = [
 	'/api/auth/login',
 	'/api/auth/register',

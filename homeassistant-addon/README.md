@@ -70,6 +70,13 @@ Accounts log in with **email + password**. To restrict who can register, set
 fill the `smtp_*` fields and `public_base_url` (the reset link must use your
 public DuckDNS HTTPS URL). If SMTP is left blank, you reset passwords as admin.
 
+**Email verification** adapts to your setup: registration always has a
+"confirm email" field (typo guard). When SMTP **is** configured, new sign-ups
+must also click an emailed link before they can log in (a blocked login
+auto-resends a fresh link); when SMTP is **not** configured, accounts activate
+immediately. Existing accounts are grandfathered as verified, so enabling SMTP
+never locks anyone out.
+
 ### Admin bootstrap — how it works
 
 There is no in-app "make me admin" button. Two ways to get your first admin:

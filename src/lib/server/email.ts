@@ -65,6 +65,26 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
 	});
 }
 
+/** Send the email-verification link. Throws EMAIL_DISABLED if SMTP isn't set up. */
+export async function sendVerificationEmail(to: string, verifyUrl: string): Promise<void> {
+	const transport = getTransport();
+	const text =
+		`¡Bienvenido a la Quiniela del Mundial 2026!\n\n` +
+		`Confirma tu correo para activar tu cuenta (enlace válido 24 horas):\n${verifyUrl}\n\n` +
+		`Si no te has registrado, ignora este mensaje.`;
+	const html =
+		`<p>¡Bienvenido a la Quiniela del Mundial 2026!</p>` +
+		`<p><a href="${verifyUrl}">Confirmar mi correo</a> (válido 24 horas).</p>` +
+		`<p>Si no te has registrado, ignora este mensaje.</p>`;
+	await transport.sendMail({
+		from: fromAddress(),
+		to,
+		subject: 'Confirma tu correo — Mundial 2026',
+		text,
+		html,
+	});
+}
+
 const esc = (s: string) =>
 	s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 

@@ -2,20 +2,24 @@
   let { data } = $props();
   let mode = $state('login');
   let email = $state('');
+  let emailConfirm = $state('');
   let password = $state('');
   let displayName = $state('');
   let error = $state('');
+  let notice = $state('');
   let loading = $state(false);
+
+  function switchMode(m) { mode = m; error = ''; notice = ''; }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    error = '';
+    error = ''; notice = '';
     loading = true;
 
     const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
     const body = mode === 'login'
       ? { email, password }
-      : { email, password, display_name: displayName };
+      : { email, email_confirm: emailConfirm, password, display_name: displayName };
 
     try {
       const res = await fetch(endpoint, {
@@ -26,6 +30,12 @@
       const data = await res.json();
       if (!res.ok) {
         error = data.error || 'Error';
+      } else if (data.verify) {
+        // SMTP on: account created but must confirm via email before logging in.
+        notice = data.mailFailed
+          ? 'Cuenta creada, pero no se pudo enviar el correo de verificación. Pídele al administrador que lo revise.'
+          : `Te hemos enviado un correo a ${email} para confirmar tu cuenta. Ábrelo para activar el acceso.`;
+        mode = 'login';
       } else {
         window.location.href = '/';
       }
@@ -64,11 +74,11 @@
 
     <div style="display: flex; gap: 0; margin-bottom: 24px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden;">
       <button
-        onclick={() => { mode = 'login'; error = ''; }}
+        onclick={() => switchMode('login')}
         style="flex: 1; padding: 10px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; border: none; background: {mode === 'login' ? 'rgba(201,168,76,0.1)' : 'transparent'}; color: {mode === 'login' ? 'var(--gold)' : 'var(--text-muted)'};"
       >Entrar</button>
       <button
-        onclick={() => { mode = 'register'; error = ''; }}
+        onclick={() => switchMode('register')}
         style="flex: 1; padding: 10px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; border: none; border-left: 1px solid var(--border); background: {mode === 'register' ? 'rgba(201,168,76,0.1)' : 'transparent'}; color: {mode === 'register' ? 'var(--gold)' : 'var(--text-muted)'};"
       >Registro</button>
     </div>
@@ -80,6 +90,10 @@
       </div>
 
       {#if mode === 'register'}
+        <div>
+          <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Confirmar correo</label>
+          <input type="email" bind:value={emailConfirm} placeholder="repite tu correo" required autocomplete="off" onpaste={(e) => e.preventDefault()} />
+        </div>
         <div>
           <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Nombre</label>
           <input bind:value={displayName} placeholder="Tu nombre" required autocomplete="name" />
@@ -93,6 +107,9 @@
 
       {#if error}
         <p style="font-size: 10px; color: var(--red);">{error}</p>
+      {/if}
+      {#if notice}
+        <p style="font-size: 10px; color: var(--green); line-height: 1.5;">{notice}</p>
       {/if}
 
       <button type="submit" class="btn-primary" style="width: 100%;" disabled={loading}>

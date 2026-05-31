@@ -1,6 +1,26 @@
-import { authenticateUser, createUser, createSession } from '$lib/server/queries.js';
+import {
+  authenticateUser, createUser, createSession,
+  createEmailVerificationToken, markEmailVerified, getUserEmailById,
+} from '$lib/server/queries.js';
 import { isValidEmail, isEmailDomainAllowed, allowedEmailDomain } from '$lib/server/email-policy.js';
+import { isEmailConfigured, sendVerificationEmail } from '$lib/server/email.js';
 import { json, redirect, type RequestHandler } from '@sveltejs/kit';
+
+const SESSION_COOKIE = {
+  path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true,
+  sameSite: 'lax' as const, secure: process.env.NODE_ENV !== 'development',
+};
+
+/** Public base for emailed links: PUBLIC_BASE_URL if set, else the request origin. */
+function publicBase(originUrl: URL): string {
+  return (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '') || originUrl.origin;
+}
+
+/** Generate + email a verification link. Best-effort; logs on failure. */
+async function sendVerification(userId: number, email: string, base: string): Promise<void> {
+  const token = await createEmailVerificationToken(userId);
+  await sendVerificationEmail(email, `${base}/verify-email?token=${encodeURIComponent(token)}`);
+}
 
 // NOTA (B1-3): Este Map reside en la memoria del proceso. Con múltiples instancias del
 // servidor (réplicas de Railway, funciones serverless de Vercel) cada instancia lleva su
@@ -26,7 +46,7 @@ function checkRate(ip: string): boolean {
   return true;
 }
 
-export const POST: RequestHandler = async ({ request, cookies, params, getClientAddress }) => {
+export const POST: RequestHandler = async ({ request, cookies, params, url, getClientAddress }) => {
   const action = params.action; // 'login', 'register', or 'logout'
   if ((action === 'login' || action === 'register') && !checkRate(getClientAddress())) {
     return json({ error: 'Demasiados intentos. Espera 15 minutos.' }, { status: 429 });
@@ -53,12 +73,17 @@ export const POST: RequestHandler = async ({ request, cookies, params, getClient
     if (!body || typeof body !== 'object') {
       return json({ error: 'Cuerpo inválido' }, { status: 400 });
     }
-    const { email, password, display_name } = body as Record<string, any>;
+    const { email, email_confirm, password, display_name } = body as Record<string, any>;
     if (!email || !password || !display_name) {
       return json({ error: 'Todos los campos son obligatorios' }, { status: 400 });
     }
     if (!isValidEmail(email)) {
       return json({ error: 'Correo electrónico no válido' }, { status: 400 });
+    }
+    // Typo guard (works without SMTP): the two email fields must match.
+    if (typeof email_confirm === 'string' &&
+        email_confirm.trim().toLowerCase() !== String(email).trim().toLowerCase()) {
+      return json({ error: 'Los correos no coinciden' }, { status: 400 });
     }
     if (!isEmailDomainAllowed(email)) {
       const dom = allowedEmailDomain();
@@ -71,9 +96,24 @@ export const POST: RequestHandler = async ({ request, cookies, params, getClient
 
     try {
       const result = await createUser(email, password, display_name.trim());
-      const userId = result.rows[0].id;
-      const token = await createSession(Number(userId));
-      cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV !== 'development' });
+      const userId = Number(result.rows[0].id);
+
+      if (isEmailConfigured()) {
+        // Strict: must confirm via the emailed link before logging in. No session.
+        try {
+          await sendVerification(userId, String(email).trim(), publicBase(url));
+        } catch (mailErr) {
+          console.error('[auth] verification email failed:', mailErr);
+          return json({ ok: true, verify: true, mailFailed: true });
+        }
+        return json({ ok: true, verify: true });
+      }
+
+      // No SMTP: can't verify by email, so trust the confirm-field guard and
+      // mark verified + log in immediately.
+      await markEmailVerified(userId);
+      const token = await createSession(userId);
+      cookies.set('session', token, SESSION_COOKIE);
       return json({ ok: true });
     } catch (e: any) {
       if (e.code === 'EMAIL_TAKEN') {
@@ -95,8 +135,23 @@ export const POST: RequestHandler = async ({ request, cookies, params, getClient
       const user = await authenticateUser(email, password);
       if (!user) return json({ error: 'Credenciales incorrectas' }, { status: 401 });
 
+      // When SMTP is configured, require a verified email. Auto-resend the link
+      // on a blocked attempt so the user has a fresh one without extra UI.
+      if (isEmailConfigured() && !user.email_verified_at) {
+        try {
+          const addr = await getUserEmailById(user.id);
+          if (addr) await sendVerification(user.id, addr, publicBase(url));
+        } catch (mailErr) {
+          console.error('[auth] resend verification on login failed:', mailErr);
+        }
+        return json({
+          error: 'Verifica tu correo para entrar. Te hemos reenviado el enlace de confirmación.',
+          needs_verification: true,
+        }, { status: 403 });
+      }
+
       const token = await createSession(user.id);
-      cookies.set('session', token, { path: '/', maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV !== 'development' });
+      cookies.set('session', token, SESSION_COOKIE);
       return json({ ok: true });
     } catch (e) {
       console.error('[auth] Login error:', e);

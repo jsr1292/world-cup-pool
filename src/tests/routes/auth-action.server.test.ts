@@ -7,6 +7,13 @@ vi.mock('$lib/server/queries.js', () => ({
 	createUser: vi.fn(),
 	createSession: vi.fn(),
 	deleteSession: vi.fn(),
+	createEmailVerificationToken: vi.fn(),
+	markEmailVerified: vi.fn(),
+	getUserEmailById: vi.fn(),
+}));
+vi.mock('$lib/server/email.js', () => ({
+	isEmailConfigured: vi.fn(() => false),
+	sendVerificationEmail: vi.fn(),
 }));
 
 import {
@@ -15,6 +22,8 @@ import {
 	createSession,
 	deleteSession,
 } from '$lib/server/queries.js';
+import { isEmailConfigured } from '$lib/server/email.js';
+const mockEmailConfigured = isEmailConfigured as ReturnType<typeof vi.fn>;
 
 // --- Helpers ---
 const mockCookies = () => ({
@@ -31,11 +40,13 @@ const mockEvent = (action: string, body: any, cookies = mockCookies()) => ({
 	request: mockRequest(body),
 	cookies,
 	params: mockParams(action),
+	url: new URL(`http://localhost/api/auth/${action}`),
 	getClientAddress: () => '127.0.0.1',
 });
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	mockEmailConfigured.mockReturnValue(false); // default: no SMTP → auto-verify path
 	// Reset the in-memory rate limit map by re-importing or using a fresh module.
 	// Since _attempts is module-scoped, we use vi.resetModules() + dynamic import when
 	// testing rate-limit behaviour specifically. For most tests a single IP is fine.
@@ -159,6 +170,56 @@ describe('POST /api/auth/[action]', () => {
 			if (prev === undefined) delete process.env.ALLOWED_EMAIL_DOMAIN;
 			else process.env.ALLOWED_EMAIL_DOMAIN = prev;
 		}
+	});
+
+	// Unique-IP event so these don't share the 127.0.0.1 rate-limit bucket.
+	const evIp = (action: string, body: any, ip: string, cookies = mockCookies()) => ({
+		request: mockRequest(body), cookies, params: mockParams(action),
+		url: new URL(`http://localhost/api/auth/${action}`), getClientAddress: () => ip,
+	});
+
+	// 7d. Confirm-email typo guard
+	it('register: returns 400 when email_confirm does not match', async () => {
+		const res = await POST(evIp('register', { email: 'bob@typsa.es', email_confirm: 'bobby@typsa.es', password: 'secret123', display_name: 'Bob' }, '10.2.0.1'));
+		expect(res.status).toBe(400);
+		const body = await res.json();
+		expect(body.error).toMatch(/no coinciden/i);
+		expect(createUser).not.toHaveBeenCalled();
+	});
+
+	// 7e. SMTP configured → registration requires verification (no session yet)
+	it('register: with SMTP, returns verify:true and does not log in', async () => {
+		mockEmailConfigured.mockReturnValue(true);
+		const cookies = mockCookies();
+		(createUser as ReturnType<typeof vi.fn>).mockResolvedValue({ rows: [{ id: 11 }] });
+		const res = await POST(evIp('register', { email: 'new@typsa.es', email_confirm: 'new@typsa.es', password: 'secret123', display_name: 'New' }, '10.2.0.2', cookies));
+		expect(res.status).toBe(200);
+		const body = await res.json();
+		expect(body.verify).toBe(true);
+		expect(cookies.set).not.toHaveBeenCalled(); // not logged in until verified
+	});
+
+	// 7f. SMTP configured → unverified login blocked (403)
+	it('login: with SMTP, blocks an unverified user (403)', async () => {
+		mockEmailConfigured.mockReturnValue(true);
+		(authenticateUser as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 5, email_verified_at: null });
+		const cookies = mockCookies();
+		const res = await POST(evIp('login', { email: 'unv@typsa.es', password: 'secret123' }, '10.2.0.3', cookies));
+		expect(res.status).toBe(403);
+		const body = await res.json();
+		expect(body.needs_verification).toBe(true);
+		expect(cookies.set).not.toHaveBeenCalled();
+	});
+
+	// 7g. SMTP configured → verified user logs in fine
+	it('login: with SMTP, a verified user logs in (200)', async () => {
+		mockEmailConfigured.mockReturnValue(true);
+		(authenticateUser as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 6, email_verified_at: '2026-01-01T00:00:00Z' });
+		(createSession as ReturnType<typeof vi.fn>).mockResolvedValue('tok-v');
+		const cookies = mockCookies();
+		const res = await POST(evIp('login', { email: 'v@typsa.es', password: 'secret123' }, '10.2.0.4', cookies));
+		expect(res.status).toBe(200);
+		expect(cookies.set).toHaveBeenCalled();
 	});
 
 	// 8. Logout success
