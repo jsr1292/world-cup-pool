@@ -1,9 +1,11 @@
 # Base image per architecture for the Home Assistant builder.
 # We use the official multi-arch Node 22 Alpine image (Node >= 22.12 satisfies
 # Vite 8 / SvelteKit), and install bashio in the Dockerfile for option reads.
+# NOTE: HA requires a FULLY-QUALIFIED image (registry/namespace/name:tag); a
+# bare "node:22-alpine" is rejected and HA silently falls back to its own base.
 build_from:
-  aarch64: node:22-alpine
-  amd64: node:22-alpine
+  aarch64: docker.io/library/node:22-alpine
+  amd64: docker.io/library/node:22-alpine
 # Which revision of the app repository to build. Override here if you want to
 # pin a tag/commit instead of tracking the default branch.
 args:
