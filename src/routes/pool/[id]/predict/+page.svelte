@@ -221,6 +221,14 @@
       const groups = {};
       for (const group of GROUP_NAMES) {
         const arr = selections[group] || [];
+        // DATA-LOSS FIX: only send groups that actually have a team assigned.
+        // The server DELETEs any group it receives empty, and this autosave used
+        // to send ALL 12 groups every time — so a transient/stale empty state on
+        // one client (e.g. after switching devices mid-prediction) silently wiped
+        // groups already saved by another device (the "Group A vanished" bug).
+        // Never transmitting empty groups means the server only ever upserts real
+        // picks and can never delete them behind your back.
+        if (!arr.some(v => v != null)) continue;
         groups[group] = {
           pos1: arr[0] ?? null,
           pos2: arr[1] ?? null,
@@ -228,6 +236,8 @@
           pos4: arr[3] ?? null,
         };
       }
+      // Nothing with data to save — don't fire a request the server would 400.
+      if (Object.keys(groups).length === 0) { saving = false; return; }
       const res = await fetch('/api/predictions/group', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
