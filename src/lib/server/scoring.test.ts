@@ -335,7 +335,37 @@ describe('calculateBracketScores', () => {
 		// The UPDATE joins on bp.id (not team_id): first param = ids, last = pts.
 		expect(updateCall[0]).toContain('bp.id = v.id');
 		expect(updateCall[1][0]).toEqual([500, 501]); // ids
-		expect(updateCall[1][1]).toEqual([14, 0]);     // winner 14, runner-up 0
+		// winner 14 (final+champion); runner-up 6 (knockout_final, #12).
+		expect(updateCall[1][1]).toEqual([14, 6]);
+	});
+
+	it('#12: a correct losing-finalist (runner-up) pick scores knockout_final', async () => {
+		// Final: team 10 beats team 20 → 10 champion, 20 runner-up. 30 never
+		// reached the final. Picks: 10 (champion), 20 (runner-up), 30 (wrong).
+		setup(
+			[{ id: 1, phase: 'final', home_team_id: 10, away_team_id: 20, home_score: 2, away_score: 1, penalty_winner_id: null }],
+			[
+				{ id: 500, phase: 'final', team_id: 10 },
+				{ id: 501, phase: 'final', team_id: 20 },
+				{ id: 502, phase: 'final', team_id: 30 },
+			]
+		);
+		const client = { query: clientQuery, release: vi.fn() } as unknown as PoolClient;
+		await calculateBracketScores(1, DEFAULT_RULES, client);
+		// champion 10 → knockout_final(6) + knockout_winner(8) = 14
+		// runner-up 20 → knockout_final(6); did-not-reach-final 30 → 0
+		expect(unnestPts(clientQuery)).toEqual([14, 6, 0]);
+	});
+
+	it('#12: a penalty-shootout runner-up still scores knockout_final', async () => {
+		// Final level after extra time, team 10 wins on penalties → 20 runner-up.
+		setup(
+			[{ id: 1, phase: 'final', home_team_id: 10, away_team_id: 20, home_score: 1, away_score: 1, penalty_winner_id: 10 }],
+			[{ id: 500, phase: 'final', team_id: 10 }, { id: 501, phase: 'final', team_id: 20 }]
+		);
+		const client = { query: clientQuery, release: vi.fn() } as unknown as PoolClient;
+		await calculateBracketScores(1, DEFAULT_RULES, client);
+		expect(unnestPts(clientQuery)).toEqual([14, 6]); // champion 14, runner-up 6
 	});
 });
 
