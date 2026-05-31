@@ -32,14 +32,15 @@ export HOST="0.0.0.0"
 export PORT="3000"
 
 # Trust HA ingress / reverse-proxy forwarded headers so SvelteKit (adapter-node)
-# derives the real request origin. This is what makes the app's CSRF origin
-# check pass on BOTH the ingress path and the DuckDNS reverse-proxy path.
+# derives the real request origin. These fall back to the Host header when the
+# forwarded header is absent, so they're safe on direct access too.
 export PROTOCOL_HEADER="x-forwarded-proto"
 export HOST_HEADER="x-forwarded-host"
-export ADDRESS_HEADER="x-forwarded-for"
-# #11 — trust exactly `xff_depth` proxies when reading the client IP from
-# X-Forwarded-For, so login rate-limiting keys on the real client. Default 1.
-export XFF_DEPTH="${XFF_DEPTH:-1}"
+# IMPORTANT: do NOT set ADDRESS_HEADER. adapter-node's getClientAddress()
+# THROWS (HTTP 500) when ADDRESS_HEADER is set but the header is absent — which
+# happens on direct LAN/IP access (no proxy adds x-forwarded-for), breaking
+# login/registration. Leaving it unset makes rate-limiting key on the socket
+# address, which works on every access path. (xff_depth is consequently unused.)
 
 # Gentle heap cap — this add-on shares the Raspberry Pi with Home Assistant.
 export NODE_OPTIONS="--max-old-space-size=256"
