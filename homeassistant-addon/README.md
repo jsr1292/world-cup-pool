@@ -39,19 +39,31 @@ each start, `run.sh`:
 | `can_create_pools` | `admin` \| `anyone` | `admin` | Writes `site_settings.can_create_pools`. `admin` = only admins create pools (recommended for a private group). |
 | `admin_username` | string (optional) | — | If set, the **existing** user with this username is promoted to admin on startup (idempotent). Leave blank if you promote manually. |
 | `run_setup` | bool | `false` | If on, runs migrations + seeds teams + seeds the 104 match fixtures on startup. Turn on for the **first** boot against a fresh database; safe to leave on (idempotent) or switch off afterward. |
+| `xff_depth` | int | `1` | Trusted-proxy count for reading the client IP (rate-limiting). See the comment in the config form. |
+| `allowed_email_domain` | string (optional) | — | Restrict sign-ups to this email domain (e.g. `typsa.es`). Blank = any domain. |
+| `public_base_url` | string (optional) | — | Public HTTPS base URL for password-reset links, e.g. `https://you.duckdns.org`. |
+| `smtp_host` / `smtp_port` / `smtp_user` / `smtp_pass` / `smtp_from` | string / int / masked | — / `587` / — | SMTP settings for password-reset emails. Leave `smtp_host` blank to disable self-service reset (use admin reset instead). |
+
+### Login & password reset
+
+Accounts log in with **email + password**. To restrict who can register, set
+`allowed_email_domain` (e.g. `typsa.es`). For self-service "forgot password",
+fill the `smtp_*` fields and `public_base_url` (the reset link must use your
+public DuckDNS HTTPS URL). If SMTP is left blank, you reset passwords as admin.
 
 ### Admin bootstrap — how it works
 
 There is no in-app "make me admin" button. Two ways to get your first admin:
 
 1. **Via the form (recommended):** register your account in the app first, then
-   put that username in `admin_username` and restart the add-on. You'll see
-   `Promoted '<name>' to admin` in the add-on log. If the user doesn't exist yet,
-   the log warns and nothing changes — register, then restart.
-2. **Manually:** `UPDATE users SET is_admin = true WHERE username = '…';`
+   put your **email** (or your derived handle) in `admin_username` and restart the
+   add-on. You'll see `Promoted '<name>' to admin` in the add-on log. If the user
+   doesn't exist yet, the log warns and nothing changes — register, then restart.
+2. **Manually:** `UPDATE users SET is_admin = true WHERE email = '…';`
 
-Registration is always open to anyone who can reach the URL — keep your URL
-private, and leave `can_create_pools` on `admin`.
+Registration is open to anyone whose email matches `allowed_email_domain` (or
+anyone, if it's blank) — keep your URL private, and leave `can_create_pools`
+on `admin`.
 
 ---
 

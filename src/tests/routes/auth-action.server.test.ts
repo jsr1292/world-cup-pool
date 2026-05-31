@@ -42,17 +42,18 @@ beforeEach(() => {
 });
 
 describe('POST /api/auth/[action]', () => {
-	// 1. Login success
+	// 1. Login success (by email)
 	it('login: returns 200 with ok:true on valid credentials', async () => {
 		const cookies = mockCookies();
 		(authenticateUser as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 42 });
 		(createSession as ReturnType<typeof vi.fn>).mockResolvedValue('token-abc');
 
-		const res = await POST(mockEvent('login', { username: 'alice', password: 'pass123' }, cookies));
+		const res = await POST(mockEvent('login', { email: 'alice@typsa.es', password: 'pass123' }, cookies));
 
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.ok).toBe(true);
+		expect(authenticateUser).toHaveBeenCalledWith('alice@typsa.es', 'pass123');
 		expect(cookies.set).toHaveBeenCalledWith(
 			'session', 'token-abc',
 			expect.objectContaining({ path: '/', httpOnly: true }),
@@ -63,7 +64,7 @@ describe('POST /api/auth/[action]', () => {
 	it('login: returns 401 on invalid credentials', async () => {
 		(authenticateUser as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
-		const res = await POST(mockEvent('login', { username: 'alice', password: 'wrong' }));
+		const res = await POST(mockEvent('login', { email: 'alice@typsa.es', password: 'wrong' }));
 
 		expect(res.status).toBe(401);
 		const body = await res.json();
@@ -71,61 +72,93 @@ describe('POST /api/auth/[action]', () => {
 	});
 
 	// 3. Login missing fields
-	it('login: returns 400 when username or password is missing', async () => {
-		const res = await POST(mockEvent('login', { username: '', password: '' }));
+	it('login: returns 400 when email or password is missing', async () => {
+		const res = await POST(mockEvent('login', { email: '', password: '' }));
 
 		expect(res.status).toBe(400);
 		const body = await res.json();
 		expect(body.error).toMatch(/obligatorios/i);
 	});
 
-	// 4. Register success
+	// 4. Register success (email + display name)
 	it('register: returns 200 with ok:true on valid registration', async () => {
 		const cookies = mockCookies();
 		(createUser as ReturnType<typeof vi.fn>).mockResolvedValue({ rows: [{ id: 7 }] });
 		(createSession as ReturnType<typeof vi.fn>).mockResolvedValue('token-reg');
 
-		const res = await POST(mockEvent('register', { username: 'bob', password: 'secret123' }, cookies));
+		const res = await POST(mockEvent('register', { email: 'bob@typsa.es', password: 'secret123', display_name: 'Bob' }, cookies));
 
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.ok).toBe(true);
-		expect(createUser).toHaveBeenCalledWith('bob', 'secret123', 'bob');
+		expect(createUser).toHaveBeenCalledWith('bob@typsa.es', 'secret123', 'Bob');
 		expect(cookies.set).toHaveBeenCalledWith(
 			'session', 'token-reg',
 			expect.objectContaining({ path: '/', httpOnly: true }),
 		);
 	});
 
-	// 5. Register duplicate username
-	it('register: returns 409 on duplicate username (unique constraint)', async () => {
-		const err: any = new Error('unique constraint violation');
-		err.code = '23505';
+	// 5. Register duplicate email
+	it('register: returns 409 when the email is already registered', async () => {
+		const err: any = new Error('Email already registered');
+		err.code = 'EMAIL_TAKEN';
 		(createUser as ReturnType<typeof vi.fn>).mockRejectedValue(err);
 
-		const res = await POST(mockEvent('register', { username: 'taken', password: 'secret123' }));
+		const res = await POST(mockEvent('register', { email: 'taken@typsa.es', password: 'secret123', display_name: 'X' }));
 
 		expect(res.status).toBe(409);
 		const body = await res.json();
-		expect(body.error).toMatch(/ya en uso/i);
+		expect(body.error).toMatch(/registrado/i);
 	});
 
 	// 6. Register validation — missing fields
-	it('register: returns 400 when username or password is missing', async () => {
-		const res = await POST(mockEvent('register', { username: '', password: '' }));
+	it('register: returns 400 when fields are missing', async () => {
+		const res = await POST(mockEvent('register', { email: '', password: '', display_name: '' }));
 
 		expect(res.status).toBe(400);
 		const body = await res.json();
 		expect(body.error).toMatch(/obligatorios/i);
 	});
 
-	// 7. Register validation — short username
-	it('register: returns 400 when username is too short (<3 chars)', async () => {
-		const res = await POST(mockEvent('register', { username: 'ab', password: 'secret123' }));
+	// 7. Register validation — invalid email format
+	it('register: returns 400 on an invalid email', async () => {
+		const res = await POST(mockEvent('register', { email: 'not-an-email', password: 'secret123', display_name: 'X' }));
 
 		expect(res.status).toBe(400);
 		const body = await res.json();
-		expect(body.error).toMatch(/al menos 3/i);
+		expect(body.error).toMatch(/no válido/i);
+		expect(createUser).not.toHaveBeenCalled();
+	});
+
+	// 7b. Signup domain restriction (config option)
+	it('register: returns 403 when email domain is not allowed', async () => {
+		const prev = process.env.ALLOWED_EMAIL_DOMAIN;
+		process.env.ALLOWED_EMAIL_DOMAIN = 'typsa.es';
+		try {
+			const res = await POST(mockEvent('register', { email: 'someone@gmail.com', password: 'secret123', display_name: 'X' }));
+			expect(res.status).toBe(403);
+			const body = await res.json();
+			expect(body.error).toMatch(/@typsa\.es/);
+			expect(createUser).not.toHaveBeenCalled();
+		} finally {
+			if (prev === undefined) delete process.env.ALLOWED_EMAIL_DOMAIN;
+			else process.env.ALLOWED_EMAIL_DOMAIN = prev;
+		}
+	});
+
+	// 7c. Allowed domain passes
+	it('register: allows an email on the configured domain', async () => {
+		const prev = process.env.ALLOWED_EMAIL_DOMAIN;
+		process.env.ALLOWED_EMAIL_DOMAIN = 'typsa.es';
+		(createUser as ReturnType<typeof vi.fn>).mockResolvedValue({ rows: [{ id: 9 }] });
+		(createSession as ReturnType<typeof vi.fn>).mockResolvedValue('tok');
+		try {
+			const res = await POST(mockEvent('register', { email: 'ok@typsa.es', password: 'secret123', display_name: 'OK' }));
+			expect(res.status).toBe(200);
+		} finally {
+			if (prev === undefined) delete process.env.ALLOWED_EMAIL_DOMAIN;
+			else process.env.ALLOWED_EMAIL_DOMAIN = prev;
+		}
 	});
 
 	// 8. Logout success
