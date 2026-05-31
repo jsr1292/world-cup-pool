@@ -63,14 +63,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       `, [selectedEntryId]);
       userBracketPreds = bpRows;
 
-      // Match predictions (knockout + group)
+      // Match predictions — only the fields the page actually uses
+      // (matchPredLookup + the points total). The previous query joined matches
+      // and selected m.home_name/home_flag/away_name/away_flag, which are join
+      // aliases, NOT real columns on `matches` — so Postgres threw
+      // "column m.home_name does not exist", 500-ing the page for any user with
+      // a prediction. None of those columns were ever read, so drop the join.
       const { rows: mpRows } = await query(`
-        SELECT mp.match_id, mp.home_score as pred_home, mp.away_score as pred_away, mp.points_earned,
-          m.home_score as actual_home, m.away_score as actual_away, m.home_team_id, m.away_team_id,
-          m.phase, m.status, m.home_name, m.home_flag, m.away_name, m.away_flag
-        FROM match_predictions mp
-        JOIN matches m ON m.id = mp.match_id
-        WHERE mp.prediction_id = $1
+        SELECT match_id, home_score as pred_home, away_score as pred_away, points_earned
+        FROM match_predictions
+        WHERE prediction_id = $1
       `, [selectedEntryId]);
       userMatchPreds = mpRows;
     }
