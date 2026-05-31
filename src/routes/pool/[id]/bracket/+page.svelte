@@ -4,6 +4,10 @@
   import { headerTitle } from '$lib/stores/header';
   import { flagEmoji, shortName } from '$lib/teams.js';
   import { goto } from '$app/navigation';
+  import {
+    WILDCARD, R32_MAP, R32_TO_R16, R32_LABELS, R16_LABELS, QF_LABELS,
+    SF_LABELS, FINAL_LABEL, THIRD_LABEL, THIRD_GROUP_MAP,
+  } from '$lib/bracket-2026.js';
   let { data } = $props();
 
   $effect(() => {
@@ -11,97 +15,14 @@
     return () => { headerTitle.set({ text: 'Mundial 2026', emoji: '🏆', showBack: false, poolName: null, poolEmoji: null }); };
   });
 
-  // §5.6 — Sentinel for wildcard R32 group entries (3rd-place teams that
-  // are determined post-group-stage). Use this everywhere instead of the
-  // bare '?' string literal so typos surface at compile time.
-  const WILDCARD = '?';
-  // R32 matchups reordered to match FIFA bracket halves.
-  // Left wing (indices 0–7) → R16 left (M89–M94) → QF left (M97–M98) → SF M101
-  // Right wing (indices 8–15) → R16 right (M91–M96) → QF right (M99–M100) → SF M102
-  // Verified against Wikipedia "2026 FIFA World Cup knockout stage" (Match 73–104).
-  const R32_MAP = [
-    // LEFT WING (→ SF M101)
-    { t1g: 'L', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M74: 1L vs 3rd(E/H/I/J/K)
-    { t1g: 'B', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M77: 1B vs 3rd(E/F/G/I/J)
-    { t1g: 'A', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M73: 1A vs 3rd(C/E/F/H/I)
-    { t1g: 'E', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M75: 1E vs 3rd(A/B/C/D/F)
-    { t1g: 'D', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M83: 1D vs 3rd(B/E/F/I/J)
-    { t1g: 'G', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M84: 1G vs 3rd(A/E/H/I/J)
-    { t1g: 'A', t1p: 2, t2g: 'B', t2p: 2 },        // M81: 2A vs 2B
-    { t1g: 'K', t1p: 2, t2g: 'L', t2p: 2 },        // M82: 2K vs 2L
-    // RIGHT WING (→ SF M102)
-    { t1g: 'I', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M76: 1I vs 3rd(C/D/F/G/H)
-    { t1g: 'K', t1p: 1, t2g: WILDCARD, t2p: 3 },  // M78: 1K vs 3rd(D/E/I/J/L)
-    { t1g: 'F', t1p: 1, t2g: 'C', t2p: 2 },        // M79: 1F vs 2C
-    { t1g: 'H', t1p: 1, t2g: 'J', t2p: 2 },        // M80: 1H vs 2J
-    { t1g: 'J', t1p: 1, t2g: 'H', t2p: 2 },        // M86: 1J vs 2H
-    { t1g: 'D', t1p: 2, t2g: 'G', t2p: 2 },        // M88: 2D vs 2G
-    { t1g: 'C', t1p: 1, t2g: 'F', t2p: 2 },        // M85: 1C vs 2F
-    { t1g: 'E', t1p: 2, t2g: 'I', t2p: 2 },        // M87: 2E vs 2I
-  ];
-
-  // R32 → R16: sequential — each adjacent R32 pair feeds one R16 slot.
-  // R16[i] = winner(R32[i*2]) vs winner(R32[i*2+1])
-  // Verified: R16[0]=M89=W(M74)+W(M77), R16[1]=M90=W(M73)+W(M75), ...
-  const R32_TO_R16 = [
-     0, 1,   // R16[0] = M89 (left wing)
-     2, 3,   // R16[1] = M90 (left wing)
-     4, 5,   // R16[2] = M93 (left wing)
-     6, 7,   // R16[3] = M94 (left wing)
-     8, 9,   // R16[4] = M91 (right wing)
-    10, 11,  // R16[5] = M92 (right wing)
-    12, 13,  // R16[6] = M95 (right wing)
-    14, 15,  // R16[7] = M96 (right wing)
-  ];
-
-  // Match labels
-  const R32_LABELS = [
-    '1L vs 3rd(E/H/I/J/K)', '1B vs 3rd(E/F/G/I/J)', '1A vs 3rd(C/E/F/H/I)', '1E vs 3rd(A/B/C/D/F)',
-    '1D vs 3rd(B/E/F/I/J)', '1G vs 3rd(A/E/H/I/J)', '2A vs 2B', '2K vs 2L',
-    '1I vs 3rd(C/D/F/G/H)', '1K vs 3rd(D/E/I/J/L)', '1F vs 2C', '1H vs 2J',
-    '1J vs 2H', '2D vs 2G', '1C vs 2F', '2E vs 2I',
-  ];
-  const R16_LABELS = [
-    'W(R32-1) vs W(R32-2)',   // M89
-    'W(R32-3) vs W(R32-4)',   // M90
-    'W(R32-5) vs W(R32-6)',   // M93
-    'W(R32-7) vs W(R32-8)',   // M94
-    'W(R32-9) vs W(R32-10)',  // M91
-    'W(R32-11) vs W(R32-12)', // M92
-    'W(R32-13) vs W(R32-14)', // M95
-    'W(R32-15) vs W(R32-16)', // M96
-  ];
-  // FIFA QFs: M97=M89+M90, M98=M93+M94, M99=M91+M92, M100=M95+M96
-  const QF_LABELS = [
-    'W(R16-1) vs W(R16-2)',   // M97
-    'W(R16-3) vs W(R16-4)',   // M98
-    'W(R16-5) vs W(R16-6)',   // M99
-    'W(R16-7) vs W(R16-8)',   // M100
-  ];
-  const SF_LABELS = ['W(QF-1) vs W(QF-2)', 'W(QF-3) vs W(QF-4)'];
-  const FINAL_LABEL = 'W(SF-1) vs W(SF-2)';
-  const THIRD_LABEL = 'L(SF-1) vs L(SF-2)';
+  // Bracket constants (WILDCARD, R32_MAP, R32_TO_R16, labels, THIRD_GROUP_MAP)
+  // live in $lib/bracket-2026.ts — the single source of truth, locked by
+  // bracket-2026.test.ts against the official 2026 knockout tree.
 
   function r32Label(mi) { return R32_LABELS[mi] || `R32-${mi + 1}`; }
   function r16Label(mi) { return R16_LABELS[mi] || `R16-${mi + 1}`; }
   function qfLabel(mi) { return QF_LABELS[mi] || `QF-${mi + 1}`; }
   function sfLabel(mi) { return SF_LABELS[mi] || `SF-${mi + 1}`; }
-
-  // Map each R32 "3rd from" slot to the groups whose 3rd-place teams feed into it.
-  // §5.5 — Keys here MUST stay in lockstep with R32_MAP — if you reorder R32_MAP,
-  // also update these keys. TODO: add an integration test that asserts every
-  // wildcard slot in R32_MAP has a matching THIRD_GROUP_MAP entry.
-  // Reindexed for FIFA-correct bracket order (2026-05).
-  const THIRD_GROUP_MAP = {
-    0: ['E', 'H', 'I', 'J', 'K'],   // M74: 1L vs 3rd(E/H/I/J/K)
-    1: ['E', 'F', 'G', 'I', 'J'],   // M77: 1B vs 3rd(E/F/G/I/J)
-    2: ['C', 'E', 'F', 'H', 'I'],   // M73: 1A vs 3rd(C/E/F/H/I)
-    3: ['A', 'B', 'C', 'D', 'F'],   // M75: 1E vs 3rd(A/B/C/D/F)
-    4: ['B', 'E', 'F', 'I', 'J'],   // M83: 1D vs 3rd(B/E/F/I/J)
-    5: ['A', 'E', 'H', 'I', 'J'],   // M84: 1G vs 3rd(A/E/H/I/J)
-    8: ['C', 'D', 'F', 'G', 'H'],   // M76: 1I vs 3rd(C/D/F/G/H)
-    9: ['D', 'E', 'I', 'J', 'L'],   // M78: 1K vs 3rd(D/E/I/J/L)
-  };
 
   // Return 3rd-place teams from relevant groups based on user's group predictions
   function get3rdOptions(mi) {
@@ -226,14 +147,17 @@
       const slot = i + 1, mi = Math.floor(i / 2), ti = i % 2;
       if (data.existingBracket?.r32?.[slot]) {
         t.r32[mi][ti] = data.existingBracket.r32[slot];
-        // §3.13 — For wildcard R32 matches, the team in slot ti=1 represents
-        // the chosen 3rd-place occupant. Restore the occupant map; only mark
-        // it as a "winner" pick if the user also predicted them to advance,
-        // which we cannot infer from this single field. Default: occupant only.
+        // saveBracket persists a slot value ONLY when it was the WINNER pick
+        // (`exp[j] ? team : null`), so any non-null restored value means the
+        // user picked this team to advance — restore the winner flag.
+        // Previously wildcard ti=1 slots were restored as "occupant only",
+        // which dropped a correctly-saved 3rd-place advancer: it stopped
+        // cascading forward AND was wiped on the next autosave (null write).
+        exp.r32[mi][ti] = true;
+        // For wildcard R32 matches, also remember this 3rd-place team as the
+        // slot's occupant so the third-place selector shows it as chosen.
         if (ti === 1 && R32_MAP[mi].t2g === WILDCARD) {
           _thirdSlots[mi] = data.existingBracket.r32[slot];
-        } else {
-          exp.r32[mi][ti] = true;
         }
       }
     }
