@@ -238,7 +238,15 @@ export async function calculateBracketScores(
 
   // Determine winners per match
   const phaseWinners: Record<string, Set<number>> = {}; // phase -> set of winner team_ids
+  // #12 — Teams that reached a finished final (both finalists). A correctly
+  // predicted losing finalist (runner-up) earns the "reached the final" value.
+  const finalists = new Set<number>();
 	for (const m of matches) {
+		if (m.phase === 'final' && m.home_team_id != null && m.away_team_id != null) {
+			finalists.add(m.home_team_id);
+			finalists.add(m.away_team_id);
+		}
+
 		const winner =
 			m.home_score > m.away_score ? m.home_team_id :
 			m.home_score < m.away_score ? m.away_team_id :
@@ -278,8 +286,15 @@ export async function calculateBracketScores(
       const ruleKey = bp.phase === '3rd' ? 'third_place' : `knockout_${bp.phase}`;
       pts = rules[ruleKey] ?? 0;
       if (bp.phase === 'final') {
+        // Champion: reached the final (knockout_final) + won it (knockout_winner).
         pts += rules['knockout_winner'] ?? 0;
       }
+    } else if (bp.phase === 'final' && bp.team_id && finalists.has(bp.team_id)) {
+      // #12 — Correctly predicted the LOSING finalist (runner-up): award the
+      // "reached the final" value (knockout_final), without the champion bonus.
+      // The else-if guarantees the champion (handled above) is never also
+      // counted here, so a single slot is never double-awarded.
+      pts = rules['knockout_final'] ?? 0;
     }
     ids.push(bp.id);
     ptsArray.push(pts);
