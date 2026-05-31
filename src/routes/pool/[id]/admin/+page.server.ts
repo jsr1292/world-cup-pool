@@ -51,5 +51,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     finishedMatches: fmRows[0].c,
   };
 
-  return { pool, members, entries, scoring, matches, teams, stats };
+  // Match results are GLOBAL (one matches table scores every pool), so only a
+  // site admin enters them — /api/admin/results enforces this. Expose the flag
+  // so the UI shows the results-entry section only to site admins (a non-admin
+  // pool creator would otherwise see controls that 403 on save).
+  const isSiteAdmin = !!locals.user.is_admin;
+
+  return { pool, members, entries, scoring, matches, teams, stats, isSiteAdmin };
 };

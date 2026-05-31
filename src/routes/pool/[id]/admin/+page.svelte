@@ -488,7 +488,8 @@
     </div>
   </div>
 
-  <!-- Match Results -->
+  <!-- Match Results — site-admin only (results are global across all pools) -->
+  {#if data.isSiteAdmin}
   <div>
     <h2 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">Resultados de partidos</h2>
     <div style="margin-bottom: 10px; display: flex; gap: 8px; align-items: center;">
@@ -496,11 +497,11 @@
         try {
           const res = await fetch('/api/admin/fifa-sync', { method: 'POST' });
           const data = await res.json();
-          if (res.ok) alert(`Sincronizado: ${data.updated ?? 0} partidos actualizados`);
+          if (res.ok) alert(`Puntuaciones recalculadas (${data.pools ?? 0} quinielas).`);
           else alert('Error: ' + (data.error ?? 'desconocido'));
         } catch { alert('Error de conexión'); }
-      }} style="font-size: 9px; padding: 8px 16px;">📡 Sincronizar con FIFA</button>
-      <span style="font-size: 9px; color: var(--text-dim);">Actualiza resultados automáticamente desde FIFA</span>
+      }} style="font-size: 9px; padding: 8px 16px;">🔄 Recalcular puntuaciones</button>
+      <span style="font-size: 9px; color: var(--text-dim);">Vuelve a calcular todas las puntuaciones con los resultados actuales</span>
     </div>
     {#if localMatches.length === 0}
       <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px;">
@@ -562,7 +563,9 @@
         {/if}
       {/each}
     {/if}
-  </div>  {#if showConfirm}
+  </div>
+  {/if}
+  {#if showConfirm}
     <div style="position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);"
       role="dialog"
       aria-modal="true"
