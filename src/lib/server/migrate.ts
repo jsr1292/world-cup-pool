@@ -13,6 +13,7 @@
  *   (or: tsx src/lib/server/migrate.ts)
  */
 
+import './load-env.js';
 import { readFileSync, readdirSync } from 'fs';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';

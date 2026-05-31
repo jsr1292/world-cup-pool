@@ -12,6 +12,9 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"migrate": "tsx src/lib/server/migrate.ts",
+		"seed": "tsx src/lib/server/seed.ts",
+		"seed:matches": "tsx src/lib/server/seed-matches.ts",
+		"setup": "npm run migrate && npm run seed && npm run seed:matches",
 		"test": "vitest run",
 		"test:watch": "vitest"
 	},

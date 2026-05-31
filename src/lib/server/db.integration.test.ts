@@ -76,16 +76,19 @@ async function insertPool(name: string, createdBy: number): Promise<number> {
 // ─── Tests ───────────────────────────────────────────────────────────
 
 describe('Schema integrity', () => {
-	it('has all 15 required tables', async () => {
+	it('has all 16 required tables', async () => {
 		const { rows } = await client.query(
 			`SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`
 		);
-		const tables = rows.map((r) => r.tablename);
+		// `_migrations` is the migration-runner's bookkeeping table, not part of
+		// the application schema — exclude it so the count is deterministic
+		// regardless of how the test DB was provisioned.
+		const tables = rows.map((r) => r.tablename).filter((t) => t !== '_migrations');
 		const expected = [
 			'audit_log', 'bracket_predictions', 'group_predictions',
 			'match_predictions', 'matches', 'pool_creators', 'pool_members',
 			'pools', 'predictions', 'scoring_config', 'sessions',
-			'site_settings', 'teams', 'tiebreaker', 'users'
+			'site_settings', 'team_aliases', 'teams', 'tiebreaker', 'users'
 		];
 		for (const t of expected) {
 			expect(tables).toContain(t);
@@ -570,19 +573,35 @@ describe('queries.ts SQL patterns', () => {
 
 	// 4. createPool full transaction
 	it('createPool pattern: transaction creates pool + member + 10 scoring_config rows', async () => {
-		const userId = await insertUser('q_pool_tx');
+		// This case exercises a REAL commit, so it runs on its own connection
+		// (the outer `client` is mid-transaction and rolled back per test) and
+		// creates its own user there — a row in the outer transaction would not
+		// be visible to this committed connection. Cleanup runs via `pool.query`
+		// (autocommit) so the committed rows are actually removed.
+		// Defensive: clear any leftover from an interrupted prior run (these use
+		// fixed username/invite_code, so a leak would otherwise cause a unique
+		// violation). Delete the pool first — created_by has no ON DELETE.
+		await pool.query("DELETE FROM pools WHERE invite_code = 'TXCODE123'");
+		await pool.query("DELETE FROM users WHERE username = 'q_pool_tx'");
 
-		// Use a separate client for inner transaction (outer client is already in BEGIN)
 		const inner = await pool.connect();
+		let userId: number | undefined;
+		let poolId: number | undefined;
 		try {
 			await inner.query('BEGIN');
+
+			const u = await inner.query(
+				`INSERT INTO users (username, password_hash, display_name, is_admin)
+				 VALUES ('q_pool_tx', 'fake:hash', 'q_pool_tx', false) RETURNING id`
+			);
+			userId = u.rows[0].id as number;
 
 			const poolRes = await inner.query(
 				`INSERT INTO pools (name, invite_code, share_token, created_by, buy_in, allow_multiple_predictions, currency)
 				 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
 				['Q Transaction Pool', 'TXCODE123', 'tx-share-token', userId, 0, false, 'EUR']
 			);
-			const poolId = Number(poolRes.rows[0].id);
+			poolId = Number(poolRes.rows[0].id);
 
 			// Creator auto-joins
 			await inner.query(
@@ -606,7 +625,7 @@ describe('queries.ts SQL patterns', () => {
 
 			await inner.query('COMMIT');
 
-			// Verify via the test transaction client (same connection pool, data is committed)
+			// Verify the committed data is visible from a separate connection.
 			const p = await client.query('SELECT * FROM pools WHERE id = $1', [poolId]);
 			expect(p.rows).toHaveLength(1);
 			expect(p.rows[0].name).toBe('Q Transaction Pool');
@@ -617,11 +636,15 @@ describe('queries.ts SQL patterns', () => {
 
 			const sc = await client.query('SELECT * FROM scoring_config WHERE pool_id = $1 ORDER BY rule', [poolId]);
 			expect(sc.rows).toHaveLength(10);
-
-			// Clean up committed data (outer test is in ROLLBACK so manual delete)
-			await client.query('DELETE FROM pools WHERE id = $1', [poolId]);
 		} finally {
+			// Release `inner` BEFORE the autocommit cleanup: the pool is capped at
+			// max:2 connections (outer `client` holds one, `inner` the other), so
+			// a pool.query() here would otherwise block waiting for a free slot.
 			inner.release();
+			// Clean up committed rows (delete pool first — it cascades members +
+			// scoring_config — then the user).
+			if (poolId !== undefined) await pool.query('DELETE FROM pools WHERE id = $1', [poolId]);
+			if (userId !== undefined) await pool.query('DELETE FROM users WHERE id = $1', [userId]);
 		}
 	});
 
@@ -786,8 +809,13 @@ describe('queries.ts SQL patterns', () => {
 		const poolId1 = await insertPool('Q UserPool1', u1);
 		const poolId2 = await insertPool('Q UserPool2', u1);
 
-		// u1 is creator/auto-join for both pools
-		// u2 joins pool1
+		// The real createPool() auto-joins the creator; the insertPool() test
+		// helper does not, so add u1's memberships explicitly here.
+		await client.query(
+			'INSERT INTO pool_members (pool_id, user_id) VALUES ($1, $3), ($2, $3)',
+			[poolId1, poolId2, u1]
+		);
+		// u2 also joins pool1
 		await client.query(
 			'INSERT INTO pool_members (pool_id, user_id) VALUES ($1, $2)',
 			[poolId1, u2]

@@ -1,0 +1,56 @@
+# Home Assistant add-on manifest for the World Cup Pool app.
+# HA renders the configuration form from the `schema` below.
+name: World Cup Pool
+version: "1.0.0"
+slug: world-cup-pool
+description: >-
+  Private FIFA World Cup 2026 prediction pool (SvelteKit + PostgreSQL/Neon).
+  Set the database connection, admin bootstrap, and pool-creation policy in the
+  configuration form below.
+url: https://github.com/jsr1292/world-cup-pool
+# Pi 5 is aarch64. amd64 added for free (the node base image is multi-arch).
+arch:
+  - aarch64
+  - amd64
+startup: application
+# Manual boot so the add-on doesn't crash-loop before you've filled in the
+# database_url. Switch to `auto` in the UI once it's configured and healthy.
+boot: manual
+# run.sh exec's node directly; no s6 service layer needed.
+init: false
+
+# ── Access ──────────────────────────────────────────────────────────────────
+# Ingress: reachable from the HA sidebar with automatic HTTPS (HA terminates TLS).
+ingress: true
+ingress_port: 3000
+panel_icon: mdi:soccer
+panel_title: World Cup Pool
+# Direct host port so it's also reachable on the LAN / behind your DuckDNS
+# reverse proxy. Optional — ingress works without this mapping.
+ports:
+  3000/tcp: 3000
+ports_description:
+  3000/tcp: >-
+    Direct / DuckDNS reverse-proxy access (optional). Ingress works without it.
+
+# ── Configuration form ──────────────────────────────────────────────────────
+# `options` are the defaults; `schema` drives validation and the form widgets.
+options:
+  database_url: ""
+  node_env: production
+  can_create_pools: admin
+  admin_username: ""
+  run_setup: false
+schema:
+  # Neon (or any Postgres) connection string. Required. Provided at runtime —
+  # never baked into the image.
+  database_url: str
+  # production enables Secure cookies + strict origin checks (needs HTTPS).
+  node_env: list(development|production)
+  # Who may create pools: admins only, or any registered user.
+  can_create_pools: list(admin|anyone)
+  # Optional: an EXISTING username to promote to admin on startup (idempotent).
+  admin_username: str?
+  # One-shot DB bootstrap: migrations + 48 teams + 104 fixtures. Idempotent, so
+  # it's safe to leave on, but you can switch it back off after the first boot.
+  run_setup: bool

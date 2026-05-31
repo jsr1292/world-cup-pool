@@ -1,3 +1,4 @@
+import './load-env.js';
 import { query, getClient } from './db.js';
 
 // 48 confirmed qualified teams for FIFA World Cup 2026.
