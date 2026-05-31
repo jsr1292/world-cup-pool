@@ -153,7 +153,9 @@
   }
 
   function shareScoreboard() {
-    const url = `${window.location.origin}/s/${pool.invite_code}`;
+    // The public scoreboard route (/s/[code]) resolves the pool by share_token
+    // (NOT invite_code — a public viewer must not be able to use it to join).
+    const url = `${window.location.origin}/s/${pool.share_token}`;
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(url).then(() => {
         shared = true;
