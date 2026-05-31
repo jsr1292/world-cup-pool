@@ -413,8 +413,8 @@
   <div style="margin-bottom: 20px;">
     <h1 style="font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--gold);">Pronósticos de Fase de Grupos</h1>
     <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
-      Ordéna los equipos de cada grupo del 1º al 4º puesto.
-      <span class="desktop-hint" style="color: var(--gold); margin-left: 6px;">← Arrastra para reordenar</span>
+      Ordena los equipos de cada grupo del 1º al 4º puesto.
+      <span class="desktop-hint" style="color: var(--gold); margin-left: 6px;">← Haz clic o arrastra para clasificar</span>
     </p>
 
     <!-- Progress bar -->
@@ -533,6 +533,9 @@
                 opacity: {isDraggingThis ? '0.4' : '1'};
                 transition: border-color 0.1s, background 0.1s, opacity 0.1s;
               "
+              role={team ? 'button' : undefined}
+              title={team ? 'Haz clic para quitar' : undefined}
+              onclick={() => { if (team && !effectivelyLocked) tapTeam(group, team.id); }}
               draggable={team !== null}
               ondragstart={(e) => handleDragStart(e, group, slot)}
               ondragover={(e) => handleDragOver(e, group, slot)}
@@ -556,14 +559,18 @@
               <div style="font-size: 8px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px;">Sin asignar</div>
               <div style="display: flex; flex-wrap: wrap; gap: 4px;">
                 {#each unassignedTeams(group) as team}
-                  <div
+                  <button
+                    type="button"
                     draggable={true}
+                    disabled={effectivelyLocked}
+                    title="Haz clic para asignar al siguiente puesto"
+                    onclick={() => { if (!effectivelyLocked) tapTeam(group, team.id); }}
                     ondragstart={(e) => handleDragStartUnassigned(e, group, team.id)}
-                    style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: rgba(255,255,255,0.03); cursor: grab; font-size: 11px; color: var(--text);"
+                    style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: rgba(255,255,255,0.03); cursor: pointer; font-size: 11px; color: var(--text);"
                   >
                     <span style="font-size: 14px;">{flagEmoji(team.flag_code)}</span>
                     {shortName(team.name)}
-                  </div>
+                  </button>
                 {/each}
               </div>
             </div>
@@ -734,7 +741,13 @@
   <!-- Bracket CTA -->
   {#if !effectivelyLocked && data.selectedId}
     <div style="margin-top: 20px; padding: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
-      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Grupos completados — ahora predice las eliminatorias</p>
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+        {#if groupsCompleted >= totalGroups}
+          ¡Grupos completados! Ahora predice las eliminatorias
+        {:else}
+          Predice también el cuadro eliminatorio ({groupsCompleted}/{totalGroups} grupos listos)
+        {/if}
+      </p>
       <a href="/pool/{pool.id}/bracket" class="btn-primary" style="font-size: 11px; padding: 10px 24px; display: inline-block; text-decoration: none;">⚔️ Cuadro Eliminatorio →</a>
     </div>
   {/if}
