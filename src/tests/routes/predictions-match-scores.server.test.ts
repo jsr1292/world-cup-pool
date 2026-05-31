@@ -159,6 +159,29 @@ describe('POST /api/predictions/match-scores', () => {
 		expect(body.dropped).toEqual([10]);
 	});
 
+	it('#1: the lock query treats a FINISHED match as locked (not just started)', async () => {
+		const mockClient = { query: vi.fn().mockResolvedValue(undefined), release: vi.fn() };
+		mockGetClient.mockResolvedValueOnce(mockClient);
+		mockQuery
+			.mockResolvedValueOnce({ rows: [{ user_id: 1, pool_id: 5 }] })                       // ownership
+			.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] })                               // membership
+			.mockResolvedValueOnce({ rows: [{ deadline_group: null, deadline_knockout: null }] }) // deadline
+			.mockResolvedValueOnce({ rows: [{ id: 10 }] });                                     // match 10 finished → dropped
+		const response = await POST({
+			request: mockRequest({ prediction_id: 1, scores: { '10': { home_score: 2, away_score: 1 } } }),
+			locals: mockLocals(1) as any
+		});
+		expect(response.status).toBe(200);
+		expect((await response.json()).dropped).toEqual([10]);
+		// Critical for #1: fixtures may have NULL kickoff_time, so the guard MUST
+		// also lock on status = 'finished' (otherwise a result-known match is editable).
+		const guardCall = mockQuery.mock.calls.find(
+			(c: any[]) => typeof c[0] === 'string' && c[0].includes('FROM matches') && c[0].includes('ANY($1::int[])')
+		);
+		expect(guardCall).toBeTruthy();
+		expect(guardCall![0]).toContain("status = 'finished'");
+	});
+
 	it('returns 403 when group deadline passed', async () => {
 		const pastDate = new Date('2020-01-01T00:00:00Z').toISOString();
 		mockQuery

@@ -10,6 +10,7 @@ DATABASE_URL="$(bashio::config 'database_url')"
 NODE_ENV="$(bashio::config 'node_env')"
 CAN_CREATE_POOLS="$(bashio::config 'can_create_pools')"
 ADMIN_USERNAME="$(bashio::config 'admin_username')"
+XFF_DEPTH="$(bashio::config 'xff_depth')"
 
 # database_url is required.
 if bashio::var.is_empty "${DATABASE_URL}" || [ "${DATABASE_URL}" = "null" ]; then
@@ -29,7 +30,9 @@ export PORT="3000"
 export PROTOCOL_HEADER="x-forwarded-proto"
 export HOST_HEADER="x-forwarded-host"
 export ADDRESS_HEADER="x-forwarded-for"
-export XFF_DEPTH="1"
+# #11 — trust exactly `xff_depth` proxies when reading the client IP from
+# X-Forwarded-For, so login rate-limiting keys on the real client. Default 1.
+export XFF_DEPTH="${XFF_DEPTH:-1}"
 
 # Gentle heap cap — this add-on shares the Raspberry Pi with Home Assistant.
 export NODE_OPTIONS="--max-old-space-size=256"

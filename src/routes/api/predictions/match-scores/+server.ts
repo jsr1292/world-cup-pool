@@ -67,11 +67,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const matchIds = Object.keys(scores).map(Number);
   const droppedMatches: number[] = [];
   if (matchIds.length > 0) {
-    // §2.8 — Drop matches that have already started instead of rejecting
-    // the whole batch. Mirrors the group/bracket pattern so the autosave
-    // path doesn't lose unrelated edits.
+    // §2.8 — Drop matches that have already started OR finished instead of
+    // rejecting the whole batch. #1 — `status = 'finished'` is essential:
+    // fixtures may have NULL kickoff_time, so without it a player could submit
+    // an exact score for a match whose result is already known. Mirrors the
+    // group endpoint's guard.
     const { rows: started } = await query(
-      'SELECT id FROM matches WHERE id = ANY($1::int[]) AND kickoff_time IS NOT NULL AND kickoff_time <= NOW()',
+      `SELECT id FROM matches WHERE id = ANY($1::int[])
+         AND (status = 'finished' OR (kickoff_time IS NOT NULL AND kickoff_time <= NOW()))`,
       [matchIds]
     );
     const startedSet = new Set(started.map((r: any) => Number(r.id)));
