@@ -55,10 +55,10 @@
   }
 
   // Kickoff formatting in the viewer's local timezone. ISO/UTC in, Spanish out.
-  const _dayFmt = new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+  const _dateFmt = new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric' });
   const _timeFmt = new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit' });
   function dayKey(iso) { return iso ? new Date(iso).toLocaleDateString('es-ES') : ''; }
-  function dayLabel(iso) { return iso ? _dayFmt.format(new Date(iso)) : ''; }
+  function dateShort(iso) { return iso ? _dateFmt.format(new Date(iso)) : ''; }
   function timeLabel(iso) { return iso ? _timeFmt.format(new Date(iso)) : ''; }
 
   // True once every one of a group's 6 fixtures has a complete scoreline entered.
@@ -351,18 +351,14 @@
           {/if}
         </div>
 
-        <!-- Fixtures: enter each scoreline, in chronological order, by day -->
-        <div style="display: flex; flex-direction: column; gap: 1px;">
+        <!-- Fixtures: enter each scoreline, in chronological order.
+             Date on the left (shown when it changes), time on the right. -->
+        <div style="display: flex; flex-direction: column; gap: 2px;">
           {#each fixtures as match, i}
             {@const mLocked = match.locked || effectivelyLocked}
             {@const dayChanged = i === 0 || dayKey(match.kickoff) !== dayKey(fixtures[i - 1]?.kickoff)}
-            {#if match.kickoff && dayChanged}
-              <div style="font-size: 9px; color: var(--gold); letter-spacing: 0.03em; text-transform: capitalize; margin: {i === 0 ? '0' : '5px'} 0 1px;">{dayLabel(match.kickoff)}</div>
-            {/if}
             <div style="display: flex; align-items: center; gap: 5px; padding: 1px 0; {mLocked ? 'opacity: 0.55;' : ''}">
-              {#if match.kickoff}
-                <span style="font-size: 9px; color: var(--text-dim); width: 28px; flex-shrink: 0;">{#if match.locked}🔒{:else}{timeLabel(match.kickoff)}{/if}</span>
-              {/if}
+              <span style="font-size: 9px; color: var(--gold); width: 36px; flex-shrink: 0; text-transform: capitalize; line-height: 1.1;">{match.kickoff && dayChanged ? dateShort(match.kickoff) : ''}</span>
               <div style="flex: 1; display: flex; align-items: center; gap: 4px; justify-content: flex-end; min-width: 0;">
                 <span style="font-size: 11px; font-weight: 500; color: var(--text); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(match.home_name)}</span>
                 <span style="font-size: 13px; flex-shrink: 0;">{@html flagEmoji(match.home_flag)}</span>
@@ -388,6 +384,7 @@
                 <span style="font-size: 13px; flex-shrink: 0;">{@html flagEmoji(match.away_flag)}</span>
                 <span style="font-size: 11px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(match.away_name)}</span>
               </div>
+              <span style="font-size: 9px; color: var(--text-dim); width: 32px; flex-shrink: 0; text-align: right;">{#if match.locked}🔒{:else if match.kickoff}{timeLabel(match.kickoff)}{/if}</span>
             </div>
           {/each}
         </div>
