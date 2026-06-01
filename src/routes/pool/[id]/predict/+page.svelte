@@ -25,10 +25,6 @@
   let countdown = $state('');
   // 8a: Client-side lock — true if server locked at page load OR if countdown reached zero
   const effectivelyLocked = $derived(data.isLocked || countdown === 'Cerrado');
-  // A specific group whose matches have already started/finished — predictions
-  // for it can no longer be saved (the server drops them), so lock it in the UI.
-  const isGroupStarted = (group) => data.lockedGroups?.includes(group) ?? false;
-  const isGroupLocked = (group) => effectivelyLocked || isGroupStarted(group);
   $effect(() => {
     const dl = pool.deadline_group;
     if (!dl) return;
@@ -57,6 +53,13 @@
   function groupFixtures(group) {
     return data.groupMatchesByGroup?.[group] || [];
   }
+
+  // Kickoff formatting in the viewer's local timezone. ISO/UTC in, Spanish out.
+  const _dayFmt = new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+  const _timeFmt = new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit' });
+  function dayKey(iso) { return iso ? new Date(iso).toLocaleDateString('es-ES') : ''; }
+  function dayLabel(iso) { return iso ? _dayFmt.format(new Date(iso)) : ''; }
+  function timeLabel(iso) { return iso ? _timeFmt.format(new Date(iso)) : ''; }
 
   // True once every one of a group's 6 fixtures has a complete scoreline entered.
   function groupComplete(group) {
@@ -326,7 +329,7 @@
       {@const fixtures = groupFixtures(group)}
       {@const entered = fixtures.filter(m => { const s = matchScores[m.id]; return s && s.home != null && s.away != null; }).length}
       {@const complete = entered === 6 && fixtures.length === 6}
-      {@const locked = isGroupLocked(group)}
+      {@const allLocked = fixtures.length > 0 && fixtures.every(m => m.locked)}
       {@const ds = derivedStandings(group)}
 
       <div class="group-card" style="background: var(--bg-card); border: 1px solid {complete ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 10px; padding: 14px; {complete ? 'box-shadow: 0 0 12px rgba(201,168,76,0.08);' : ''}">
@@ -334,7 +337,7 @@
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
           <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold);">{group}</div>
           <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>
-          {#if isGroupStarted(group)}
+          {#if allLocked}
             <span style="margin-left: auto; font-size: 9px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 10px;">🔒 Cerrado</span>
           {:else if complete}
             <span style="margin-left: auto; font-size: 9px; color: var(--green); background: rgba(0,229,160,0.1); padding: 2px 8px; border-radius: 10px;">✓ Completo</span>
@@ -343,10 +346,18 @@
           {/if}
         </div>
 
-        <!-- Fixtures: enter each scoreline -->
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          {#each fixtures as match}
-            <div style="display: flex; align-items: center; gap: 6px;">
+        <!-- Fixtures: enter each scoreline, in chronological order, by day -->
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          {#each fixtures as match, i}
+            {@const mLocked = match.locked || effectivelyLocked}
+            {@const dayChanged = i === 0 || dayKey(match.kickoff) !== dayKey(fixtures[i - 1]?.kickoff)}
+            {#if match.kickoff && dayChanged}
+              <div style="font-size: 9px; color: var(--gold); letter-spacing: 0.04em; text-transform: capitalize; margin: 6px 0 2px; padding-bottom: 2px; border-bottom: 1px solid rgba(201,168,76,0.12);">📅 {dayLabel(match.kickoff)}</div>
+            {/if}
+            <div style="display: flex; align-items: center; gap: 6px; {mLocked ? 'opacity: 0.6;' : ''}">
+              {#if match.kickoff}
+                <span style="font-size: 9px; color: var(--text-dim); width: 34px; flex-shrink: 0; text-align: left;">{#if match.locked}🔒{:else}{timeLabel(match.kickoff)}{/if}</span>
+              {/if}
               <div style="flex: 1; display: flex; align-items: center; gap: 4px; justify-content: flex-end; min-width: 0;">
                 <span style="font-size: 11px; font-weight: 500; color: var(--text); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(match.home_name)}</span>
                 <span style="font-size: 15px; flex-shrink: 0;">{@html flagEmoji(match.home_flag)}</span>
@@ -356,7 +367,7 @@
                   type="number" min="0" max="20" inputmode="numeric" placeholder="-"
                   value={getMatchScore(match.id, 'home')}
                   oninput={(e) => setMatchScore(match.id, 'home', e.target.value === '' ? null : Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
-                  disabled={locked}
+                  disabled={mLocked}
                   style="width: 34px; text-align: center; font-size: 15px; font-weight: 700; padding: 5px 2px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--gold);"
                 />
                 <span style="font-size: 12px; color: var(--text-muted);">—</span>
@@ -364,7 +375,7 @@
                   type="number" min="0" max="20" inputmode="numeric" placeholder="-"
                   value={getMatchScore(match.id, 'away')}
                   oninput={(e) => setMatchScore(match.id, 'away', e.target.value === '' ? null : Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
-                  disabled={locked}
+                  disabled={mLocked}
                   style="width: 34px; text-align: center; font-size: 15px; font-weight: 700; padding: 5px 2px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--gold);"
                 />
               </div>

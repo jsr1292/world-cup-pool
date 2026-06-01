@@ -101,11 +101,20 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
     LEFT JOIN teams ht ON ht.id = m.home_team_id
     LEFT JOIN teams at ON at.id = m.away_team_id
     WHERE m.phase = 'group' AND m.group_name IS NOT NULL
-    ORDER BY m.group_name, m.matchday, m.sort_order, m.id
+    ORDER BY m.group_name, m.kickoff_time ASC NULLS LAST, m.matchday, m.sort_order, m.id
   `);
+  // Per-match lock: a group match locks individually once it kicks off (or is
+  // finished), so earlier rounds locking doesn't freeze a group's later games.
+  const now = Date.now();
   const groupMatchesByGroup: Record<string, any[]> = {};
   for (const m of groupMatches) {
-    (groupMatchesByGroup[m.group_name] ??= []).push(m);
+    const ko = m.kickoff_time ? new Date(m.kickoff_time) : null;
+    const locked = m.status === 'finished' || (ko != null && ko.getTime() <= now);
+    (groupMatchesByGroup[m.group_name] ??= []).push({
+      ...m,
+      kickoff: ko ? ko.toISOString() : null,
+      locked,
+    });
   }
 
   // Load existing match predictions
