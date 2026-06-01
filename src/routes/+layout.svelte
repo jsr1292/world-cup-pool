@@ -190,6 +190,9 @@
           <div style="font-size: 9px; color: var(--text-dim);">@{data.user?.username}</div>
         </div>
       </div>
+      <button type="button" onclick={toggleTheme} class="btn-ghost" style="width: 100%; font-size: 9px; padding: 8px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+        {isDark ? '☀️ Modo claro' : '🌙 Modo oscuro'}
+      </button>
       <button type="button" onclick={logout} class="btn-ghost" style="width: 100%; font-size: 9px; padding: 8px;">
         Cerrar sesión
       </button>
