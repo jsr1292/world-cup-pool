@@ -80,8 +80,10 @@
   function getMatchResultClass(matchId) {
     const mp = matchPredLookup[matchId];
     if (!mp || mp.points_earned == null) return null;
-    if (mp.points_earned >= 7) return 'exact'; // exact score (outcome + exact)
-    if (mp.points_earned >= 2) return 'outcome'; // correct outcome only
+    // Tiers (default rule values): exact 4, goal-difference 2, outcome 1.
+    if (mp.points_earned >= 4) return 'exact';
+    if (mp.points_earned >= 2) return 'gd';
+    if (mp.points_earned >= 1) return 'outcome';
     return 'wrong';
   }
 </script>
@@ -181,7 +183,7 @@
             {@const mp = matchPredLookup[match.id]}
             {@const resultClass = isFinished ? getMatchResultClass(match.id) : null}
 
-            <div style="background: var(--bg-surface); border: 1px solid {resultClass === 'exact' ? 'rgba(0,229,160,0.5)' : resultClass === 'outcome' ? 'rgba(255,200,0,0.4)' : resultClass === 'wrong' ? 'rgba(255,77,106,0.3)' : 'var(--border)'}; border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+            <div style="background: var(--bg-surface); border: 1px solid {resultClass === 'exact' ? 'rgba(0,229,160,0.5)' : (resultClass === 'gd' || resultClass === 'outcome') ? 'rgba(255,200,0,0.4)' : resultClass === 'wrong' ? 'rgba(255,77,106,0.3)' : 'var(--border)'}; border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
               <!-- Home -->
               <span style="flex: 1; text-align: right; font-size: 12px; {homeWin ? 'font-weight: 600; color: var(--text);' : isFinished ? 'color: var(--text-muted);' : 'color: var(--text);'}">
                 {@html flag(match.home_flag)} {match.home_name ?? 'TBD'}
@@ -210,11 +212,11 @@
             <!-- Prediction comparison + Match score prediction -->
             {#if isFinished && mp}
               {@const ptsLabel = mp.points_earned > 0 ? `+${mp.points_earned}pts` : '0pts'}
-              {@const resultColor = mp.points_earned >= 7 ? 'var(--green)' : mp.points_earned >= 2 ? '#ffc800' : 'var(--red)'}
+              {@const resultColor = mp.points_earned >= 4 ? 'var(--green)' : mp.points_earned >= 1 ? '#ffc800' : 'var(--red)'}
               <div style="font-size: 10px; padding: 0 0 8px 0; text-align: center; color: var(--text-muted);">
                 Tu marcador: <strong style="color: var(--text);">{mp.pred_home} - {mp.pred_away}</strong>
                 · <span style="color: {resultColor}; font-weight: 600;">{ptsLabel}</span>
-                · {#if mp.points_earned >= 7}<span style="color: var(--green);">✓ Exact</span>{:else if mp.points_earned >= 2}<span style="color: #ffc800;">✓ Resultado</span>{:else}<span style="color: var(--red);">✗</span>{/if}
+                · {#if mp.points_earned >= 4}<span style="color: var(--green);">✓ Exacto</span>{:else if mp.points_earned >= 2}<span style="color: #ffc800;">✓ Diferencia</span>{:else if mp.points_earned >= 1}<span style="color: #ffc800;">✓ Resultado</span>{:else}<span style="color: var(--red);">✗</span>{/if}
               </div>
             {:else if isFinished}
               {@const actualWinner = homeWin ? match.home_team_id : awayWin ? match.away_team_id : (match.penalty_winner_id || null)}

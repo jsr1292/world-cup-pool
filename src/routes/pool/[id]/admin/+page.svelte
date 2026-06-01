@@ -120,6 +120,7 @@
 
   const ruleLabels = {
     match_outcome: 'Resultado partido',
+    goal_difference: 'Diferencia de goles',
     exact_score: 'Resultado exacto',
     group_position: 'Posición en grupo',
     knockout_r32: 'Dieciseisavos (R32)',

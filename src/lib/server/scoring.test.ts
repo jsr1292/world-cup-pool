@@ -22,6 +22,7 @@ import {
 
 const DEFAULT_RULES: Record<string, number> = {
 	match_outcome: 1,
+	goal_difference: 1,
 	exact_score: 3,
 	group_position: 2,
 	knockout_r32: 2,
@@ -78,10 +79,10 @@ describe('calculateMatchScores', () => {
 			.mockResolvedValueOnce({ rowCount: 1 });    // unnest update
 	}
 
-	it('awards match_outcome points for correct outcome (not exact score)', async () => {
+	it('awards match_outcome points for correct outcome (wrong margin, not exact)', async () => {
 		setup(
-			[{ id: 1, home_team_id: 10, away_team_id: 20, home_score: 2, away_score: 0 }],
-			[{ id: 100, prediction_id: 50, match_id: 1, home_score: 3, away_score: 1 }]
+			[{ id: 1, home_team_id: 10, away_team_id: 20, home_score: 2, away_score: 0 }], // GD +2
+			[{ id: 100, prediction_id: 50, match_id: 1, home_score: 3, away_score: 0 }]    // GD +3 — different
 		);
 		const client = { query: clientQuery, release: vi.fn() } as unknown as PoolClient;
 		await calculateMatchScores(1, DEFAULT_RULES, client);
@@ -109,14 +110,34 @@ describe('calculateMatchScores', () => {
 		expect(unnestPts(clientQuery)).toEqual([0]);
 	});
 
-	it('awards match_outcome for correct draw (different exact score)', async () => {
+	it('awards outcome + goal_difference for a correct (non-exact) draw — both GD 0', async () => {
 		setup(
 			[{ id: 1, home_team_id: 10, away_team_id: 20, home_score: 1, away_score: 1 }],
 			[{ id: 100, prediction_id: 50, match_id: 1, home_score: 2, away_score: 2 }]
 		);
 		const client = { query: clientQuery, release: vi.fn() } as unknown as PoolClient;
 		await calculateMatchScores(1, DEFAULT_RULES, client);
-		expect(unnestPts(clientQuery)).toEqual([1]); // correct draw, not exact
+		expect(unnestPts(clientQuery)).toEqual([2]); // 1 outcome + 1 GD (2-2 and 1-1 are both GD 0)
+	});
+
+	it('awards outcome + goal_difference for a correct winner with the right margin (not exact)', async () => {
+		setup(
+			[{ id: 1, home_team_id: 10, away_team_id: 20, home_score: 3, away_score: 1 }], // GD +2
+			[{ id: 100, prediction_id: 50, match_id: 1, home_score: 2, away_score: 0 }]    // GD +2, not exact
+		);
+		const client = { query: clientQuery, release: vi.fn() } as unknown as PoolClient;
+		await calculateMatchScores(1, DEFAULT_RULES, client);
+		expect(unnestPts(clientQuery)).toEqual([2]); // 1 outcome + 1 GD
+	});
+
+	it('awards outcome only when the winner is right but the margin is wrong', async () => {
+		setup(
+			[{ id: 1, home_team_id: 10, away_team_id: 20, home_score: 1, away_score: 0 }], // GD +1
+			[{ id: 100, prediction_id: 50, match_id: 1, home_score: 2, away_score: 0 }]    // GD +2 — wrong margin
+		);
+		const client = { query: clientQuery, release: vi.fn() } as unknown as PoolClient;
+		await calculateMatchScores(1, DEFAULT_RULES, client);
+		expect(unnestPts(clientQuery)).toEqual([1]); // outcome only, no GD bonus
 	});
 
 	it('#7/#9: resets points even when there are no finished matches', async () => {

@@ -7,7 +7,7 @@ import { parseJsonBody } from '$lib/server/json-body.js';
 import { errCode } from '$lib/server/err-code.js';
 
 const VALID_RULES = new Set([
-  'match_outcome', 'exact_score', 'group_position',
+  'match_outcome', 'goal_difference', 'exact_score', 'group_position',
   'knockout_r32', 'knockout_r16', 'knockout_qf', 'knockout_sf',
   'knockout_final', 'knockout_winner', 'third_place',
 ]);

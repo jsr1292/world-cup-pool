@@ -677,7 +677,7 @@
         <h2 style="font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--gold); margin-bottom: 4px;">⚽ Resultados de Eliminatorias</h2>
         <p style="font-size: 10px; color: var(--text-muted);">Predice el marcador exacto de cada partido eliminado.</p>
         <p style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
-          Acierta el resultado (1/X/2): <strong style="color: var(--gold);">+1 pts</strong> · Marcador exacto: <strong style="color: var(--gold);">+3 pts</strong>
+          Resultado (1/X/2): <strong style="color: var(--gold);">+1</strong> · + diferencia de goles: <strong style="color: var(--gold);">+1</strong> · marcador exacto: <strong style="color: var(--gold);">+3</strong>
         </p>
       </div>
 

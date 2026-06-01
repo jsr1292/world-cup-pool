@@ -1,5 +1,6 @@
 import { query } from '$lib/server/db.js';
 import { getPoolById, getPoolMembers, getPoolEntries, getScoringConfig } from '$lib/server/queries.js';
+import { DEFAULT_SCORING_RULES } from '$lib/server/scoring.js';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
 
@@ -17,7 +18,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
   const members = await getPoolMembers(poolId);   // one row per user
   const entries = await getPoolEntries(poolId);   // one row per (user, entry)
-  const scoring = await getScoringConfig(poolId);
+  // Merge defaults so newly-added rules (e.g. goal_difference) are editable
+  // even for pools created before they existed; saved values override defaults.
+  const scoring = { ...DEFAULT_SCORING_RULES, ...(await getScoringConfig(poolId)) };
 
   // Get ALL matches (group + knockout). Knockout matches start with NULL teams
   // until the admin assigns them, so the admin UI needs every phase plus the
