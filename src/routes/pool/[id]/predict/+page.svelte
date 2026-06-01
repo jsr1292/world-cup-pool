@@ -223,16 +223,6 @@
     autoSaveMatchScores();
   }
 
-  const PHASE_LABELS = {
-    r32: 'Dieciseisavos',
-    r16: 'Octavos',
-    qf: 'Cuartos',
-    sf: 'Semifinales',
-    '3rd': '3º y 4º puesto',
-    final: 'Final',
-  };
-  const PHASE_ORDER = ['r32', 'r16', 'qf', 'sf', '3rd', 'final'];
-
   function getMatchScore(matchId, side) {
     const s = matchScores[matchId];
     if (!s) return '';
@@ -423,100 +413,17 @@
     </div>
   {/if}
 
-  <!-- Knockout Match Scores Section -->
-  {#if Object.keys(data.knockoutByPhase || {}).length > 0}
-    <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border);">
-      <div style="margin-bottom: 16px;">
-        <h2 style="font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--gold); margin-bottom: 4px;">⚽ Resultados de Eliminatorias</h2>
-        <p style="font-size: 10px; color: var(--text-muted);">Predice el marcador exacto de cada partido eliminado.</p>
-        <p style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
-          Resultado (1/X/2): <strong style="color: var(--gold);">+1</strong> · + diferencia de goles: <strong style="color: var(--gold);">+1</strong> · marcador exacto: <strong style="color: var(--gold);">+3</strong>
-        </p>
-        <p style="font-size: 9px; color: var(--text-dim); margin-top: 6px; line-height: 1.5;">
-          💡 El marcador se juzga al final del tiempo reglamentario o la prórroga. Si quieres predecir que el partido acaba en empate, pon el mismo marcador (p. ej. 1-1): los penaltis deciden quién pasa, pero no cuentan para el marcador. Quién avanza se elige aparte en el <strong>cuadro eliminatorio</strong>.
-        </p>
-      </div>
-
-      {#each PHASE_ORDER as phase}
-        {@const phaseMatches = data.knockoutByPhase?.[phase] || []}
-        {#if phaseMatches.length > 0}
-          <div style="margin-bottom: 20px;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-              <h3 style="font-size: 12px; font-weight: 600; color: var(--text); margin: 0;">{PHASE_LABELS[phase] || phase}</h3>
-              <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 8px; border-radius: 8px;">{phaseMatches.length} partidos</span>
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              {#each phaseMatches as match}
-                <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; gap: 10px;">
-                  <!-- Home team -->
-                  <div style="flex: 1; display: flex; align-items: center; gap: 6px; justify-content: flex-end;">
-                    <span style="font-size: 13px; font-weight: 500; color: var(--text); text-align: right;">{shortName(match.home_name)}</span>
-                    <span style="font-size: 18px;">{@html flagEmoji(match.home_flag)}</span>
-                  </div>
-
-                  <!-- Score inputs -->
-                  <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-                    <input
-                      type="number"
-                      min="0"
-                      max="20"
-                      inputmode="numeric"
-                      placeholder="-"
-                      value={getMatchScore(match.id, 'home')}
-                      oninput={(e) => setMatchScore(match.id, 'home', e.target.value === '' ? null : Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
-                      disabled={effectivelyLocked}
-                      style="width: 40px; text-align: center; font-size: 16px; font-weight: 700; padding: 6px 4px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--gold);"
-                    />
-                    <span style="font-size: 14px; color: var(--text-muted);">—</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="20"
-                      inputmode="numeric"
-                      placeholder="-"
-                      value={getMatchScore(match.id, 'away')}
-                      oninput={(e) => setMatchScore(match.id, 'away', e.target.value === '' ? null : Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
-                      disabled={effectivelyLocked}
-                      style="width: 40px; text-align: center; font-size: 16px; font-weight: 700; padding: 6px 4px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--gold);"
-                    />
-                  </div>
-
-                  <!-- Away team -->
-                  <div style="flex: 1; display: flex; align-items: center; gap: 6px;">
-                    <span style="font-size: 18px;">{@html flagEmoji(match.away_flag)}</span>
-                    <span style="font-size: 13px; font-weight: 500; color: var(--text);">{shortName(match.away_name)}</span>
-                  </div>
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/if}
-      {/each}
-
-      <!-- Match scores auto-save indicator -->
-      {#if !effectivelyLocked}
-        <div style="margin-top: 8px; display: flex; gap: 12px; align-items: center;">
-          {#if matchSaving}
-            <span style="font-size: 10px; color: var(--text-muted);">Guardando marcadores...</span>
-          {:else if matchSaved}
-            <span style="font-size: 10px; color: var(--green);">✓ Marcadores guardados</span>
-          {:else}
-            <span style="font-size: 10px; color: var(--text-dim);">Guardado automático</span>
-          {/if}
-        </div>
-      {/if}
-    </div>
-  {/if}
+  <!-- Knockout note: the knockout is predicted on the bracket page (who advances
+       + the final-score tiebreaker), not as per-match scorelines here. -->
 
   <!-- Bracket CTA -->
   {#if !effectivelyLocked && data.selectedId}
     <div style="margin-top: 20px; padding: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
       <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
         {#if groupsCompleted >= totalGroups}
-          ¡Grupos completados! Ahora predice las eliminatorias
+          ¡Grupos completados! Ahora elige quién avanza en el cuadro y el marcador de la final.
         {:else}
-          Predice también el cuadro eliminatorio ({groupsCompleted}/{totalGroups} grupos listos)
+          Predice también el cuadro eliminatorio: quién avanza y el marcador de la final ({groupsCompleted}/{totalGroups} grupos listos)
         {/if}
       </p>
       <a href="/pool/{pool.id}/bracket" class="btn-primary" style="font-size: 11px; padding: 10px 24px; display: inline-block; text-decoration: none;">⚔️ Cuadro Eliminatorio →</a>

@@ -256,11 +256,15 @@ export async function calculateMatchScores(
       AND p.pool_id = $1
   `, [poolId]);
 
-  // Get all finished matches (group or knockout) with scores
+  // Score scorelines for GROUP matches only. Knockout matchups aren't known
+  // until the tournament unfolds, so the knockout is predicted via the bracket
+  // (who advances) plus the single final-score tiebreaker — not per-match
+  // scorelines. Restricting here guarantees a stray knockout match_prediction
+  // can never earn scoreline points.
   const { rows: matches } = await client.query(`
     SELECT id, home_team_id, away_team_id, home_score, away_score
     FROM matches
-    WHERE status = 'finished' AND home_score IS NOT NULL AND away_score IS NOT NULL
+    WHERE phase = 'group' AND status = 'finished' AND home_score IS NOT NULL AND away_score IS NOT NULL
   `);
 
   if (matches.length === 0) return; // already zeroed above
