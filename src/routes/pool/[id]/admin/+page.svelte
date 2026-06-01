@@ -216,6 +216,28 @@
     savingDeadline = false;
   }
 
+  // Admin password reset — the fallback when SMTP/email isn't configured. A site
+  // admin sets a new password for a locked-out user and tells it to them.
+  let resetUser = $state('');
+  let resetPwd = $state('');
+  let resettingPwd = $state(false);
+  let resetPwdMsg = $state('');
+  async function resetUserPassword() {
+    if (!resetUser || resetPwd.length < 6) { resetPwdMsg = '✗ Elige un usuario y una contraseña de 6+ caracteres'; return; }
+    resettingPwd = true; resetPwdMsg = '';
+    try {
+      const res = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: resetUser, new_password: resetPwd }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) { resetPwdMsg = `✓ Contraseña cambiada. Comunícasela a la persona; tendrá que volver a iniciar sesión.`; resetPwd = ''; }
+      else { resetPwdMsg = '✗ ' + (body.error || 'Error'); }
+    } catch { resetPwdMsg = '✗ Error de conexión'; }
+    resettingPwd = false;
+  }
+
   let showConfirm = $state(false);
   let confirmEntryId = $state(null);
   let confirmOdUserId = $state(null);
@@ -378,6 +400,31 @@
       </div>
     </div>
   </div>
+
+  <!-- Reset a user's password (fallback when email/SMTP isn't configured) -->
+  {#if data.isSiteAdmin}
+  <div style="margin-bottom: 24px;">
+    <h2 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">Restablecer contraseña</h2>
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+      <p style="font-size: 9px; color: var(--text-dim); margin: 0;">Si alguien olvida su contraseña (y no hay email configurado), elígele una nueva aquí y comunícasela. Se cerrarán sus sesiones y podrá cambiarla luego en su perfil.</p>
+      <div>
+        <label style="display: block; font-size: 9px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px;">Usuario</label>
+        <select bind:value={resetUser} style="font-size: 12px; padding: 6px 8px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); width: 100%; max-width: 280px;">
+          <option value="">— Elige un miembro —</option>
+          {#each members as m}<option value={m.username}>{m.display_name} (@{m.username})</option>{/each}
+        </select>
+      </div>
+      <div>
+        <label style="display: block; font-size: 9px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px;">Nueva contraseña (temporal)</label>
+        <input type="text" bind:value={resetPwd} placeholder="mínimo 6 caracteres" style="font-size: 12px; padding: 6px 8px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); width: 100%; max-width: 280px;" />
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <button class="btn-primary" onclick={resetUserPassword} disabled={resettingPwd} style="font-size: 9px; padding: 8px 16px;">{resettingPwd ? 'Guardando...' : 'Cambiar contraseña'}</button>
+        {#if resetPwdMsg}<span style="font-size: 11px; color: {resetPwdMsg.startsWith('✓') ? 'var(--green)' : 'var(--red)'};">{resetPwdMsg}</span>{/if}
+      </div>
+    </div>
+  </div>
+  {/if}
 
   <!-- Scoring Config -->
   <div style="margin-bottom: 24px;">
