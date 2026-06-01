@@ -204,22 +204,29 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     client.release();
   }
 
-  // §3.6 — Score synchronously when the user edits a prediction whose previous
-  // points_earned was non-zero. The ON CONFLICT clause above sets points_earned
-  // to 0 on update, so the UI would otherwise show a stale total until the
-  // setImmediate callback finishes. Doing it inline keeps the displayed total
-  // in lockstep with the just-zeroed row.
+  // Re-score synchronously so a live total stays in lockstep — BUT only when a
+  // result actually exists. A user can only edit a prediction for a match that
+  // hasn't started yet, so before any match is finished a score edit can never
+  // change an awarded point: re-scoring would be a pointless full-pool scan on
+  // every keystroke (and, pre-tournament, the most common source of load). Skip
+  // it entirely until the first result lands.
   const poolId = pred.pool_id;
-  try {
-    await calculateAllScores(poolId);
-    invalidateCachedPoolLeaderboard(poolId);
-    invalidateCachedPoolResults(poolId);
-    invalidateGlobalLeaderboard();
-  } catch (e) {
-    console.error('[score] match-scores pool', poolId, e);
-    // Fall through — we already saved the prediction; the next sync will
-    // reconcile points_earned. Surface the error code, not a generic 500.
-    return json({ ok: false, error: 'Predicción guardada, pero el cálculo de puntos falló', scoring: 'failed' }, { status: 500 });
+  const { rows: anyFinished } = await query(
+    `SELECT 1 FROM matches WHERE status = 'finished' AND home_score IS NOT NULL LIMIT 1`
+  );
+  if (anyFinished.length > 0) {
+    try {
+      await calculateAllScores(poolId);
+      invalidateCachedPoolLeaderboard(poolId);
+      invalidateCachedPoolResults(poolId);
+      invalidateGlobalLeaderboard();
+    } catch (e) {
+      // The prediction is already safely saved; only the (best-effort) re-score
+      // failed. Do NOT alarm the user mid-entry — the scheduled sync reconciles
+      // points, and the failure is logged + recorded in pools.last_score_error.
+      console.error('[score] match-scores pool', poolId, e);
+      return json({ ok: true, scoring: 'deferred', dropped: droppedMatches });
+    }
   }
 
   return json({ ok: true, dropped: droppedMatches });

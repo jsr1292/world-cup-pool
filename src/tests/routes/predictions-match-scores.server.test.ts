@@ -148,7 +148,8 @@ describe('POST /api/predictions/match-scores', () => {
 			})
 			.mockResolvedValueOnce({
 				rows: [{ id: 10 }]
-			});
+			})
+			.mockResolvedValueOnce({ rows: [] }); // anyFinished probe → none, scoring skipped
 		const response = await POST({
 			request: mockRequest({ prediction_id: 1, scores: { '10': { home_score: 2, away_score: 1 } } }),
 			locals: mockLocals(1) as any
@@ -166,7 +167,8 @@ describe('POST /api/predictions/match-scores', () => {
 			.mockResolvedValueOnce({ rows: [{ user_id: 1, pool_id: 5 }] })                       // ownership
 			.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] })                               // membership
 			.mockResolvedValueOnce({ rows: [{ deadline_group: null, deadline_knockout: null }] }) // deadline
-			.mockResolvedValueOnce({ rows: [{ id: 10 }] });                                     // match 10 finished → dropped
+			.mockResolvedValueOnce({ rows: [{ id: 10 }] })                                      // match 10 finished → dropped
+			.mockResolvedValueOnce({ rows: [] });                                               // anyFinished probe
 		const response = await POST({
 			request: mockRequest({ prediction_id: 1, scores: { '10': { home_score: 2, away_score: 1 } } }),
 			locals: mockLocals(1) as any
@@ -261,7 +263,8 @@ describe('POST /api/predictions/match-scores', () => {
 			})
 			.mockResolvedValueOnce({
 				rows: [{ has_group: 1, has_knockout: 0 }]
-			});
+			})
+			.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }); // anyFinished probe → a result exists → scoring runs
 		mockGetClient.mockResolvedValue({
 			query: clientQuery,
 			release: mockRelease
@@ -324,7 +327,8 @@ describe('POST /api/predictions/match-scores', () => {
 			.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] })                                 // membership
 			.mockResolvedValueOnce({ rows: [{ deadline_group: futureDate, deadline_knockout: futureDate }] }) // deadlines
 			.mockResolvedValueOnce({ rows: [] })                                                  // started-match lock (none)
-			.mockResolvedValueOnce({ rows: [{ has_group: 1, has_knockout: 0 }] });                // phase deadline check
+			.mockResolvedValueOnce({ rows: [{ has_group: 1, has_knockout: 0 }] })                 // phase deadline check
+			.mockResolvedValueOnce({ rows: [] });                                                 // anyFinished probe → none, scoring skipped
 		mockGetClient.mockResolvedValue({ query: clientQuery, release: mockRelease });
 
 		const response = await POST({
