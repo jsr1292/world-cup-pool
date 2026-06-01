@@ -323,8 +323,13 @@
     </div>
   {/if}
 
+  <!-- Legend (once, instead of repeating in every card) -->
+  <p style="font-size: 9px; color: var(--text-dim); margin-bottom: 10px; line-height: 1.4;">
+    <span style="color: var(--green);">●</span> 1.º y 2.º clasifican · <span style="color: #b87333;">●</span> mejores 3.º a la repesca · los empates de la tabla se deshacen por criterios FIFA (dif. de goles, goles…).
+  </p>
+
   <!-- Group prediction cards: predict 6 scorelines, table derives itself -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px;">
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 10px;">
     {#each GROUP_NAMES as group}
       {@const fixtures = groupFixtures(group)}
       {@const entered = fixtures.filter(m => { const s = matchScores[m.id]; return s && s.home != null && s.away != null; }).length}
@@ -332,55 +337,55 @@
       {@const allLocked = fixtures.length > 0 && fixtures.every(m => m.locked)}
       {@const ds = derivedStandings(group)}
 
-      <div class="group-card" style="background: var(--bg-card); border: 1px solid {complete ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 10px; padding: 14px; {complete ? 'box-shadow: 0 0 12px rgba(201,168,76,0.08);' : ''}">
+      <div class="group-card" style="background: var(--bg-card); border: 1px solid {complete ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 9px; padding: 10px 11px; {complete ? 'box-shadow: 0 0 10px rgba(201,168,76,0.07);' : ''}">
         <!-- Group header -->
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
-          <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold);">{group}</div>
-          <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>
+        <div style="display: flex; align-items: center; gap: 7px; margin-bottom: 7px; padding-bottom: 6px; border-bottom: 1px solid var(--border);">
+          <div style="width: 22px; height: 22px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--gold);">{group}</div>
+          <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase;">Grupo {group}</span>
           {#if allLocked}
-            <span style="margin-left: auto; font-size: 9px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 10px;">🔒 Cerrado</span>
+            <span style="margin-left: auto; font-size: 9px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 1px 7px; border-radius: 10px;">🔒</span>
           {:else if complete}
-            <span style="margin-left: auto; font-size: 9px; color: var(--green); background: rgba(0,229,160,0.1); padding: 2px 8px; border-radius: 10px;">✓ Completo</span>
+            <span style="margin-left: auto; font-size: 9px; color: var(--green); background: rgba(0,229,160,0.1); padding: 1px 7px; border-radius: 10px;">✓</span>
           {:else}
-            <span style="margin-left: auto; font-size: 9px; color: var(--text-dim); background: rgba(255,255,255,0.04); padding: 2px 8px; border-radius: 10px;">{entered}/6</span>
+            <span style="margin-left: auto; font-size: 9px; color: var(--text-dim); background: rgba(255,255,255,0.04); padding: 1px 7px; border-radius: 10px;">{entered}/6</span>
           {/if}
         </div>
 
         <!-- Fixtures: enter each scoreline, in chronological order, by day -->
-        <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; flex-direction: column; gap: 1px;">
           {#each fixtures as match, i}
             {@const mLocked = match.locked || effectivelyLocked}
             {@const dayChanged = i === 0 || dayKey(match.kickoff) !== dayKey(fixtures[i - 1]?.kickoff)}
             {#if match.kickoff && dayChanged}
-              <div style="font-size: 9px; color: var(--gold); letter-spacing: 0.04em; text-transform: capitalize; margin: 6px 0 2px; padding-bottom: 2px; border-bottom: 1px solid rgba(201,168,76,0.12);">📅 {dayLabel(match.kickoff)}</div>
+              <div style="font-size: 9px; color: var(--gold); letter-spacing: 0.03em; text-transform: capitalize; margin: {i === 0 ? '0' : '5px'} 0 1px;">{dayLabel(match.kickoff)}</div>
             {/if}
-            <div style="display: flex; align-items: center; gap: 6px; {mLocked ? 'opacity: 0.6;' : ''}">
+            <div style="display: flex; align-items: center; gap: 5px; padding: 1px 0; {mLocked ? 'opacity: 0.55;' : ''}">
               {#if match.kickoff}
-                <span style="font-size: 9px; color: var(--text-dim); width: 34px; flex-shrink: 0; text-align: left;">{#if match.locked}🔒{:else}{timeLabel(match.kickoff)}{/if}</span>
+                <span style="font-size: 9px; color: var(--text-dim); width: 28px; flex-shrink: 0;">{#if match.locked}🔒{:else}{timeLabel(match.kickoff)}{/if}</span>
               {/if}
               <div style="flex: 1; display: flex; align-items: center; gap: 4px; justify-content: flex-end; min-width: 0;">
                 <span style="font-size: 11px; font-weight: 500; color: var(--text); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(match.home_name)}</span>
-                <span style="font-size: 15px; flex-shrink: 0;">{@html flagEmoji(match.home_flag)}</span>
+                <span style="font-size: 13px; flex-shrink: 0;">{@html flagEmoji(match.home_flag)}</span>
               </div>
-              <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+              <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
                 <input
                   type="number" min="0" max="20" inputmode="numeric" placeholder="-"
                   value={getMatchScore(match.id, 'home')}
                   oninput={(e) => setMatchScore(match.id, 'home', e.target.value === '' ? null : Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
                   disabled={mLocked}
-                  style="width: 34px; text-align: center; font-size: 15px; font-weight: 700; padding: 5px 2px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--gold);"
+                  style="width: 28px; text-align: center; font-size: 14px; font-weight: 700; padding: 3px 2px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 5px; color: var(--gold);"
                 />
-                <span style="font-size: 12px; color: var(--text-muted);">—</span>
+                <span style="font-size: 10px; color: var(--text-muted);">–</span>
                 <input
                   type="number" min="0" max="20" inputmode="numeric" placeholder="-"
                   value={getMatchScore(match.id, 'away')}
                   oninput={(e) => setMatchScore(match.id, 'away', e.target.value === '' ? null : Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
                   disabled={mLocked}
-                  style="width: 34px; text-align: center; font-size: 15px; font-weight: 700; padding: 5px 2px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--gold);"
+                  style="width: 28px; text-align: center; font-size: 14px; font-weight: 700; padding: 3px 2px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 5px; color: var(--gold);"
                 />
               </div>
               <div style="flex: 1; display: flex; align-items: center; gap: 4px; min-width: 0;">
-                <span style="font-size: 15px; flex-shrink: 0;">{@html flagEmoji(match.away_flag)}</span>
+                <span style="font-size: 13px; flex-shrink: 0;">{@html flagEmoji(match.away_flag)}</span>
                 <span style="font-size: 11px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(match.away_name)}</span>
               </div>
             </div>
@@ -388,27 +393,21 @@
         </div>
 
         <!-- Derived standings -->
-        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border);">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <div style="margin-top: 8px; padding-top: 7px; border-top: 1px dashed var(--border);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
             <span style="font-size: 8px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">Clasificación</span>
-            {#if !complete}
-              <span style="font-size: 8px; color: var(--text-dim); font-style: italic;">provisional</span>
-            {/if}
+            {#if !complete}<span style="font-size: 8px; color: var(--text-dim); font-style: italic;">provisional</span>{/if}
           </div>
-          <div style="display: flex; flex-direction: column; gap: 2px; {complete ? '' : 'opacity: 0.7;'}">
+          <div style="display: flex; flex-direction: column; {complete ? '' : 'opacity: 0.7;'}">
             {#each ds.rows as row, i}
               {@const pos = i + 1}
               {@const accent = pos <= 2 ? 'var(--green)' : pos === 3 ? '#b87333' : 'var(--text-dim)'}
-              <div style="display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 5px; background: {pos <= 2 ? 'rgba(0,229,160,0.06)' : pos === 3 ? 'rgba(184,115,51,0.06)' : 'transparent'}; {pos === 2 ? 'border-bottom: 1px solid rgba(0,229,160,0.25); border-radius: 5px 5px 0 0;' : ''}">
-                <div style="width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; color: {accent}; border: 1px solid {accent}; flex-shrink: 0;">{pos}</div>
-                <span style="font-size: 11px; font-weight: {pos <= 2 ? '600' : '400'}; color: {row.ranked ? 'var(--text)' : 'var(--text-dim)'}; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span style="font-size: 14px; margin-right: 4px;">{@html flagEmoji(row.team.flag_code)}</span>{shortName(row.team.name)}</span>
-                {#if pos <= 2}<span style="font-size: 8px; color: var(--green);">clasifica</span>{:else if pos === 3}<span style="font-size: 8px; color: #b87333;">3.º</span>{/if}
+              <div style="display: flex; align-items: center; gap: 6px; padding: 2px 5px; border-radius: 4px; background: {pos <= 2 ? 'rgba(0,229,160,0.06)' : pos === 3 ? 'rgba(184,115,51,0.06)' : 'transparent'}; {pos === 2 ? 'border-bottom: 1px solid rgba(0,229,160,0.22);' : ''}">
+                <span style="width: 13px; color: {accent}; font-size: 9px; font-weight: 800; flex-shrink: 0; text-align: center;">{pos}</span>
+                <span style="font-size: 11px; font-weight: {pos <= 2 ? '600' : '400'}; color: {row.ranked ? 'var(--text)' : 'var(--text-dim)'}; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span style="font-size: 12px; margin-right: 4px;">{@html flagEmoji(row.team.flag_code)}</span>{shortName(row.team.name)}</span>
               </div>
             {/each}
           </div>
-          <p style="font-size: 8px; color: var(--text-dim); margin-top: 6px; line-height: 1.4;">
-            1.º y 2.º pasan directos · los mejores 3.º entran como repesca. Empates: criterios FIFA (dif. de goles, goles, etc.).
-          </p>
         </div>
       </div>
     {/each}
