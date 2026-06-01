@@ -93,25 +93,6 @@
     '3rd': '3er puesto',
   };
 
-  const scoringLabels: Record<string, string> = {
-    exact_score: 'Resultado exacto (fase de grupos)',
-    match_outcome: 'Resultado correcto (ganar/empatar/perder)',
-    group_position: 'Posición en grupo',
-    knockout_r32: 'Dieciseisavos — acierto',
-    knockout_r16: 'Octavos — acierto',
-    knockout_qf: 'Cuartos — acierto',
-    knockout_sf: 'Semifinales — acierto',
-    knockout_final: 'Final — acierto',
-    third_place: '3er puesto — acierto',
-    knockout_winner: 'Ganador eliminatoria',
-    r32_winner: 'Ganador dieciseisavos',
-    r16_winner: 'Ganador octavos',
-    qf_winner: 'Ganador cuartos',
-    sf_winner: 'Ganador semifinales',
-    final_winner: 'Ganador del mundial',
-    final_exact_score: 'Resultado exacto final',
-  };
-
   let shared = $state(false);
   let sheetOpen = $state(false);
   let sheetStartY = 0;
@@ -383,17 +364,59 @@
     {/if}
   {/if}
 
-  <!-- Scoring Tab -->
+  <!-- Scoring Tab — friendly explanation using this pool's actual values -->
   {#if tab === 'scoring'}
-    <div style="display: flex; flex-direction: column; gap: 4px;">
-      {#each Object.entries(data.scoring) as [rule, points]}
-        <div style="display: flex; justify-content: space-between; padding: 10px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;">
-          <span style="font-size: 12px; color: var(--text);">{scoringLabels[rule] || rule.replace(/_/g, ' ')}</span>
-          <span style="font-size: 12px; font-weight: 600; color: var(--gold);">{points} pts</span>
+    {@const s = data.scoring}
+    {@const n = (k, d = 0) => Number(s?.[k] ?? d)}
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <p style="font-size: 11px; color: var(--text-muted); line-height: 1.55;">
+        Sumas puntos prediciendo la fase de grupos, los marcadores de las eliminatorias y qué equipos avanzan en el cuadro. Cuanto más afinada la predicción, más puntos.
+      </p>
+
+      <!-- Groups -->
+      <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 8px;">🏆 Fase de grupos</div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Ordena los 4 equipos de cada grupo, del 1.º al 4.º.</p>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text);"><span>Por cada posición acertada</span><strong style="color: var(--gold);">+{n('group_position')} pts</strong></div>
+        <p style="font-size: 9px; color: var(--text-dim); margin-top: 8px;">Hasta {n('group_position') * 4} pts por grupo · {n('group_position') * 48} en total.</p>
+      </div>
+
+      <!-- Match scores -->
+      <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 8px;">⚽ Marcadores de eliminatorias</div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Predice el marcador de cada partido. Los aciertos se acumulan:</p>
+        <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text);">
+          <div style="display: flex; justify-content: space-between;"><span>Resultado (1 / X / 2)</span><strong style="color: var(--gold);">+{n('match_outcome')}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>+ diferencia de goles</span><strong style="color: var(--gold);">+{n('goal_difference')}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>+ marcador exacto</span><strong style="color: var(--gold);">+{n('exact_score')}</strong></div>
         </div>
-      {/each}
+        <p style="font-size: 9px; color: var(--text-dim); margin-top: 8px; line-height: 1.5;">Ej.: predices 2-1 y acaba 3-2 → resultado + diferencia = <strong>{n('match_outcome') + n('goal_difference')} pts</strong>. Marcador exacto = <strong>{n('match_outcome') + n('exact_score')} pts</strong>.</p>
+      </div>
+
+      <!-- Bracket -->
+      <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 8px;">⚔️ Cuadro eliminatorio</div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Acierta qué equipo supera cada ronda:</p>
+        <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text);">
+          <div style="display: flex; justify-content: space-between;"><span>Dieciseisavos</span><strong style="color: var(--gold);">+{n('knockout_r32')}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Octavos</span><strong style="color: var(--gold);">+{n('knockout_r16')}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Cuartos</span><strong style="color: var(--gold);">+{n('knockout_qf')}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Semifinales</span><strong style="color: var(--gold);">+{n('knockout_sf')}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Llegar a la final</span><strong style="color: var(--gold);">+{n('knockout_final')}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Campeón (adicional)</span><strong style="color: var(--gold);">+{n('knockout_winner')}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Ganar el 3.er puesto</span><strong style="color: var(--gold);">+{n('third_place')}</strong></div>
+        </div>
+        <p style="font-size: 9px; color: var(--text-dim); margin-top: 8px;">Acertar el campeón vale <strong>{n('knockout_final') + n('knockout_winner')} pts</strong> (final + campeón).</p>
+      </div>
+
+      <!-- Tiebreaker -->
+      <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 6px;">⚖️ Desempate</div>
+        <p style="font-size: 11px; color: var(--text-muted); line-height: 1.5;">Si dos personas terminan empatadas a puntos, gana quien más se acerque al marcador real de la final.</p>
+      </div>
+
+      <p style="font-size: 10px; color: var(--text-dim); text-align: center;">Puntuación configurada por el creador de la quiniela.</p>
     </div>
-    <p style="font-size: 10px; color: var(--text-dim); margin-top: 12px; text-align: center;">Puntuación configurada por el creador de la quiniela.</p>
   {/if}
 
    {#if tab === 'summary'}

@@ -1,4 +1,5 @@
 import { getPoolById, getPoolMembers, getPoolLeaderboard, getScoringConfig, getUserPredictions } from '$lib/server/queries.js';
+import { DEFAULT_SCORING_RULES } from '$lib/server/scoring.js';
 import { query } from '$lib/server/db.js';
 import { getTeamsMapCached, getCachedPoolResults, setCachedPoolResults } from '$lib/server/cache.js';
 import { error } from '@sveltejs/kit';
@@ -21,7 +22,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
   const members = await getPoolMembers(poolId);
   const leaderboard = await getPoolLeaderboard(poolId);
-  const scoring = await getScoringConfig(poolId);
+  // Merge defaults so the "Puntuación" tab always shows every rule with its
+  // effective value (incl. newer ones like goal_difference) even on pools whose
+  // saved config predates them.
+  const scoring = { ...DEFAULT_SCORING_RULES, ...(await getScoringConfig(poolId)) };
   const predictions = locals.user ? await getUserPredictions(poolId, locals.user.id) : [];
 
   // F-15: Use cached teams map instead of querying teams table
