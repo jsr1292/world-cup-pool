@@ -691,7 +691,7 @@
                   {@const isThirdSlot = ti === 1 && m.t2g === WILDCARD}
                   {@const canClick = !data.isLocked && (tid !== null || isThirdSlot)}
                   <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => { if (!canClick) return; if (isThirdSlot && tid === null) { openThirdSelector(mi); } else { pickTeam('r32', mi, ti, tid); } }} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { if (tid) hoveredTeam = null; }}>
-                    {#if t}<span class="team-flag">{@html flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}
+                    {#if t}<span class="team-flag">{@html flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if isThirdSlot && !data.isLocked}<span class="third-change" role="button" tabindex="-1" title="Cambiar tercero" onclick={(e) => { e.stopPropagation(); openThirdSelector(mi); }}>▾</span>{/if}
                     {:else if isThirdSlot}
                       {@const options = get3rdOptions(mi)}
                       {#if options.length > 0}
@@ -872,7 +872,7 @@
                   {@const isThirdSlot = ti === 1 && m.t2g === WILDCARD}
                   {@const canClick = !data.isLocked && (tid !== null || isThirdSlot)}
                   <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => { if (!canClick) return; if (isThirdSlot && tid === null) { openThirdSelector(mi); } else { pickTeam('r32', mi, ti, tid); } }} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { if (tid) hoveredTeam = null; }}>
-                    {#if t}<span class="team-flag">{@html flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}
+                    {#if t}<span class="team-flag">{@html flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if isThirdSlot && !data.isLocked}<span class="third-change" role="button" tabindex="-1" title="Cambiar tercero" onclick={(e) => { e.stopPropagation(); openThirdSelector(mi); }}>▾</span>{/if}
                     {:else if isThirdSlot}
                       {@const options = get3rdOptions(mi)}
                       {#if options.length > 0}
@@ -908,7 +908,7 @@
                 {@const isThirdSlot = ti === 1 && m.t2g === WILDCARD}
                 {@const canClick = !data.isLocked && (tid !== null || isThirdSlot)}
                 <button id={"btn-r32-"+mi+"-"+ti} class="team-btn" class:picked={isPicked} class:eliminated={explicitPicks.r32?.[mi]?.[1 - ti] && !isPicked && tid !== null} class:path-highlight={isInPath('r32', mi, ti)} disabled={!canClick} onclick={() => { if (!canClick) return; if (isThirdSlot && tid === null) { openThirdSelector(mi); } else { pickTeam('r32', mi, ti, tid); } }} onmouseenter={() => { if (tid) hoveredTeam = tid; }} onmouseleave={() => { if (tid) hoveredTeam = null; }}>
-                  {#if t}<span class="team-flag">{@html flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}
+                  {#if t}<span class="team-flag">{@html flagEmoji(t.flag_code)}</span><span class="team-name">{shortName(t.name)}</span>{#if isPicked}<span class="pick-star">★</span>{/if}{#if isThirdSlot && !data.isLocked}<span class="third-change" role="button" tabindex="-1" title="Cambiar tercero" onclick={(e) => { e.stopPropagation(); openThirdSelector(mi); }}>▾</span>{/if}
                   {:else if isThirdSlot}
                     {@const options = get3rdOptions(mi)}
                     {#if options.length > 0}
@@ -1382,6 +1382,20 @@
   }
 
   .match-final .pick-star { font-size: 12px; }
+
+  /* Caret to reopen the 3rd-place selector on an already-filled wildcard slot,
+     so a chosen third can be swapped for a different eligible third. Clicking it
+     stops propagation so it doesn't also pick the team as the match winner. */
+  .third-change {
+    color: var(--text-muted);
+    font-size: 11px;
+    flex-shrink: 0;
+    margin-left: 2px;
+    padding: 0 4px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .third-change:hover { color: var(--accent); background: rgba(255,255,255,0.08); }
 
   .team-tbd {
     color: var(--text-dim);
