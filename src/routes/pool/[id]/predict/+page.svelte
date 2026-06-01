@@ -679,6 +679,9 @@
         <p style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
           Resultado (1/X/2): <strong style="color: var(--gold);">+1</strong> · + diferencia de goles: <strong style="color: var(--gold);">+1</strong> · marcador exacto: <strong style="color: var(--gold);">+3</strong>
         </p>
+        <p style="font-size: 9px; color: var(--text-dim); margin-top: 6px; line-height: 1.5;">
+          💡 El marcador se juzga al final del tiempo reglamentario o la prórroga. Si quieres predecir que el partido acaba en empate, pon el mismo marcador (p. ej. 1-1): los penaltis deciden quién pasa, pero no cuentan para el marcador. Quién avanza se elige aparte en el <strong>cuadro eliminatorio</strong>.
+        </p>
       </div>
 
       {#each PHASE_ORDER as phase}

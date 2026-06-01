@@ -391,6 +391,7 @@
           <div style="display: flex; justify-content: space-between;"><span>+ marcador exacto</span><strong style="color: var(--gold);">+{n('exact_score')}</strong></div>
         </div>
         <p style="font-size: 9px; color: var(--text-dim); margin-top: 8px; line-height: 1.5;">Ej.: predices 2-1 y acaba 3-2 → resultado + diferencia = <strong>{n('match_outcome') + n('goal_difference')} pts</strong>. Marcador exacto = <strong>{n('match_outcome') + n('exact_score')} pts</strong>.</p>
+        <p style="font-size: 9px; color: var(--text-dim); margin-top: 6px; line-height: 1.5;">En eliminatorias el marcador se juzga al final de la prórroga; un empate (p. ej. 1-1) es válido. Los penaltis deciden quién pasa, pero no cuentan para el marcador — quién avanza se elige aparte en el cuadro.</p>
       </div>
 
       <!-- Bracket -->
