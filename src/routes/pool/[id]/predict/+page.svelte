@@ -4,6 +4,7 @@
   import { untrack } from 'svelte';
   import { showToast } from '$lib/toast';
   import { flagEmoji, shortName } from '$lib/teams.js';
+  import { rankGroup } from '$lib/group-standings.js';
 
   let { data } = $props();
 
@@ -16,13 +17,8 @@
   const pool = $derived(data.pool);
   const allowMultiple = $derived(!!data.pool.allow_multiple_predictions);
 
-  // Progress tracking
-  const groupsCompleted = $derived.by(() => {
-    return GROUP_NAMES.filter(g => {
-      const arr = selections[g] || [];
-      return arr[0] != null && arr[1] != null && arr[2] != null && arr[3] != null;
-    }).length;
-  });
+  // Progress tracking — a group is "done" once all 6 of its scorelines are in.
+  const groupsCompleted = $derived.by(() => GROUP_NAMES.filter(g => groupComplete(g)).length);
   const progressPct = $derived(Math.round((groupsCompleted / totalGroups) * 100));
 
   // Deadline countdown
@@ -50,216 +46,52 @@
     return () => { cancelled = true; clearInterval(iv); };
   });
 
-  // selections[group] = ordered array of teamIds [pos1, pos2, pos3, pos4]
-  // Re-derive initial state when data changes (entry switch via soft navigation)
-  const selectionsInit = $derived.by(() => {
-    const init = {};
-    for (const group of GROUP_NAMES) {
-      const existing = data.existingGroupPreds?.[group] || {};
-      init[group] = [
-        existing.pos1 ?? null,
-        existing.pos2 ?? null,
-        existing.pos3 ?? null,
-        existing.pos4 ?? null,
-      ];
-    }
-    return init;
-  });
-  let selections = $state(JSON.parse(JSON.stringify(selectionsInit)));
+  // ─── Group standings (derived from predicted scorelines) ───────────────
+  // The group stage is predicted as 6 scorelines per group; the final table is
+  // DERIVED from them with the shared FIFA ranking (the same rankGroup the server
+  // re-runs on save and the scoring engine uses for the REAL table). The player
+  // never drags a table — they type scores and watch the standings sort.
 
-  // Active drag/save operations track which groups are being actively edited
-  // so we don't overwrite user's in-flight changes with stale server data
-  const _activeEdits = new Set();
+  const MEDAL = { 0: '#c9a84c', 1: '#a0a0a0', 2: '#b87333' };
 
-  $effect(() => {
-    // Depend on selectionsInit only; mutate `selections` inside untrack so the
-    // write doesn't re-trigger this effect (which would loop infinitely).
-    const fresh = JSON.parse(JSON.stringify(selectionsInit));
-    untrack(() => {
-      for (const [group, ranks] of Object.entries(fresh)) {
-        if (!_activeEdits.has(group)) {
-          selections[group] = ranks;
-        }
-      }
+  function groupFixtures(group) {
+    return data.groupMatchesByGroup?.[group] || [];
+  }
+
+  // True once every one of a group's 6 fixtures has a complete scoreline entered.
+  function groupComplete(group) {
+    const fx = groupFixtures(group);
+    if (fx.length === 0) return false;
+    return fx.every(m => {
+      const s = matchScores[m.id];
+      return s && s.home != null && s.away != null;
     });
-  });
-
-  // ─── Mobile: sequential tap-to-rank ───────────────────────────────
-
-  const POS_LABEL = ['1º', '2º', '3º', '4º'];
-  const POS_FULL = ['1º puesto', '2º puesto', '3º puesto', '4º puesto'];
-
-  function nextSlot(group) {
-    const arr = selections[group] || [];
-    return arr.findIndex(s => !s);
   }
 
-  function tapTeam(group, teamId) {
-    const arr = [...(selections[group] || [null, null, null, null])];
-    const currentPos = arr.findIndex(t => Number(t) === Number(teamId));
-
-    if (currentPos >= 0) {
-      // Unrank this team — compact remaining picks to avoid interior nulls
-      arr.splice(currentPos, 1);
-      arr.push(null);
-    } else {
-      // Assign to next available slot
-      const slot = arr.findIndex(s => !s);
-      if (slot >= 0) {
-        arr[slot] = teamId;
+  // Returns { rows: [{ team, ranked }], complete } — always the 4 group teams:
+  // those with enough entered scorelines to be ranked come first (in derived
+  // order); any not-yet-rankable teams follow (provisional, id order).
+  function derivedStandings(group) {
+    const gs = [];
+    for (const m of groupFixtures(group)) {
+      const s = matchScores[m.id];
+      if (s && s.home != null && s.away != null) {
+        gs.push({ homeTeamId: m.home_team_id, awayTeamId: m.away_team_id, homeScore: s.home, awayScore: s.away });
       }
     }
-    selections[group] = arr;
-    _activeEdits.add(group);
-    autoSave();
-  }
-
-  function resetGroup(group) {
-    selections[group] = [null, null, null, null];
-    _activeEdits.delete(group);
-    autoSave();
-  }
-
-  // ─── Desktop: native HTML5 drag-to-reorder ────────────────────────────
-
-  let draggingGroup = $state(null);
-  let draggingSlot = $state(null);
-  let dragOverGroup = $state(null);   // group currently hovered (for highlight)
-  let dragOverSlot = $state(null);    // slot index hovered over
-
-  function handleDragStart(e, group, slotIndex) {
-    if (effectivelyLocked) return;
-    draggingGroup = group;
-    draggingSlot = slotIndex;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', `slot:${group}:${slotIndex}`);
-  }
-
-  function handleDragStartUnassigned(e, group, teamId) {
-    if (effectivelyLocked) return;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', `team:${group}:${teamId}`);
-  }
-
-  function handleDragOver(e, group, slotIndex) {
-    if (effectivelyLocked) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    dragOverGroup = group;
-    dragOverSlot = slotIndex;
-  }
-
-  function handleDragLeave() {
-    dragOverGroup = null;
-    dragOverSlot = null;
-  }
-
-  function handleDrop(e, group, slotIndex) {
-    if (effectivelyLocked) return;
-    e.preventDefault();
-    const raw = e.dataTransfer.getData('text/plain');
-    const parts = raw.split(':');
-    const type = parts[0]; // 'slot' or 'team'
-
-    const arr = [...(selections[group] || [null, null, null, null])];
-
-    if (type === 'team') {
-      // Dragging an unranked team from the pool onto a slot — POSITIONAL: it
-      // lands exactly where you drop it (drop on 4th → 4th), not snapped to the
-      // first free slot. If it was ranked elsewhere, vacate that slot; any team
-      // already in the target slot returns to the pool. Partial groups (gaps)
-      // are fine — they save, and only filled positions are scored.
-      const srcGroup = parts[1];
-      const teamId = Number(parts[2]);
-      if (srcGroup !== group) return;
-      const existing = arr.findIndex(t => Number(t) === teamId);
-      if (existing >= 0) arr[existing] = null;
-      arr[slotIndex] = teamId;
-      selections[group] = arr;
-      _activeEdits.add(group);
-      autoSave();
-    } else {
-      // Dragging from one ranked slot to another — POSITIONAL swap.
-      const srcGroup = parts[1];
-      const srcSlot = parseInt(parts[2]);
-      if (srcGroup !== group || srcSlot === slotIndex) {
-        draggingGroup = null; draggingSlot = null; dragOverGroup = null; dragOverSlot = null;
-        return;
-      }
-      if (arr[srcSlot] === null) {
-        draggingGroup = null; draggingSlot = null; dragOverGroup = null; dragOverSlot = null;
-        return;
-      }
-      const tmp = arr[srcSlot];
-      arr[srcSlot] = arr[slotIndex];
-      arr[slotIndex] = tmp;
-      selections[group] = arr;
-      _activeEdits.add(group);
-      autoSave();
+    const order = rankGroup(gs);
+    const teamMap = {};
+    for (const t of (data.teamsByGroup?.[group] || [])) teamMap[Number(t.id)] = t;
+    const rankedIds = new Set(order.map(Number));
+    const rows = [];
+    for (const id of order) {
+      const team = teamMap[Number(id)];
+      if (team) rows.push({ team, ranked: true });
     }
-
-    draggingGroup = null;
-    draggingSlot = null;
-    dragOverSlot = null;
-  }
-
-  function handleDragEnd() {
-    draggingGroup = null;
-    draggingSlot = null;
-    dragOverGroup = null;
-    dragOverSlot = null;
-  }
-
-  // ─── Save ─────────────────────────────────────────────────────────────
-
-  let saving = $state(false);
-  let saved = $state(false);
-  let autoSaveTimer = null;
-
-  function autoSave() {
-    if (autoSaveTimer) clearTimeout(autoSaveTimer);
-    autoSaveTimer = setTimeout(savePredictions, 600);
-  }
-
-  async function savePredictions() {
-    saving = true;
-    saved = false;
-    try {
-      const groups = {};
-      for (const group of GROUP_NAMES) {
-        const arr = selections[group] || [];
-        // DATA-LOSS FIX: only send groups that actually have a team assigned.
-        // The server DELETEs any group it receives empty, and this autosave used
-        // to send ALL 12 groups every time — so a transient/stale empty state on
-        // one client (e.g. after switching devices mid-prediction) silently wiped
-        // groups already saved by another device (the "Group A vanished" bug).
-        // Never transmitting empty groups means the server only ever upserts real
-        // picks and can never delete them behind your back.
-        if (!arr.some(v => v != null)) continue;
-        groups[group] = {
-          pos1: arr[0] ?? null,
-          pos2: arr[1] ?? null,
-          pos3: arr[2] ?? null,
-          pos4: arr[3] ?? null,
-        };
-      }
-      // Nothing with data to save — don't fire a request the server would 400.
-      if (Object.keys(groups).length === 0) { saving = false; return; }
-      const res = await fetch('/api/predictions/group', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prediction_id: data.selectedId, groups }),
-      });
-      if (res.ok) { saved = true; _activeEdits.clear(); setTimeout(() => saved = false, 2000); }
-      else {
-        const body = await res.json().catch(() => ({}));
-        showToast('⚠️ ' + (body.error || 'Error al guardar — inténtalo de nuevo'));
-      }
-    } catch (e) {
-      console.error(e);
-      showToast('⚠️ Error al guardar — inténtalo de nuevo');
+    for (const t of (data.teamsByGroup?.[group] || [])) {
+      if (!rankedIds.has(Number(t.id))) rows.push({ team: t, ranked: false });
     }
-    finally { saving = false; }
+    return { rows, complete: groupComplete(group) };
   }
 
   // ─── Entry management ─────────────────────────────────────────────────
@@ -330,7 +162,6 @@
   // Cleanup timers on component destroy
   $effect(() => {
     return () => {
-      if (autoSaveTimer) clearTimeout(autoSaveTimer);
       if (matchSaveTimer) clearTimeout(matchSaveTimer);
     };
   });
@@ -405,28 +236,6 @@
     return side === 'home' ? (s.home ?? '') : (s.away ?? '');
   }
 
-  // ─── Helpers ───────────────────────────────────────────────────────────
-
-  const MEDAL = { 0: '#c9a84c', 1: '#a0a0a0', 2: '#b87333' };
-
-  function teamAt(group, slot) {
-    const teamId = selections[group]?.[slot];
-    if (!teamId) return null;
-    return (data.teamsByGroup[group] || []).find(t => Number(t.id) === Number(teamId));
-  }
-
-  function unassignedTeams(group) {
-    const assigned = new Set((selections[group] || []).filter(Boolean).map(Number));
-    return (data.teamsByGroup[group] || []).filter(t => !assigned.has(Number(t.id)));
-  }
-
-  function isDragging(group, slot) {
-    return draggingGroup === group && draggingSlot === slot;
-  }
-
-  function isDropTarget(group, slot) {
-    return dragOverGroup === group && dragOverSlot === slot && !(draggingGroup === group && draggingSlot === slot);
-  }
 </script>
 
 <div>
@@ -437,8 +246,10 @@
   <div style="margin-bottom: 20px;">
     <h1 style="font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--gold);">Pronósticos de Fase de Grupos</h1>
     <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
-      Ordena los equipos de cada grupo del 1º al 4º puesto.
-      <span class="desktop-hint" style="color: var(--gold); margin-left: 6px;">← Haz clic o arrastra para clasificar</span>
+      Predice el marcador de los 6 partidos de cada grupo. La clasificación se calcula sola.
+    </p>
+    <p style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+      Resultado (1/X/2): <strong style="color: var(--gold);">+1</strong> · + diferencia de goles: <strong style="color: var(--gold);">+1</strong> · marcador exacto: <strong style="color: var(--gold);">+3</strong> · cada puesto acertado de la tabla: <strong style="color: var(--gold);">+2</strong>
     </p>
 
     <!-- Progress bar -->
@@ -509,166 +320,101 @@
     </div>
   {/if}
 
-  <!-- Group prediction cards -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
+  <!-- Group prediction cards: predict 6 scorelines, table derives itself -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px;">
     {#each GROUP_NAMES as group}
-      {@const groupTeams = data.teamsByGroup[group] || []}
-      {@const _selArr = selections[group] || []}
-      {@const groupDone = _selArr[0] != null && _selArr[1] != null && _selArr[2] != null && _selArr[3] != null}
+      {@const fixtures = groupFixtures(group)}
+      {@const entered = fixtures.filter(m => { const s = matchScores[m.id]; return s && s.home != null && s.away != null; }).length}
+      {@const complete = entered === 6 && fixtures.length === 6}
+      {@const locked = isGroupLocked(group)}
+      {@const ds = derivedStandings(group)}
 
-      <!-- ── Desktop: native drag-to-reorder ──────────────────────── -->
-      <div class="desktop-view group-card" style="background: var(--bg-card); border: 1px solid {groupDone ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 8px; padding: 14px; {groupDone ? 'box-shadow: 0 0 12px rgba(201,168,76,0.08);' : ''}">
+      <div class="group-card" style="background: var(--bg-card); border: 1px solid {complete ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 10px; padding: 14px; {complete ? 'box-shadow: 0 0 12px rgba(201,168,76,0.08);' : ''}">
         <!-- Group header -->
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
           <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold);">{group}</div>
-          {#if groupDone}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span><span style="color: var(--green); font-size: 11px;"> ✓</span>{:else}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>{/if}
+          <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>
           {#if isGroupStarted(group)}
             <span style="margin-left: auto; font-size: 9px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 10px;">🔒 Cerrado</span>
-          {:else if groupDone}
+          {:else if complete}
             <span style="margin-left: auto; font-size: 9px; color: var(--green); background: rgba(0,229,160,0.1); padding: 2px 8px; border-radius: 10px;">✓ Completo</span>
+          {:else}
+            <span style="margin-left: auto; font-size: 9px; color: var(--text-dim); background: rgba(255,255,255,0.04); padding: 2px 8px; border-radius: 10px;">{entered}/6</span>
           {/if}
         </div>
 
-        <!-- Slot rows — each slot is a drop target -->
-        {#if isGroupLocked(group)}
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-            {#each [0,1,2,3] as slot}
-              {@const team = teamAt(group, slot)}
-              <div style="display: flex; align-items: center; gap: 8px; padding: 10px 8px; border-radius: 6px; background: {slot < 3 ? MEDAL[slot] + '15' : 'rgba(255,255,255,0.03)'}; border: 1px solid {slot < 3 ? MEDAL[slot] + '33' : 'transparent'};">
-                <div style="width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; background: {slot < 3 ? MEDAL[slot] : 'rgba(255,255,255,0.1)'}; color: {slot === 0 ? '#3d2a00' : slot < 3 ? '#fff' : 'var(--text-dim)'}; flex-shrink: 0;">{slot + 1}</div>
-                {#if team}
-                  <span style="font-size: 11px; font-weight: 500; color: var(--text);"><span style="font-size: 16px; margin-right: 4px;">{@html flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
-                {:else}
-                  <span style="font-size: 11px; color: var(--text-dim); border: 1px dashed var(--border); padding: 2px 8px; border-radius: 4px;">—</span>
-                {/if}
+        <!-- Fixtures: enter each scoreline -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          {#each fixtures as match}
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <div style="flex: 1; display: flex; align-items: center; gap: 4px; justify-content: flex-end; min-width: 0;">
+                <span style="font-size: 11px; font-weight: 500; color: var(--text); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(match.home_name)}</span>
+                <span style="font-size: 15px; flex-shrink: 0;">{@html flagEmoji(match.home_flag)}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                <input
+                  type="number" min="0" max="20" inputmode="numeric" placeholder="-"
+                  value={getMatchScore(match.id, 'home')}
+                  oninput={(e) => setMatchScore(match.id, 'home', e.target.value === '' ? null : Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
+                  disabled={locked}
+                  style="width: 34px; text-align: center; font-size: 15px; font-weight: 700; padding: 5px 2px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--gold);"
+                />
+                <span style="font-size: 12px; color: var(--text-muted);">—</span>
+                <input
+                  type="number" min="0" max="20" inputmode="numeric" placeholder="-"
+                  value={getMatchScore(match.id, 'away')}
+                  oninput={(e) => setMatchScore(match.id, 'away', e.target.value === '' ? null : Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
+                  disabled={locked}
+                  style="width: 34px; text-align: center; font-size: 15px; font-weight: 700; padding: 5px 2px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--gold);"
+                />
+              </div>
+              <div style="flex: 1; display: flex; align-items: center; gap: 4px; min-width: 0;">
+                <span style="font-size: 15px; flex-shrink: 0;">{@html flagEmoji(match.away_flag)}</span>
+                <span style="font-size: 11px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(match.away_name)}</span>
+              </div>
+            </div>
+          {/each}
+        </div>
+
+        <!-- Derived standings -->
+        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <span style="font-size: 8px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">Clasificación</span>
+            {#if !complete}
+              <span style="font-size: 8px; color: var(--text-dim); font-style: italic;">provisional</span>
+            {/if}
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px; {complete ? '' : 'opacity: 0.7;'}">
+            {#each ds.rows as row, i}
+              {@const pos = i + 1}
+              {@const accent = pos <= 2 ? 'var(--green)' : pos === 3 ? '#b87333' : 'var(--text-dim)'}
+              <div style="display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 5px; background: {pos <= 2 ? 'rgba(0,229,160,0.06)' : pos === 3 ? 'rgba(184,115,51,0.06)' : 'transparent'}; {pos === 2 ? 'border-bottom: 1px solid rgba(0,229,160,0.25); border-radius: 5px 5px 0 0;' : ''}">
+                <div style="width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; color: {accent}; border: 1px solid {accent}; flex-shrink: 0;">{pos}</div>
+                <span style="font-size: 11px; font-weight: {pos <= 2 ? '600' : '400'}; color: {row.ranked ? 'var(--text)' : 'var(--text-dim)'}; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span style="font-size: 14px; margin-right: 4px;">{@html flagEmoji(row.team.flag_code)}</span>{shortName(row.team.name)}</span>
+                {#if pos <= 2}<span style="font-size: 8px; color: var(--green);">clasifica</span>{:else if pos === 3}<span style="font-size: 8px; color: #b87333;">3.º</span>{/if}
               </div>
             {/each}
           </div>
-        {:else}
-          <!-- Draggable slot rows -->
-          {#each [0,1,2,3] as slot}
-            {@const team = teamAt(group, slot)}
-            {@const isDraggingThis = isDragging(group, slot)}
-            {@const isDropTargetThis = isDropTarget(group, slot)}
-            <div
-              style="
-                display: flex; align-items: center; gap: 8px;
-                padding: 7px 8px; border-radius: 6px;
-                background: {isDraggingThis ? 'rgba(201,168,76,0.03)' : slot < 3 && team ? (MEDAL[slot] + '15') : 'rgba(255,255,255,0.03)'};
-                border: 1.5px solid {isDropTargetThis ? 'var(--gold)' : isDraggingThis ? 'rgba(201,168,76,0.4)' : slot < 3 && team ? (MEDAL[slot] + '33') : 'transparent'};
-                opacity: {isDraggingThis ? '0.4' : '1'};
-                transition: border-color 0.1s, background 0.1s, opacity 0.1s;
-              "
-              role={team ? 'button' : undefined}
-              title={team ? 'Haz clic para quitar' : undefined}
-              onclick={() => { if (team && !effectivelyLocked) tapTeam(group, team.id); }}
-              draggable={team !== null}
-              ondragstart={(e) => handleDragStart(e, group, slot)}
-              ondragover={(e) => handleDragOver(e, group, slot)}
-              ondragleave={handleDragLeave}
-              ondrop={(e) => handleDrop(e, group, slot)}
-              ondragend={handleDragEnd}
-            >
-              <div style="width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; background: {slot < 3 && team ? MEDAL[slot] : 'rgba(255,255,255,0.1)'}; color: {slot === 0 && team ? '#3d2a00' : slot < 3 && team ? '#fff' : 'var(--text-dim)'}; flex-shrink: 0;">{slot + 1}</div>
-              <div style="color: var(--text-dim); font-size: 14px; flex-shrink: 0; cursor: {team ? 'grab' : 'default'}; line-height: 1;">☰</div>
-              {#if team}
-                <span style="font-size: 11px; font-weight: 500; color: var(--text);"><span style="font-size: 16px; margin-right: 4px;">{@html flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
-              {:else}
-                <span style="font-size: 11px; color: var(--text-dim); border: 1px dashed var(--border); padding: 2px 8px; border-radius: 4px;">—</span>
-              {/if}
-            </div>
-          {/each}
-
-          <!-- Unassigned teams pool -->
-          {#if unassignedTeams(group).length > 0}
-            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border);">
-              <div style="font-size: 8px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px;">Sin asignar</div>
-              <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-                {#each unassignedTeams(group) as team}
-                  <button
-                    type="button"
-                    draggable={true}
-                    disabled={effectivelyLocked}
-                    title="Haz clic para asignar al siguiente puesto"
-                    onclick={() => { if (!effectivelyLocked) tapTeam(group, team.id); }}
-                    ondragstart={(e) => handleDragStartUnassigned(e, group, team.id)}
-                    style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: rgba(255,255,255,0.03); cursor: pointer; font-size: 11px; color: var(--text);"
-                  >
-                    <span style="font-size: 14px;">{@html flagEmoji(team.flag_code)}</span>
-                    {shortName(team.name)}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        {/if}
-      </div>
-
-      <!-- ── Mobile: sequential tap-to-rank ──────────────────────── -->
-      <div class="mobile-view group-card" style="background: var(--bg-card); border: 1px solid {groupDone ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 12px; padding: 16px; {groupDone ? 'box-shadow: 0 0 12px rgba(201,168,76,0.08);' : ''}">
-        <!-- Group header -->
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <div style="width: 32px; height: 32px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: var(--gold);">{group}</div>
-            <span style="font-size: 12px; font-weight: 600; color: var(--text); letter-spacing: 0.04em;">Grupo {group}</span>
-          </div>
-          {#if isGroupStarted(group)}
-            <span style="font-size: 9px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 3px 10px; border-radius: 10px; font-weight: 500;">🔒 Cerrado</span>
-          {:else if groupDone}
-            <span style="font-size: 9px; color: var(--green); background: rgba(0,229,160,0.1); padding: 3px 10px; border-radius: 10px; font-weight: 500;">✓ Completo</span>
-          {:else}
-            <button
-              disabled={effectivelyLocked}
-              onclick={() => resetGroup(group)}
-              style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; font-size: 9px; color: var(--text-dim); cursor: pointer; {selections[group]?.some(s => s) ? '' : 'opacity: 0.3; pointer-events: none;'}"
-            >Reset</button>
-          {/if}
-        </div>
-
-        <!-- Instruction -->
-        {#if !groupDone && !isGroupLocked(group)}
-          {@const ns = nextSlot(group)}
-          <div style="font-size: 10px; color: var(--gold); margin-bottom: 10px; padding: 6px 10px; background: rgba(201,168,76,0.08); border-radius: 6px; text-align: center;">
-            Toca el equipo que quedar&aacute; <strong>{POS_FULL[ns] || ''}</strong>
-          </div>
-        {/if}
-
-        <!-- Team list -->
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          {#each [...groupTeams].sort((a, b) => {
-            const ra = selections[group]?.findIndex(t => Number(t) === Number(a.id));
-            const rb = selections[group]?.findIndex(t => Number(t) === Number(b.id));
-            if (ra >= 0 && rb >= 0) return ra - rb;
-            if (ra >= 0) return -1;
-            if (rb >= 0) return 1;
-            return 0;
-          }) as team (team.id)}
-            {@const rank = selections[group]?.findIndex(t => Number(t) === Number(team.id))}
-            {@const isRanked = rank >= 0}
-            {@const isNext = !groupDone && !isRanked}
-            <button
-              disabled={isGroupLocked(group) || (!isRanked && groupDone)}
-              onclick={() => tapTeam(group, team.id)}
-              style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1.5px solid {isRanked ? MEDAL[rank] + '88' : isNext ? 'rgba(255,255,255,0.08)' : 'transparent'}; background: {isRanked ? MEDAL[rank] + '15' : isNext ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.01)'}; cursor: pointer; transition: all 0.2s; width: 100%; text-align: left; {isRanked ? 'opacity: 1;' : isNext ? 'opacity: 0.9;' : 'opacity: 0.35;'}"
-            >
-              <!-- Rank badge -->
-              {#if isRanked}
-                <div style="width: 26px; height: 26px; border-radius: 50%; background: {MEDAL[rank]}; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: {rank === 0 ? '#3d2a00' : '#fff'}; flex-shrink: 0;">{rank + 1}</div>
-              {:else}
-                <div style="width: 26px; height: 26px; border-radius: 50%; border: 1.5px dashed {isNext ? 'var(--border)' : 'transparent'}; flex-shrink: 0;"></div>
-              {/if}
-              <!-- Team info -->
-              <span style="font-size: 13px; font-weight: {isRanked ? '600' : '400'}; color: var(--text); flex: 1;"><span style="font-size: 20px; margin-right: 6px;">{@html flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
-              {#if isRanked}
-                <span style="font-size: 14px; color: var(--text-dim); opacity: 0.5;">×</span>
-              {/if}
-            </button>
-          {/each}
+          <p style="font-size: 8px; color: var(--text-dim); margin-top: 6px; line-height: 1.4;">
+            1.º y 2.º pasan directos · los mejores 3.º entran como repesca. Empates: criterios FIFA (dif. de goles, goles, etc.).
+          </p>
         </div>
       </div>
-
     {/each}
   </div>
+
+  <!-- Group scores auto-save indicator -->
+  {#if !effectivelyLocked}
+    <div style="margin-top: 12px; display: flex; gap: 12px; align-items: center;">
+      {#if matchSaving}
+        <span style="font-size: 10px; color: var(--text-muted);">Guardando...</span>
+      {:else if matchSaved}
+        <span style="font-size: 10px; color: var(--green);">✓ Guardado</span>
+      {:else}
+        <span style="font-size: 10px; color: var(--text-dim);">Guardado automático</span>
+      {/if}
+    </div>
+  {/if}
 
   <!-- Knockout Match Scores Section -->
   {#if Object.keys(data.knockoutByPhase || {}).length > 0}
@@ -756,19 +502,6 @@
     </div>
   {/if}
 
-  <!-- Auto-save indicator -->
-  {#if !effectivelyLocked}
-    <div style="margin-top: 24px; display: flex; gap: 12px; align-items: center;">
-      {#if saving}
-        <span style="font-size: 10px; color: var(--text-muted);">Guardando...</span>
-      {:else if saved}
-        <span style="font-size: 10px; color: var(--green);">✓ Guardado</span>
-      {:else}
-        <span style="font-size: 10px; color: var(--text-dim);">Cambios guardados automáticamente</span>
-      {/if}
-    </div>
-  {/if}
-
   <!-- Bracket CTA -->
   {#if !effectivelyLocked && data.selectedId}
     <div style="margin-top: 20px; padding: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
@@ -785,16 +518,5 @@
 </div>
 
 <style>
-  .desktop-view { display: none; }
-  .mobile-view { display: flex; flex-direction: column; }
-
-  @media (hover: hover) and (pointer: fine) {
-    .desktop-view { display: flex; flex-direction: column; }
-    .mobile-view { display: none; }
-    .desktop-hint { display: inline; }
-  }
-
-  @media (hover: none) and (pointer: coarse) {
-    .desktop-hint { display: none; }
-  }
+  .group-card { min-width: 0; }
 </style>

@@ -39,15 +39,17 @@ const defaultPrediction = { id: 10, label: 'Principal', total_score: 5 };
  *   2. query → membership gate (IDOR check)
  *   3. getAllTeams → teams[]
  *   4. getUserPredictions → predictions[]
- *   5. (if selectedPrediction) query → knockout matches
- *   6. (if selectedPrediction) getGroupPredictions → group pred rows
- *   7. (if selectedPrediction) query → match predictions
+ *   5. query → knockout matches (runs always)
+ *   6. query → group matches (runs always)
+ *   7. (if selectedPrediction) getGroupPredictions → group pred rows
+ *   8. (if selectedPrediction) query → match predictions
  */
 function setupDefaultMocks(overrides: {
 	pool?: any;
 	teams?: any[];
 	predictions?: any[];
 	knockoutRows?: any[];
+	groupMatchRows?: any[];
 	groupPredRows?: any[];
 	matchPredRows?: any[];
 	memberRows?: any[];
@@ -57,6 +59,7 @@ function setupDefaultMocks(overrides: {
 	const teams = overrides.teams ?? [];
 	const predictions = overrides.predictions ?? [defaultPrediction];
 	const knockoutRows = overrides.knockoutRows ?? [];
+	const groupMatchRows = overrides.groupMatchRows ?? [];
 	const groupPredRows = overrides.groupPredRows ?? [];
 	const matchPredRows = overrides.matchPredRows ?? [];
 	const memberRows = overrides.memberRows ?? [{ 1: 1 }]; // is a member by default
@@ -68,8 +71,10 @@ function setupDefaultMocks(overrides: {
 	(getUserPredictions as any).mockResolvedValue(predictions);
 	// lockedGroups query (runs always, after the deadline check)
 	(query as any).mockResolvedValueOnce({ rows: overrides.lockedGroupRows ?? [] });
+	// knockout + group matches queries (both run always, before the entry block)
+	(query as any).mockResolvedValueOnce({ rows: knockoutRows }); // knockout matches query
+	(query as any).mockResolvedValueOnce({ rows: groupMatchRows }); // group matches query
 	if (predictions.length > 0) {
-		(query as any).mockResolvedValueOnce({ rows: knockoutRows }); // knockout matches query
 		(getGroupPredictions as any).mockResolvedValue(groupPredRows);
 		(query as any).mockResolvedValueOnce({ rows: matchPredRows }); // match predictions query
 	}
@@ -182,6 +187,7 @@ describe('predict page load', () => {
 			.mockResolvedValueOnce({ rows: [{ 1: 1 }] }) // auto-create membership check: is a member
 			.mockResolvedValueOnce({ rows: [] }) // lockedGroups
 			.mockResolvedValueOnce({ rows: [] }) // knockout matches
+			.mockResolvedValueOnce({ rows: [] }) // group matches
 			.mockResolvedValueOnce({ rows: [] }); // match predictions for selected (auto-created) entry
 		(createPrediction as any).mockResolvedValue(undefined);
 		(getGroupPredictions as any).mockResolvedValue([]);
@@ -350,6 +356,8 @@ describe('predict page load', () => {
 		// lockedGroups query
 		(query as any).mockResolvedValueOnce({ rows: [] });
 		// knockout matches query
+		(query as any).mockResolvedValueOnce({ rows: [] });
+		// group matches query
 		(query as any).mockResolvedValueOnce({ rows: [] });
 
 		const result = await load({

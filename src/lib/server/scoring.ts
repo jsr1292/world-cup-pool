@@ -1,5 +1,6 @@
 import { query, getClient } from './db.js';
 import type { PoolClient } from 'pg';
+import { rankGroup, type GsMatch } from '../group-standings.js';
 
 export const DEFAULT_SCORING_RULES: Record<string, number> = {
   match_outcome: 1,
@@ -55,113 +56,30 @@ export async function calculateGroupScores(
 
   if (matches.length === 0) return; // already zeroed above
 
-  // Build actual group standings from match results
-  const standings: Record<string, Record<number, { points: number; gf: number; ga: number }>> = {};
+  // Group the finished results by group, mapped to the shared ranking input.
+  // The ACTUAL table is ordered by the SAME rankGroup() (src/lib/group-standings.ts)
+  // used to derive players' PREDICTED tables from their scorelines — so the table
+  // a player is scored against can never disagree with the one they saw/built.
+  const matchesByGroup: Record<string, GsMatch[]> = {};
+  const finishedPerGroup: Record<string, number> = {};
   for (const m of matches) {
     if (!m.group_name) continue;
-    if (!standings[m.group_name]) standings[m.group_name] = {};
-    const gs = standings[m.group_name];
-    if (!gs[m.home_team_id]) gs[m.home_team_id] = { points: 0, gf: 0, ga: 0 };
-    if (!gs[m.away_team_id]) gs[m.away_team_id] = { points: 0, gf: 0, ga: 0 };
-
-    const h = gs[m.home_team_id];
-    const a = gs[m.away_team_id];
-    h.gf += m.home_score; h.ga += m.away_score;
-    a.gf += m.away_score; a.ga += m.home_score;
-
-    if (m.home_score > m.away_score) { h.points += 3; }
-    else if (m.home_score < m.away_score) { a.points += 3; }
-    else { h.points += 1; a.points += 1; }
-  }
-
-  // §2.3 — FIFA World Cup group ranking (regulations art. on ranking):
-  //   1. points (all group matches)
-  //   2. overall goal difference
-  //   3. overall goals scored
-  //   — if two+ teams are still equal on 1–3, apply head-to-head among ONLY
-  //     those teams:
-  //   4. H2H points  5. H2H goal difference  6. H2H goals scored
-  //   — then fair play / drawing of lots. We don't track fair-play points,
-  //     so the final fallback is a deterministic order by team id (stable).
-  //
-  // NOTE: overall GD/GF come BEFORE head-to-head. This is the FIFA World Cup
-  // procedure and differs from UEFA (which applies head-to-head first).
-  function rankGroup(group: string, teams: Record<number, { points: number; gf: number; ga: number }>): number[] {
-    const ids = Object.keys(teams).map(Number);
-    const groupMatches = matches.filter(m => m.group_name === group);
-
-    function h2hStats(subset: Set<number>): Map<number, { points: number; gf: number; ga: number }> {
-      const out = new Map<number, { points: number; gf: number; ga: number }>();
-      for (const id of subset) out.set(id, { points: 0, gf: 0, ga: 0 });
-      for (const m of groupMatches) {
-        if (!subset.has(m.home_team_id) || !subset.has(m.away_team_id)) continue;
-        const h = out.get(m.home_team_id)!;
-        const a = out.get(m.away_team_id)!;
-        h.gf += m.home_score; h.ga += m.away_score;
-        a.gf += m.away_score; a.ga += m.home_score;
-        if (m.home_score > m.away_score) h.points += 3;
-        else if (m.home_score < m.away_score) a.points += 3;
-        else { h.points += 1; a.points += 1; }
-      }
-      return out;
-    }
-
-    // Step 1 — sort by overall points, then overall GD, then overall GF.
-    const arr = ids.map(id => ({
-      id,
-      points: teams[id].points,
-      gf: teams[id].gf,
-      gd: teams[id].gf - teams[id].ga,
-    }));
-    arr.sort((a, b) =>
-      (b.points - a.points) || (b.gd - a.gd) || (b.gf - a.gf)
-    );
-
-    // Step 2 — break remaining ties (teams equal on points AND GD AND GF) by
-    // head-to-head among exactly those teams, then by id as the final fallback.
-    const finalOrder: number[] = [];
-    let i = 0;
-    while (i < arr.length) {
-      let j = i + 1;
-      while (
-        j < arr.length &&
-        arr[j].points === arr[i].points &&
-        arr[j].gd === arr[i].gd &&
-        arr[j].gf === arr[i].gf
-      ) j++;
-      const tied = arr.slice(i, j);
-      if (tied.length === 1) {
-        finalOrder.push(tied[0].id);
-      } else {
-        const subset = new Set(tied.map(t => t.id));
-        const h2h = h2hStats(subset);
-        tied.sort((a, b) => {
-          const ah = h2h.get(a.id)!;
-          const bh = h2h.get(b.id)!;
-          const ahGd = ah.gf - ah.ga;
-          const bhGd = bh.gf - bh.ga;
-          return (bh.points - ah.points) || (bhGd - ahGd) || (bh.gf - ah.gf) || (a.id - b.id);
-        });
-        for (const t of tied) finalOrder.push(t.id);
-      }
-      i = j;
-    }
-    return finalOrder;
+    (matchesByGroup[m.group_name] ??= []).push({
+      homeTeamId: m.home_team_id,
+      awayTeamId: m.away_team_id,
+      homeScore: m.home_score,
+      awayScore: m.away_score,
+    });
+    finishedPerGroup[m.group_name] = (finishedPerGroup[m.group_name] ?? 0) + 1;
   }
 
   // #6 — Only score a group once ALL 6 of its round-robin matches are
   // finished. Ranking a partial table awards premature/incorrect position
   // points that fluctuate until the group completes.
-  const finishedPerGroup: Record<string, number> = {};
-  for (const m of matches) {
-    if (!m.group_name) continue;
-    finishedPerGroup[m.group_name] = (finishedPerGroup[m.group_name] ?? 0) + 1;
-  }
-
   const actualPositions: Record<string, number[]> = {};
-  for (const [group, teams] of Object.entries(standings)) {
+  for (const [group, gMatches] of Object.entries(matchesByGroup)) {
     if (finishedPerGroup[group] !== 6) continue; // group not complete yet
-    actualPositions[group] = rankGroup(group, teams);
+    actualPositions[group] = rankGroup(gMatches);
   }
 
   // Bulk fetch all group predictions for this pool

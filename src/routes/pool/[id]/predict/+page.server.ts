@@ -89,6 +89,25 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
     knockoutByPhase[m.phase].push(m);
   }
 
+  // Load the 72 group matches (always have both teams from the seed). The group
+  // stage is predicted as scorelines now; the standings table is derived from
+  // them client-side for preview and server-side on save.
+  const { rows: groupMatches } = await query(`
+    SELECT m.id, m.group_name, m.matchday, m.sort_order, m.status, m.kickoff_time,
+      m.home_team_id, m.away_team_id,
+      ht.name as home_name, ht.flag_code as home_flag,
+      at.name as away_name, at.flag_code as away_flag
+    FROM matches m
+    LEFT JOIN teams ht ON ht.id = m.home_team_id
+    LEFT JOIN teams at ON at.id = m.away_team_id
+    WHERE m.phase = 'group' AND m.group_name IS NOT NULL
+    ORDER BY m.group_name, m.matchday, m.sort_order, m.id
+  `);
+  const groupMatchesByGroup: Record<string, any[]> = {};
+  for (const m of groupMatches) {
+    (groupMatchesByGroup[m.group_name] ??= []).push(m);
+  }
+
   // Load existing match predictions
   const existingMatchPreds: Record<number, { home_score: number; away_score: number }> = {};
 
@@ -133,6 +152,7 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
     isLocked,
     lockedGroups,
     existingGroupPreds,
+    groupMatchesByGroup,
     knockoutByPhase,
     existingMatchPreds,
   };

@@ -1,5 +1,6 @@
 import { query, getClient } from '$lib/server/db.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
+import { rankGroup, type GsMatch } from '$lib/group-standings.js';
 import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
@@ -143,6 +144,55 @@ export const POST: RequestHandler = async ({ request, locals }) => {
             away_score = $4,
             points_earned = 0
         `, [prediction_id, matchId, homeScore, awayScore]);
+      }
+    }
+
+    // ── Derive group standings from the just-saved scorelines ────────────────
+    // The group stage is predicted as scorelines; the final table (which the
+    // bracket and the group_position bonus both read from group_predictions) is
+    // DERIVED here, server-side, from those scorelines — the player never drags a
+    // table directly. We re-read the entry's saved group scorelines FROM THE DB
+    // (visible inside this txn), never from the request body, so a partial/empty
+    // request can never wipe a group whose scorelines are still persisted — the
+    // same data-loss class that bit the old full-document group autosave.
+    const touchedMatchIds = Object.keys(scores).map(Number);
+    if (touchedMatchIds.length > 0) {
+      const { rows: grpRows } = await client.query(
+        `SELECT DISTINCT group_name FROM matches
+           WHERE id = ANY($1::int[]) AND phase = 'group' AND group_name IS NOT NULL`,
+        [touchedMatchIds]
+      );
+      for (const { group_name } of grpRows) {
+        const { rows: gms } = await client.query(
+          `SELECT m.home_team_id, m.away_team_id, mp.home_score, mp.away_score
+             FROM match_predictions mp
+             JOIN matches m ON m.id = mp.match_id
+            WHERE mp.prediction_id = $1 AND m.phase = 'group' AND m.group_name = $2`,
+          [prediction_id, group_name]
+        );
+        const order = rankGroup(
+          gms.map((r): GsMatch => ({
+            homeTeamId: r.home_team_id,
+            awayTeamId: r.away_team_id,
+            homeScore: r.home_score,
+            awayScore: r.away_score,
+          }))
+        );
+        if (order.length === 0) {
+          // No scorelines left for this group → clear the derived standing.
+          await client.query(
+            'DELETE FROM group_predictions WHERE prediction_id = $1 AND group_name = $2',
+            [prediction_id, group_name]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO group_predictions (prediction_id, group_name, position_1, position_2, position_3, position_4)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT(prediction_id, group_name) DO UPDATE SET
+               position_1 = $3, position_2 = $4, position_3 = $5, position_4 = $6`,
+            [prediction_id, group_name, order[0] ?? null, order[1] ?? null, order[2] ?? null, order[3] ?? null]
+          );
+        }
       }
     }
 

@@ -241,6 +241,7 @@ describe('POST /api/predictions/match-scores', () => {
 		const clientQuery = vi.fn()
 			.mockResolvedValueOnce({ rows: [] })  // BEGIN
 			.mockResolvedValueOnce({ rows: [] })  // INSERT ON CONFLICT for match 10
+			.mockResolvedValueOnce({ rows: [] })  // SELECT DISTINCT group_name (match 10 is knockout → none)
 			.mockResolvedValueOnce({ rows: [] }); // COMMIT
 		const mockRelease = vi.fn();
 
@@ -278,11 +279,13 @@ describe('POST /api/predictions/match-scores', () => {
 		const body = await response.json();
 		expect(body.ok).toBe(true);
 
-		// Verify transaction flow
-		expect(clientQuery).toHaveBeenCalledTimes(3);
+		// Verify transaction flow (now includes the in-txn group-standings derivation
+		// probe: a SELECT DISTINCT group_name for the touched match ids).
+		expect(clientQuery).toHaveBeenCalledTimes(4);
 		expect(clientQuery.mock.calls[0][0]).toContain('BEGIN');
 		expect(clientQuery.mock.calls[1][0]).toContain('INSERT INTO match_predictions');
-		expect(clientQuery.mock.calls[2][0]).toContain('COMMIT');
+		expect(clientQuery.mock.calls[2][0]).toContain('group_name');
+		expect(clientQuery.mock.calls[3][0]).toContain('COMMIT');
 		expect(mockRelease).toHaveBeenCalled();
 
 		// Advance timers to trigger setImmediate callback
@@ -294,6 +297,52 @@ describe('POST /api/predictions/match-scores', () => {
 		expect(mockInvResults).toHaveBeenCalledWith(5);
 		expect(mockInvGlobal).toHaveBeenCalled();
 
+		vi.useRealTimers();
+	});
+
+	it('derives and upserts group standings from the saved group scorelines', async () => {
+		vi.useFakeTimers();
+
+		// Saving a GROUP match score → the endpoint re-reads that entry's saved
+		// group scorelines from the DB and upserts the derived table into
+		// group_predictions (position_1..4), so the bracket + standings bonus stay
+		// in sync without the player ever dragging a table.
+		const clientQuery = vi.fn()
+			.mockResolvedValueOnce({ rows: [] })                          // BEGIN
+			.mockResolvedValueOnce({ rows: [] })                          // INSERT match 10
+			.mockResolvedValueOnce({ rows: [{ group_name: 'A' }] })       // DISTINCT affected groups
+			.mockResolvedValueOnce({ rows: [                              // saved scorelines for group A
+				{ home_team_id: 100, away_team_id: 200, home_score: 2, away_score: 0 },
+			] })
+			.mockResolvedValueOnce({ rows: [] })                          // upsert group_predictions
+			.mockResolvedValueOnce({ rows: [] });                         // COMMIT
+		const mockRelease = vi.fn();
+
+		const futureDate = new Date('2099-12-31T23:59:59Z').toISOString();
+		mockQuery
+			.mockResolvedValueOnce({ rows: [{ user_id: 1, pool_id: 5 }] })                         // ownership
+			.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] })                                 // membership
+			.mockResolvedValueOnce({ rows: [{ deadline_group: futureDate, deadline_knockout: futureDate }] }) // deadlines
+			.mockResolvedValueOnce({ rows: [] })                                                  // started-match lock (none)
+			.mockResolvedValueOnce({ rows: [{ has_group: 1, has_knockout: 0 }] });                // phase deadline check
+		mockGetClient.mockResolvedValue({ query: clientQuery, release: mockRelease });
+
+		const response = await POST({
+			request: mockRequest({ prediction_id: 1, scores: { '10': { home_score: 2, away_score: 0 } } }),
+			locals: mockLocals(1) as any
+		});
+
+		expect(response.status).toBe(200);
+
+		// The derived order for a single 2-0 result is [winner, loser] → positions
+		// [100, 200, null, null]. Verify that exact upsert was issued.
+		const upsert = clientQuery.mock.calls.find(
+			(c: any[]) => typeof c[0] === 'string' && c[0].includes('INSERT INTO group_predictions')
+		);
+		expect(upsert).toBeTruthy();
+		expect(upsert![1]).toEqual([1, 'A', 100, 200, null, null]);
+
+		await vi.runAllTimersAsync();
 		vi.useRealTimers();
 	});
 });
