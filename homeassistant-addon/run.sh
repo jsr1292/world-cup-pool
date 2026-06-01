@@ -71,8 +71,15 @@ if bashio::config.true 'run_setup'; then
 	if npm run setup; then
 		bashio::log.info "Setup OK. It's idempotent, so leaving run_setup on is safe; you may switch it off."
 	else
-		bashio::log.fatal "Setup failed — check the database_url and that the DB is reachable."
-		bashio::exit.nok
+		# Do NOT kill the container here. Setup is an OPTIONAL, idempotent bootstrap;
+		# the schema is already in place on any DB that has booted before. If this
+		# step fails (almost always a transient database blip — e.g. Neon waking up
+		# or a control-plane hiccup), exiting would crash-loop the add-on and the
+		# proxy would serve 502s. Instead warn and start the app anyway: it tolerates
+		# per-request DB errors and recovers the moment the database is reachable.
+		# (A truly first-ever boot with no schema will just 500 until the DB is up,
+		# which is strictly better than a 502 crash-loop — and easier to diagnose.)
+		bashio::log.warning "Setup did not complete (database unreachable?). Starting the app anyway — it will serve as soon as the DB is reachable. If this is the very first boot, fix the database and restart to create the schema."
 	fi
 fi
 

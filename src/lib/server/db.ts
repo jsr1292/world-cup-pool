@@ -26,12 +26,17 @@ export function getPool(): pg.Pool {
 export const query = (text: string, params?: unknown[]) => getPool().query(text, params);
 export const getClient = () => getPool().connect();
 
-// Graceful shutdown — close the pool when the server stops
+// Graceful shutdown — close the pool when the server stops. adapter-node fires
+// BOTH 'sveltekit:shutdown' and a signal, so guard against running twice (which
+// otherwise logs a noisy "Called end on pool more than once" error).
 async function shutdown() {
-	if (_pool) {
-		_shuttingDown = true;
+	if (_shuttingDown) return;
+	_shuttingDown = true;
+	const pool = _pool;
+	_pool = null;
+	if (pool) {
 		try {
-			await _pool.end();
+			await pool.end();
 			console.log('[db] Pool closed gracefully');
 		} catch (e) {
 			console.error('[db] Error closing pool:', e);
