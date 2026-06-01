@@ -139,18 +139,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     if (filled.length !== unique.size) {
       return json({ error: `Duplicate team in Group ${groupName}` }, { status: 400 });
     }
-
-    // §3.5 — No gaps: if posN is set, every position before it must also be set.
-    let seenNull = false;
-    for (const p of ordered) {
-      if (p == null) seenNull = true;
-      else if (seenNull) {
-        return json(
-          { error: `Posiciones con huecos en Grupo ${groupName} (rellena las posiciones anteriores primero)` },
-          { status: 400 }
-        );
-      }
-    }
+    // Gaps (e.g. only the 4th position set) are allowed: drag-to-rank is
+    // positional, so a team can be dropped into any slot, and a partial group
+    // is a valid in-progress prediction (only filled positions are scored).
   }
 
   // Validate team IDs belong to their declared group

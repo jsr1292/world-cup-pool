@@ -164,35 +164,35 @@
     const arr = [...(selections[group] || [null, null, null, null])];
 
     if (type === 'team') {
-      // Dragging an unranked team from the pool onto a slot.
+      // Dragging an unranked team from the pool onto a slot — POSITIONAL: it
+      // lands exactly where you drop it (drop on 4th → 4th), not snapped to the
+      // first free slot. If it was ranked elsewhere, vacate that slot; any team
+      // already in the target slot returns to the pool. Partial groups (gaps)
+      // are fine — they save, and only filled positions are scored.
       const srcGroup = parts[1];
       const teamId = Number(parts[2]);
       if (srcGroup !== group) return;
-      // Insert AT the dropped position, shifting the teams already at/after it
-      // down one (re-organising), instead of dumping it in the first empty slot.
-      // Work on the compact ranked list so there are no interior gaps.
-      const ranked = arr.filter(s => s !== null).filter(t => Number(t) !== teamId);
-      const insertAt = Math.min(slotIndex, ranked.length);
-      ranked.splice(insertAt, 0, teamId);
-      selections[group] = [ranked[0] ?? null, ranked[1] ?? null, ranked[2] ?? null, ranked[3] ?? null];
+      const existing = arr.findIndex(t => Number(t) === teamId);
+      if (existing >= 0) arr[existing] = null;
+      arr[slotIndex] = teamId;
+      selections[group] = arr;
       _activeEdits.add(group);
       autoSave();
     } else {
-      // Dragging from another slot
+      // Dragging from one ranked slot to another — POSITIONAL swap.
       const srcGroup = parts[1];
       const srcSlot = parseInt(parts[2]);
       if (srcGroup !== group || srcSlot === slotIndex) {
         draggingGroup = null; draggingSlot = null; dragOverGroup = null; dragOverSlot = null;
         return;
       }
-      const movingTeamId = arr[srcSlot];
-      if (movingTeamId === null) {
+      if (arr[srcSlot] === null) {
         draggingGroup = null; draggingSlot = null; dragOverGroup = null; dragOverSlot = null;
         return;
       }
-      const adjustedTarget = slotIndex > srcSlot ? slotIndex - 1 : slotIndex;
-      arr.splice(srcSlot, 1);
-      arr.splice(adjustedTarget, 0, movingTeamId);
+      const tmp = arr[srcSlot];
+      arr[srcSlot] = arr[slotIndex];
+      arr[slotIndex] = tmp;
       selections[group] = arr;
       _activeEdits.add(group);
       autoSave();
