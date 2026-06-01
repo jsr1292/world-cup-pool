@@ -160,14 +160,17 @@
     const arr = [...(selections[group] || [null, null, null, null])];
 
     if (type === 'team') {
-      // Dragging from unassigned pool
+      // Dragging an unranked team from the pool onto a slot.
       const srcGroup = parts[1];
       const teamId = Number(parts[2]);
       if (srcGroup !== group) return;
-      const target = arr[slotIndex] === null ? slotIndex : arr.findIndex(s => s === null);
-      if (target === -1) return;
-      arr[target] = teamId;
-      selections[group] = arr;
+      // Insert AT the dropped position, shifting the teams already at/after it
+      // down one (re-organising), instead of dumping it in the first empty slot.
+      // Work on the compact ranked list so there are no interior gaps.
+      const ranked = arr.filter(s => s !== null).filter(t => Number(t) !== teamId);
+      const insertAt = Math.min(slotIndex, ranked.length);
+      ranked.splice(insertAt, 0, teamId);
+      selections[group] = [ranked[0] ?? null, ranked[1] ?? null, ranked[2] ?? null, ranked[3] ?? null];
       _activeEdits.add(group);
       autoSave();
     } else {

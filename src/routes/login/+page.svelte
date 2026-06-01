@@ -11,6 +11,14 @@
 
   function switchMode(m) { mode = m; error = ''; notice = ''; }
 
+  // Honor a ?redirect= target (e.g. from an invite link) — but only safe local
+  // paths, never an absolute/protocol-relative URL (open-redirect guard).
+  function postAuthTarget() {
+    const r = new URLSearchParams(window.location.search).get('redirect');
+    if (r && r.startsWith('/') && !r.startsWith('//')) return r;
+    return '/';
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     error = ''; notice = '';
@@ -37,7 +45,7 @@
           : `Te hemos enviado un correo a ${email} para confirmar tu cuenta. Ábrelo para activar el acceso.`;
         mode = 'login';
       } else {
-        window.location.href = '/';
+        window.location.href = postAuthTarget();
       }
     } catch {
       error = 'Error de conexión';
