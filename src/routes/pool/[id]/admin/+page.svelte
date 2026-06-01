@@ -155,9 +155,25 @@
     else { message = '✗ Error al guardar'; }
   }
 
-  // Deadline state
-  let deadlineGroup = $state(pool.deadline_group ? pool.deadline_group.slice(0, 16) : '');
-  let deadlineKnockout = $state(pool.deadline_knockout ? pool.deadline_knockout.slice(0, 16) : '');
+  // Deadline state.
+  // `datetime-local` is a tz-less wall-clock. The DB column is TIMESTAMPTZ, so we
+  // convert: stored UTC instant → the admin's LOCAL wall-clock for display, and
+  // local wall-clock → a real UTC instant on save. This way the time you type is
+  // YOUR local time (the kickoff you see), not accidentally interpreted as UTC.
+  function toLocalInput(v) {
+    if (!v) return '';
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  function toIsoInstant(local) {
+    if (!local) return null;
+    const d = new Date(local); // tz-less string → parsed in the admin's local zone
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  let deadlineGroup = $state(toLocalInput(pool.deadline_group));
+  let deadlineKnockout = $state(toLocalInput(pool.deadline_knockout));
   let savingDeadline = $state(false);
   let deadlineMsg = $state('');
 
@@ -190,8 +206,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pool_id: pool.id,
-          deadline_group: deadlineGroup || null,
-          deadline_knockout: deadlineKnockout || null,
+          deadline_group: toIsoInstant(deadlineGroup),
+          deadline_knockout: toIsoInstant(deadlineKnockout),
         }),
       });
       if (res.ok) { deadlineMsg = '✓ Fechas guardadas'; setTimeout(() => deadlineMsg = '', 2000); }
@@ -343,6 +359,7 @@
   <div style="margin-bottom: 24px;">
     <h2 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">Fechas límite</h2>
     <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+      <p style="font-size: 9px; color: var(--text-dim); margin: 0;">Usa tu hora local. Para bloquear todo al primer partido (Mundial 2026), pon ambas el <strong>11 jun, 21:00</strong>.</p>
       <div>
         <label style="display: block; font-size: 9px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px;">Fase de grupos</label>
         <input type="datetime-local" bind:value={deadlineGroup} style="font-size: 12px; padding: 6px 8px;" />
