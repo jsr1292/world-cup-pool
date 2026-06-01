@@ -1,16 +1,31 @@
-export function flagEmoji(code: string): string {
+// Map our flag_code values → flagcdn.com codes. Most are ISO 3166-1 alpha-2;
+// England/Scotland/Wales use GB subdivision codes.
+const FLAGCDN_CODE: Record<string, string> = { ENG: 'gb-eng', SCT: 'gb-sct', WAL: 'gb-wls' };
+
+/** Normalize a team flag_code to a flagcdn slug, or '' if unknown. */
+export function flagSlug(code: string): string {
 	if (!code) return '';
-	if (code === 'ENG') return '🏴󠁧󠁢󠁥󠁮󠁧󠁿';
-	if (code === 'SCT') return '🏴󠁧󠁢󠁳󠁣󠁴󠁿';
-	if (code.length !== 2) {
-		console.warn('[flagEmoji] unknown flag code:', code);
-		return '🏳️';
-	}
-	return code
-		.toUpperCase()
-		.split('')
-		.map(c => String.fromCodePoint(c.codePointAt(0)! + 127397))
-		.join('');
+	const up = code.toUpperCase();
+	if (FLAGCDN_CODE[up]) return FLAGCDN_CODE[up];
+	if (/^[A-Z]{2}$/.test(up)) return up.toLowerCase();
+	return '';
+}
+
+/**
+ * Flag as an <img> (from flagcdn.com), sized to 1em so it scales with the
+ * surrounding font-size. Render with {@html flagEmoji(code)}.
+ *
+ * Why not emoji: Windows ships no flag-emoji font, so regional-indicator
+ * emoji render blank/as letters there. An <img> renders on every platform.
+ * The slug is whitelisted to [a-z-] (see flagSlug), so the returned string
+ * contains no user-controllable HTML and is safe to inject via {@html}.
+ */
+export function flagEmoji(code: string): string {
+	const slug = flagSlug(code);
+	if (!slug) return '';
+	// draggable=false + pointer-events:none so the image never hijacks the
+	// custom team drag-and-drop (native <img> dragging would otherwise win).
+	return `<img src="https://flagcdn.com/h40/${slug}.png" alt="" loading="lazy" decoding="async" draggable="false" style="height:1em;width:auto;display:inline-block;vertical-align:-0.12em;border-radius:2px;pointer-events:none;">`;
 }
 
 export function shortName(name: string): string {

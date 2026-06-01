@@ -7,10 +7,7 @@
   };
   const phaseOrder = ['r32', 'r16', 'qf', 'sf', '3rd', 'final'];
 
-  function flag(code: string) {
-    if (!code) return '';
-    return code.toUpperCase().replace(/./g, c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65));
-  }
+  import { flagEmoji as flag } from '$lib/teams.js';
 
   function teamName(id: number) { return data.teams[id]?.name || 'TBD'; }
   function teamFlag(id: number) { return flag(data.teams[id]?.flag_code || ''); }
@@ -111,7 +108,7 @@
               {#if tid}
                 <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; {idx < 2 ? 'color: var(--text); font-weight: 500;' : 'color: var(--text-muted);'}">
                   <span style="width: 14px; font-size: 9px; color: var(--text-muted);">{idx + 1}.</span>
-                  <span>{teamFlag(tid)}</span>
+                  <span>{@html teamFlag(tid)}</span>
                   <span>{teamName(tid)}</span>
                 </div>
               {:else}
@@ -139,7 +136,7 @@
             <div style="display: flex; flex-wrap: wrap; gap: 4px;">
               {#each picks as pick}
                 <span style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 11px;">
-                  {teamFlag(pick.team_id)} {teamName(pick.team_id)}
+                  {@html teamFlag(pick.team_id)} {teamName(pick.team_id)}
                 </span>
               {/each}
             </div>

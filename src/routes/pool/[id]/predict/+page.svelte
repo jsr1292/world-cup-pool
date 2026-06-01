@@ -531,7 +531,7 @@
               <div style="display: flex; align-items: center; gap: 8px; padding: 10px 8px; border-radius: 6px; background: {slot < 3 ? MEDAL[slot] + '15' : 'rgba(255,255,255,0.03)'}; border: 1px solid {slot < 3 ? MEDAL[slot] + '33' : 'transparent'};">
                 <div style="width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; background: {slot < 3 ? MEDAL[slot] : 'rgba(255,255,255,0.1)'}; color: {slot === 0 ? '#3d2a00' : slot < 3 ? '#fff' : 'var(--text-dim)'}; flex-shrink: 0;">{slot + 1}</div>
                 {#if team}
-                  <span style="font-size: 11px; font-weight: 500; color: var(--text);"><span style="font-size: 16px; margin-right: 4px;">{flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
+                  <span style="font-size: 11px; font-weight: 500; color: var(--text);"><span style="font-size: 16px; margin-right: 4px;">{@html flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
                 {:else}
                   <span style="font-size: 11px; color: var(--text-dim); border: 1px dashed var(--border); padding: 2px 8px; border-radius: 4px;">—</span>
                 {/if}
@@ -566,7 +566,7 @@
               <div style="width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; background: {slot < 3 && team ? MEDAL[slot] : 'rgba(255,255,255,0.1)'}; color: {slot === 0 && team ? '#3d2a00' : slot < 3 && team ? '#fff' : 'var(--text-dim)'}; flex-shrink: 0;">{slot + 1}</div>
               <div style="color: var(--text-dim); font-size: 14px; flex-shrink: 0; cursor: {team ? 'grab' : 'default'}; line-height: 1;">☰</div>
               {#if team}
-                <span style="font-size: 11px; font-weight: 500; color: var(--text);"><span style="font-size: 16px; margin-right: 4px;">{flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
+                <span style="font-size: 11px; font-weight: 500; color: var(--text);"><span style="font-size: 16px; margin-right: 4px;">{@html flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
               {:else}
                 <span style="font-size: 11px; color: var(--text-dim); border: 1px dashed var(--border); padding: 2px 8px; border-radius: 4px;">—</span>
               {/if}
@@ -588,7 +588,7 @@
                     ondragstart={(e) => handleDragStartUnassigned(e, group, team.id)}
                     style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: rgba(255,255,255,0.03); cursor: pointer; font-size: 11px; color: var(--text);"
                   >
-                    <span style="font-size: 14px;">{flagEmoji(team.flag_code)}</span>
+                    <span style="font-size: 14px;">{@html flagEmoji(team.flag_code)}</span>
                     {shortName(team.name)}
                   </button>
                 {/each}
@@ -650,7 +650,7 @@
                 <div style="width: 26px; height: 26px; border-radius: 50%; border: 1.5px dashed {isNext ? 'var(--border)' : 'transparent'}; flex-shrink: 0;"></div>
               {/if}
               <!-- Team info -->
-              <span style="font-size: 13px; font-weight: {isRanked ? '600' : '400'}; color: var(--text); flex: 1;"><span style="font-size: 20px; margin-right: 6px;">{flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
+              <span style="font-size: 13px; font-weight: {isRanked ? '600' : '400'}; color: var(--text); flex: 1;"><span style="font-size: 20px; margin-right: 6px;">{@html flagEmoji(team.flag_code)}</span>{shortName(team.name)}</span>
               {#if isRanked}
                 <span style="font-size: 14px; color: var(--text-dim); opacity: 0.5;">×</span>
               {/if}
@@ -688,7 +688,7 @@
                   <!-- Home team -->
                   <div style="flex: 1; display: flex; align-items: center; gap: 6px; justify-content: flex-end;">
                     <span style="font-size: 13px; font-weight: 500; color: var(--text); text-align: right;">{shortName(match.home_name)}</span>
-                    <span style="font-size: 18px;">{flagEmoji(match.home_flag)}</span>
+                    <span style="font-size: 18px;">{@html flagEmoji(match.home_flag)}</span>
                   </div>
 
                   <!-- Score inputs -->
@@ -720,7 +720,7 @@
 
                   <!-- Away team -->
                   <div style="flex: 1; display: flex; align-items: center; gap: 6px;">
-                    <span style="font-size: 18px;">{flagEmoji(match.away_flag)}</span>
+                    <span style="font-size: 18px;">{@html flagEmoji(match.away_flag)}</span>
                     <span style="font-size: 13px; font-weight: 500; color: var(--text);">{shortName(match.away_name)}</span>
                   </div>
                 </div>
