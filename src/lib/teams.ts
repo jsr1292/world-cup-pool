@@ -23,9 +23,12 @@ export function flagSlug(code: string): string {
 export function flagEmoji(code: string): string {
 	const slug = flagSlug(code);
 	if (!slug) return '';
-	// draggable=false + pointer-events:none so the image never hijacks the
-	// custom team drag-and-drop (native <img> dragging would otherwise win).
-	return `<img src="https://flagcdn.com/h40/${slug}.png" alt="" loading="lazy" decoding="async" draggable="false" style="height:1em;width:auto;display:inline-block;vertical-align:-0.12em;border-radius:2px;pointer-events:none;">`;
+	// Fixed 3:2 box + object-fit:cover so every flag renders at the SAME size
+	// regardless of its native aspect ratio (otherwise wide flags like Qatar
+	// look elongated next to square ones like Switzerland). Sized in em so it
+	// scales with the surrounding font-size. draggable=false + pointer-events
+	// :none so the image never hijacks the custom team drag-and-drop.
+	return `<img src="https://flagcdn.com/h40/${slug}.png" alt="" loading="lazy" decoding="async" draggable="false" style="height:1em;width:1.5em;object-fit:cover;display:inline-block;vertical-align:-0.12em;border-radius:2px;pointer-events:none;">`;
 }
 
 export function shortName(name: string): string {
