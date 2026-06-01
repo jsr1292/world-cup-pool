@@ -2,6 +2,7 @@ import {
   authenticateUser, createUser, createSession,
   createEmailVerificationToken, markEmailVerified, getUserEmailById,
 } from '$lib/server/queries.js';
+import { query } from '$lib/server/db.js';
 import { isValidEmail, isEmailDomainAllowed, allowedEmailDomain } from '$lib/server/email-policy.js';
 import { isEmailConfigured, sendVerificationEmail } from '$lib/server/email.js';
 import { json, redirect, type RequestHandler } from '@sveltejs/kit';
@@ -97,6 +98,18 @@ export const POST: RequestHandler = async ({ request, cookies, params, url, getC
     try {
       const result = await createUser(email, password, display_name.trim());
       const userId = Number(result.rows[0].id);
+
+      // Promote to admin at REGISTRATION time if this account matches the
+      // configured admin_username (by handle or email). apply-config only runs at
+      // boot, so on a fresh DB the admin account doesn't exist yet when it runs —
+      // without this, the owner registers and is NOT admin until a restart.
+      const adminUser = (process.env.ADMIN_USERNAME || '').trim();
+      if (adminUser && adminUser !== 'null') {
+        await query(
+          'UPDATE users SET is_admin = true WHERE id = $1 AND (username = $2 OR lower(email) = lower($2))',
+          [userId, adminUser]
+        ).catch((e) => console.error('[auth] admin auto-promote failed:', e));
+      }
 
       if (isEmailConfigured()) {
         // Strict: must confirm via the emailed link before logging in. No session.

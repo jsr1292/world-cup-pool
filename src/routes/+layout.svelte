@@ -264,8 +264,14 @@
 
   /* Mobile top bar */
   .top-bar {
-    position: sticky;
+    /* Fixed (not sticky) so it stays anchored to the viewport top — a sticky bar
+       rubber-bands down with the content on iOS overscroll, and because it leaves
+       the normal flow the main-content padding-top is the single correct offset
+       (sticky double-counted, leaving a big gap). */
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 50;
     background: var(--bg-nav);
     backdrop-filter: blur(20px);
