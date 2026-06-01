@@ -39,9 +39,15 @@ describe('flagEmoji (img-based, cross-platform)', () => {
 });
 
 describe('shortName', () => {
-  it('shortens long names and passes through known maps', () => {
-    expect(shortName('South Korea')).toBe('S. Korea');
-    expect(shortName('Czech Republic')).toBe('Czechia');
-    expect(shortName('Brazil')).toBe('Brazil');
+  it('returns Spanish display names for the seeded teams', () => {
+    expect(shortName('South Korea')).toBe('Corea del Sur');
+    expect(shortName('Czech Republic')).toBe('Chequia');
+    expect(shortName('Brazil')).toBe('Brasil');
+    expect(shortName('United States')).toBe('EE. UU.');
+    expect(shortName('Ivory Coast')).toBe('C. de Marfil');
+  });
+  it('falls back to a truncation for unknown names', () => {
+    expect(shortName('Some Very Long Unknown Name')).toBe('Some Very Long');
+    expect(shortName('')).toBe('');
   });
 });

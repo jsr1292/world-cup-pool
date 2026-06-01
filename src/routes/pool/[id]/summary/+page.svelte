@@ -7,9 +7,9 @@
   };
   const phaseOrder = ['r32', 'r16', 'qf', 'sf', '3rd', 'final'];
 
-  import { flagEmoji as flag } from '$lib/teams.js';
+  import { flagEmoji as flag, shortName } from '$lib/teams.js';
 
-  function teamName(id: number) { return data.teams[id]?.name || 'TBD'; }
+  function teamName(id: number) { const n = data.teams[id]?.name; return n ? shortName(n) : 'TBD'; }
   function teamFlag(id: number) { return flag(data.teams[id]?.flag_code || ''); }
 
   function getEntry() { return data.entries.find((e: any) => e.id === selectedEntry); }

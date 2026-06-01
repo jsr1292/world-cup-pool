@@ -31,19 +31,62 @@ export function flagEmoji(code: string): string {
 	return `<img src="https://flagcdn.com/h40/${slug}.png" alt="" loading="lazy" decoding="async" draggable="false" style="height:1em;width:1.5em;object-fit:cover;display:inline-block;vertical-align:-0.12em;border-radius:2px;pointer-events:none;">`;
 }
 
+// Spanish display names for the teams, keyed by the English name stored in the
+// DB (team.name). Kept reasonably short so they fit the compact group/bracket
+// cards. This is display-only — the stored English name still drives schedule
+// matching and all name-based logic, so changing these never affects scoring.
+const ES_NAME: Record<string, string> = {
+	'Czech Republic': 'Chequia',
+	'Mexico': 'México',
+	'South Africa': 'Sudáfrica',
+	'South Korea': 'Corea del Sur',
+	'Bosnia and Herzegovina': 'Bosnia',
+	'Canada': 'Canadá',
+	'Qatar': 'Catar',
+	'Switzerland': 'Suiza',
+	'Brazil': 'Brasil',
+	'Haiti': 'Haití',
+	'Morocco': 'Marruecos',
+	'Scotland': 'Escocia',
+	'Australia': 'Australia',
+	'Paraguay': 'Paraguay',
+	'Turkey': 'Turquía',
+	'United States': 'EE. UU.',
+	'Curaçao': 'Curazao',
+	'Ecuador': 'Ecuador',
+	'Germany': 'Alemania',
+	'Ivory Coast': 'C. de Marfil',
+	'Japan': 'Japón',
+	'Netherlands': 'P. Bajos',
+	'Sweden': 'Suecia',
+	'Tunisia': 'Túnez',
+	'Belgium': 'Bélgica',
+	'Egypt': 'Egipto',
+	'Iran': 'Irán',
+	'New Zealand': 'N. Zelanda',
+	'Cape Verde': 'Cabo Verde',
+	'Saudi Arabia': 'Arabia Saudí',
+	'Spain': 'España',
+	'Uruguay': 'Uruguay',
+	'France': 'Francia',
+	'Iraq': 'Irak',
+	'Norway': 'Noruega',
+	'Senegal': 'Senegal',
+	'Algeria': 'Argelia',
+	'Argentina': 'Argentina',
+	'Austria': 'Austria',
+	'Jordan': 'Jordania',
+	'Colombia': 'Colombia',
+	'DR Congo': 'RD Congo',
+	'Portugal': 'Portugal',
+	'Uzbekistan': 'Uzbekistán',
+	'Croatia': 'Croacia',
+	'England': 'Inglaterra',
+	'Ghana': 'Ghana',
+	'Panama': 'Panamá',
+};
+
+/** Spanish display name for a team (falls back to the given name). */
 export function shortName(name: string): string {
-	const MAP: Record<string, string> = {
-		'United States': 'USA',
-		'South Korea': 'S. Korea',
-		'South Africa': 'S. Africa',
-		"Ivory Coast": "Côte d'Ivoire",
-		'New Zealand': 'N. Zealand',
-		'Cape Verde': 'Cape Verde',
-		'Czech Republic': 'Czechia',
-		'Saudi Arabia': 'S. Arabia',
-		'Bosnia and Herzegovina': 'Bosnia',
-		'DR Congo': 'DR Congo',
-		'North Macedonia': 'N. Macedonia',
-	};
-	return MAP[name] ?? (name ? name.substring(0, 14) : '');
+	return ES_NAME[name] ?? (name ? name.substring(0, 14) : '');
 }

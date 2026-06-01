@@ -627,6 +627,47 @@
     </div>
   {/if}
 
+  <!-- Tiebreaker: predicted final score (kept at the TOP so nobody misses it) -->
+  <div class="tiebreaker-card">
+    <div class="tiebreaker-title">🏆 Resultado de la Final (desempate)</div>
+    <div class="tiebreaker-subtitle">No te lo saltes: si hay empate a puntos, gana quien más se acerque al marcador real de la final. Puedes rellenarlo en cualquier momento.</div>
+    <div class="tiebreaker-inputs">
+      <div class="tiebreaker-team">
+        <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Local</span>
+        <input
+          type="number"
+          min="0"
+          max="30"
+          bind:value={tieHome}
+          oninput={onTieInput}
+          placeholder="-"
+          disabled={data.isLocked}
+          class="tiebreaker-input"
+        />
+      </div>
+      <span class="tiebreaker-dash">—</span>
+      <div class="tiebreaker-team">
+        <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Visitante</span>
+        <input
+          type="number"
+          min="0"
+          max="30"
+          bind:value={tieAway}
+          oninput={onTieInput}
+          placeholder="-"
+          disabled={data.isLocked}
+          class="tiebreaker-input"
+        />
+      </div>
+    </div>
+    <div style="margin-top: 6px; font-size: 10px;">
+      {#if tieSaving}<span style="color: var(--text-muted);">Guardando...</span>
+      {:else if tieSaved}<span style="color: var(--green);">✓ Guardado</span>
+      {:else if tieHome !== null && tieAway !== null}<span style="color: var(--text-dim);">Auto-guardado</span>
+      {:else}<span style="color: var(--text-dim);">Opcional pero recomendado</span>{/if}
+    </div>
+  </div>
+
   <!-- Warning: incomplete groups -->
   {#if groupsPredicted < 12}
     <div class="incomplete-banner">
@@ -1021,46 +1062,6 @@
     <span class="legend-item"><span class="legend-tbd">TBD</span> Clasificados (3er puesto o grupo sin predecir)</span>
   </div>
 
-  <!-- Tiebreaker: predicted final score -->
-  <div class="tiebreaker-card">
-    <div class="tiebreaker-title">🏆 Desempate: Resultado de la Final</div>
-    <div class="tiebreaker-subtitle">Si hay empate a puntos, gana quien más se acerque al resultado final.</div>
-    <div class="tiebreaker-inputs">
-      <div class="tiebreaker-team">
-        <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Local</span>
-        <input
-          type="number"
-          min="0"
-          max="30"
-          bind:value={tieHome}
-          oninput={onTieInput}
-          placeholder="-"
-          disabled={data.isLocked}
-          class="tiebreaker-input"
-        />
-      </div>
-      <span class="tiebreaker-dash">—</span>
-      <div class="tiebreaker-team">
-        <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Visitante</span>
-        <input
-          type="number"
-          min="0"
-          max="30"
-          bind:value={tieAway}
-          oninput={onTieInput}
-          placeholder="-"
-          disabled={data.isLocked}
-          class="tiebreaker-input"
-        />
-      </div>
-    </div>
-    <div style="margin-top: 6px; font-size: 10px;">
-      {#if tieSaving}<span style="color: var(--text-muted);">Guardando...</span>
-      {:else if tieSaved}<span style="color: var(--green);">✓ Guardado</span>
-      {:else if tieHome !== null && tieAway !== null}<span style="color: var(--text-dim);">Auto-guardado</span>
-      {:else}<span style="color: var(--text-dim);">Opcional</span>{/if}
-    </div>
-  </div>
 </div>
 
 <style>
@@ -1437,10 +1438,10 @@
   }
 
   .tiebreaker-card {
-    margin-top: 24px;
-    padding: 16px 20px;
-    background: var(--bg-card);
-    border: 1px solid rgba(201, 168, 76, 0.2);
+    margin: 14px 0 18px;
+    padding: 14px 18px;
+    background: rgba(201, 168, 76, 0.06);
+    border: 1px solid rgba(201, 168, 76, 0.45);
     border-radius: 8px;
   }
 

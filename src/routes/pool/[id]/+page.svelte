@@ -1,7 +1,7 @@
 <script lang="ts">
   import { headerTitle } from '$lib/stores/header';
   import { haptic } from '$lib/haptic';
-  import { flagEmoji } from '$lib/teams.js';
+  import { flagEmoji, shortName } from '$lib/teams.js';
   let { data } = $props();
   let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
   const tabIndexOrder = ['predictions', 'leaderboard', 'members', 'summary', 'results', 'scoring'];
@@ -525,7 +525,7 @@
                       {@const correct = isGroupCorrect(group, idx + 1, team.id)}
                       <tr style="border-top: 1px solid var(--border); {idx < 2 ? 'color: var(--text);' : 'color: var(--text-muted);'}">
                         <td style="padding: 4px 0; font-size: 9px; color: var(--text-muted);">{idx + 1}</td>
-                        <td style="padding: 4px;">{@html flagEmoji(team.flag_code)} {team.name}</td>
+                        <td style="padding: 4px;">{@html flagEmoji(team.flag_code)} {shortName(team.name)}</td>
                         <td style="padding: 4px; text-align: center; font-weight: 600;">{team.pts}</td>
                         <td style="padding: 4px; text-align: center;">{team.gf}</td>
                         <td style="padding: 4px; text-align: center;">{team.ga}</td>
@@ -549,7 +549,7 @@
                 {@const homeWin = isFinished && match.home_score > match.away_score}
                 {@const awayWin = isFinished && match.away_score > match.home_score}
                 <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
-                  <span style="flex: 1; text-align: right; font-size: 12px; {homeWin ? 'font-weight: 600; color: var(--text);' : isFinished ? 'color: var(--text-muted);' : 'color: var(--text);'}">{@html flagEmoji(match.home_flag)} {match.home_name ?? 'TBD'}</span>
+                  <span style="flex: 1; text-align: right; font-size: 12px; {homeWin ? 'font-weight: 600; color: var(--text);' : isFinished ? 'color: var(--text-muted);' : 'color: var(--text);'}">{@html flagEmoji(match.home_flag)} {match.home_name ? shortName(match.home_name) : 'TBD'}</span>
                   <div style="min-width: 56px; text-align: center;">
                     {#if isFinished}
                       <span style="font-size: 14px; font-weight: 700; color: var(--gold);">{match.home_score} - {match.away_score}</span>
@@ -557,7 +557,7 @@
                       <span style="font-size: 9px; color: var(--text-muted);">Pend.</span>
                     {/if}
                   </div>
-                  <span style="flex: 1; text-align: left; font-size: 12px; {awayWin ? 'font-weight: 600; color: var(--text);' : isFinished ? 'color: var(--text-muted);' : 'color: var(--text);'}">{match.away_name ?? 'TBD'} {@html flagEmoji(match.away_flag)}</span>
+                  <span style="flex: 1; text-align: left; font-size: 12px; {awayWin ? 'font-weight: 600; color: var(--text);' : isFinished ? 'color: var(--text-muted);' : 'color: var(--text);'}">{match.away_name ? shortName(match.away_name) : 'TBD'} {@html flagEmoji(match.away_flag)}</span>
                 </div>
                 {#if pred && isFinished}
                   {@const actualWinner = homeWin ? match.home_team_id : awayWin ? match.away_team_id : null}
