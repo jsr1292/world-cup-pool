@@ -225,7 +225,12 @@
       _teams.r32[i][0] = getGroupTeam(m.t1g, m.t1p);
       // Only auto-fill team2 from group predictions if user hasn't explicitly picked
       if (!_picks.r32[i][1]) {
-        _teams.r32[i][1] = getGroupTeam(m.t2g, m.t2p);
+        // For a wildcard 3rd-place slot keep the user's chosen occupant
+        // (_thirdSlots). getGroupTeam(WILDCARD,…) returns null, which would
+        // wipe the 3rd-place team the instant it's selected.
+        _teams.r32[i][1] = m.t2g === WILDCARD
+          ? (_thirdSlots[i] ?? null)
+          : getGroupTeam(m.t2g, m.t2p);
       }
     }
 
