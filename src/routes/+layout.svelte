@@ -1,17 +1,11 @@
 <script>
   import { browser } from '$app/environment';
-  import { onNavigate } from '$app/navigation';
   import '../app.css';
   import { page } from '$app/stores';
   import { toast } from '$lib/toast.js';
   import { logout } from '$lib/logout.js';
   import { WORLD_CUP_KICKOFF_MS, WORLD_CUP_DURATION_MS } from '$lib/constants.js';
 
-  let fading = $state(false);
-  onNavigate(() => {
-    fading = true;
-    return () => { fading = false; };
-  });
   let { children, data } = $props();
 
   // PWA service worker disabled during development — re-enable for production builds
@@ -201,7 +195,7 @@
   {/if}
 
   <!-- Main Content -->
-  <main class="main-content" style="transition: opacity 0.18s ease, transform 0.18s ease; opacity: {fading ? 0 : 1}; transform: {fading ? 'translateY(4px)' : 'none'};">
+  <main class="main-content" class:full-bleed={!data?.user}>
     {@render children()}
   </main>
 

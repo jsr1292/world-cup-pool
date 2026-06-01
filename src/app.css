@@ -236,6 +236,48 @@ button {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Logged-out pages (login/register/forgot/reset) have no sidebar or bottom nav,
+   so the content area must be full-bleed — otherwise the desktop sidebar margin
+   and page padding leave a gap above/left of the full-screen login layout.
+   Higher specificity (two classes) overrides the padded .main-content rules in
+   the media queries below. */
+.main-content.full-bleed {
+  margin-left: 0;
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+
+/* Auth-page layout, shared by login / forgot / reset (global so all three render
+   the same full-screen centered form; the golden brand panel only appears on the
+   pages that include a .login-brand element). */
+.login-layout {
+  min-height: 100dvh;
+  display: flex;
+  align-items: stretch;
+}
+.login-brand { display: none; }
+.login-form-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+@media (min-width: 768px) {
+  .login-layout { flex-direction: row; }
+  .login-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 45%;
+    background: linear-gradient(135deg, rgba(201,168,76,0.1) 0%, rgba(7,9,15,0.5) 100%);
+    border-right: 1px solid var(--border);
+    padding: 60px;
+  }
+  .login-mobile-header { display: none !important; }
+}
+
 /* Desktop sidebar */
 @media (min-width: 768px) {
   .app-layout {
