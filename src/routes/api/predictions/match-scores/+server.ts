@@ -212,7 +212,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   // it entirely until the first result lands.
   const poolId = pred.pool_id;
   const { rows: anyFinished } = await query(
-    `SELECT 1 FROM matches WHERE status = 'finished' AND home_score IS NOT NULL LIMIT 1`
+    `SELECT 1 FROM matches WHERE phase = 'group' AND status = 'finished' AND home_score IS NOT NULL LIMIT 1`
   );
   if (anyFinished.length > 0) {
     try {

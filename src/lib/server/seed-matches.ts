@@ -174,7 +174,15 @@ export async function setGroupKickoffs(client: pg.PoolClient | pg.Client): Promi
 	const { rows } = await client.query(
 		`SELECT COUNT(*)::int AS n FROM matches WHERE phase = 'group' AND kickoff_time IS NOT NULL`
 	);
-	return rows[0].n as number;
+	const n = rows[0].n as number;
+	// All 12×6 fixtures should have matched a seeded row by team pair. A lower
+	// count means a schedule name drifted from seed.ts (a fixture failed to match
+	// and silently left a match untimed). Warn loudly but never throw — a missing
+	// kickoff must not break boot setup; the pool deadline still gates that match.
+	if (n !== 72) {
+		console.warn(`[seed-matches] WARNING: only ${n}/72 group matches have a kickoff_time — a GROUP_SCHEDULE team name may not match seed.ts.`);
+	}
+	return n;
 }
 
 export interface SeedMatchesResult {

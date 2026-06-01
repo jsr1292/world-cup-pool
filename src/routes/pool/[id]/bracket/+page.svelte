@@ -389,7 +389,7 @@
       if (r.ok) {
         const body = await r.json().catch(() => ({}));
         if (body.action === 'deleted') showToast('✓ Borrado');
-        else showToast('✓ Guardado');
+        else { showToast('✓ Guardado'); tieSaved = true; setTimeout(() => tieSaved = false, 2000); }
       }
     } catch {}
     tieSaving = false;

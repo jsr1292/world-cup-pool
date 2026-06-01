@@ -62,7 +62,7 @@
   }
 
   function getTeamName(id: number) { return data.resultsTeamCache[id]?.name || 'TBD'; }
-  function getTeamFlag(id: number) { getTeamFlag: return flagEmoji(data.resultsTeamCache[id]?.flag_code || ''); }
+  function getTeamFlag(id: number) { return flagEmoji(data.resultsTeamCache[id]?.flag_code || ''); }
   function isGroupCorrect(groupName: string, position: number, actualTeamId: number) {
     const predicted = groupPredLookup[groupName]?.[position - 1];
     return predicted && predicted === actualTeamId;

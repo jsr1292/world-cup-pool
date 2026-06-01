@@ -6,7 +6,6 @@ vi.mock('$lib/server/queries.js', () => ({
 	getAllTeams: vi.fn(),
 	createPrediction: vi.fn(),
 	getUserPredictions: vi.fn(),
-	getGroupPredictions: vi.fn(),
 }));
 
 vi.mock('$lib/server/db.js', () => ({
@@ -14,7 +13,7 @@ vi.mock('$lib/server/db.js', () => ({
 	getClient: vi.fn(),
 }));
 
-import { getPoolById, getAllTeams, createPrediction, getUserPredictions, getGroupPredictions } from '$lib/server/queries.js';
+import { getPoolById, getAllTeams, createPrediction, getUserPredictions } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
 
 const mockParams = (id: string) => ({ id });
@@ -39,28 +38,21 @@ const defaultPrediction = { id: 10, label: 'Principal', total_score: 5 };
  *   2. query → membership gate (IDOR check)
  *   3. getAllTeams → teams[]
  *   4. getUserPredictions → predictions[]
- *   5. query → knockout matches (runs always)
- *   6. query → group matches (runs always)
- *   7. (if selectedPrediction) getGroupPredictions → group pred rows
- *   8. (if selectedPrediction) query → match predictions
+ *   5. query → group matches (runs always)
+ *   6. (if selectedPrediction) query → match predictions
  */
 function setupDefaultMocks(overrides: {
 	pool?: any;
 	teams?: any[];
 	predictions?: any[];
-	knockoutRows?: any[];
 	groupMatchRows?: any[];
-	groupPredRows?: any[];
 	matchPredRows?: any[];
 	memberRows?: any[];
-	lockedGroupRows?: any[];
 } = {}) {
 	const pool = overrides.pool ?? defaultPool;
 	const teams = overrides.teams ?? [];
 	const predictions = overrides.predictions ?? [defaultPrediction];
-	const knockoutRows = overrides.knockoutRows ?? [];
 	const groupMatchRows = overrides.groupMatchRows ?? [];
-	const groupPredRows = overrides.groupPredRows ?? [];
 	const matchPredRows = overrides.matchPredRows ?? [];
 	const memberRows = overrides.memberRows ?? [{ 1: 1 }]; // is a member by default
 
@@ -69,13 +61,9 @@ function setupDefaultMocks(overrides: {
 	(query as any).mockResolvedValueOnce({ rows: memberRows });
 	(getAllTeams as any).mockResolvedValue(teams);
 	(getUserPredictions as any).mockResolvedValue(predictions);
-	// lockedGroups query (runs always, after the deadline check)
-	(query as any).mockResolvedValueOnce({ rows: overrides.lockedGroupRows ?? [] });
-	// knockout + group matches queries (both run always, before the entry block)
-	(query as any).mockResolvedValueOnce({ rows: knockoutRows }); // knockout matches query
-	(query as any).mockResolvedValueOnce({ rows: groupMatchRows }); // group matches query
+	// group matches query (runs always, before the entry block)
+	(query as any).mockResolvedValueOnce({ rows: groupMatchRows });
 	if (predictions.length > 0) {
-		(getGroupPredictions as any).mockResolvedValue(groupPredRows);
 		(query as any).mockResolvedValueOnce({ rows: matchPredRows }); // match predictions query
 	}
 }
@@ -181,16 +169,13 @@ describe('predict page load', () => {
 			.mockResolvedValueOnce([{ id: 99, label: '', total_score: 0 }]); // after create
 		// query call sequence for auto-create path:
 		//   1st: membership check for auto-create → is a member
-		//   2nd: knockout matches → empty
+		//   2nd: group matches → empty
 		//   3rd: match predictions for the auto-created entry (selected by default)
 		(query as any)
 			.mockResolvedValueOnce({ rows: [{ 1: 1 }] }) // auto-create membership check: is a member
-			.mockResolvedValueOnce({ rows: [] }) // lockedGroups
-			.mockResolvedValueOnce({ rows: [] }) // knockout matches
 			.mockResolvedValueOnce({ rows: [] }) // group matches
 			.mockResolvedValueOnce({ rows: [] }); // match predictions for selected (auto-created) entry
 		(createPrediction as any).mockResolvedValue(undefined);
-		(getGroupPredictions as any).mockResolvedValue([]);
 
 		const result = await load({
 			params: mockParams('1'),
@@ -299,32 +284,9 @@ describe('predict page load', () => {
 		expect(result.selectedId).toBe(10);
 	});
 
-	// 13. Returns knockoutByPhase correctly grouped
-	it('returns knockoutByPhase correctly grouped', async () => {
-		const knockoutRows = [
-			{ id: 1, phase: 'r16', home_team_id: 1, away_team_id: 2, home_name: 'A', home_flag: 'a', away_name: 'B', away_flag: 'b' },
-			{ id: 2, phase: 'r16', home_team_id: 3, away_team_id: 4, home_name: 'C', home_flag: 'c', away_name: 'D', away_flag: 'd' },
-			{ id: 3, phase: 'qf', home_team_id: 5, away_team_id: 6, home_name: 'E', home_flag: 'e', away_name: 'F', away_flag: 'f' },
-		];
-		setupDefaultMocks({ knockoutRows });
-
-		const result = await load({
-			params: mockParams('1'),
-			locals: mockLocals(1) as any,
-			url: mockUrl(),
-		} as any);
-
-		expect(Object.keys(result.knockoutByPhase)).toEqual(['r16', 'qf']);
-		expect(result.knockoutByPhase['r16']).toHaveLength(2);
-		expect(result.knockoutByPhase['qf']).toHaveLength(1);
-	});
-
-	// 14. Returns existing group and match predictions for selected entry
-	it('returns existing group and match predictions for selected entry', async () => {
+	// 13. Returns existing group scorelines (match predictions) for selected entry
+	it('returns existing match predictions for selected entry', async () => {
 		setupDefaultMocks({
-			groupPredRows: [
-				{ group_name: 'A', position_1: 10, position_2: 20, position_3: 30, position_4: 40 },
-			],
 			matchPredRows: [
 				{ match_id: 5, home_score: 2, away_score: 1 },
 				{ match_id: 6, home_score: 0, away_score: 3 },
@@ -337,14 +299,11 @@ describe('predict page load', () => {
 			url: mockUrl(),
 		} as any);
 
-		expect(result.existingGroupPreds['A']).toEqual({
-			pos1: 10, pos2: 20, pos3: 30, pos4: 40,
-		});
 		expect(result.existingMatchPreds[5]).toEqual({ home_score: 2, away_score: 1 });
 		expect(result.existingMatchPreds[6]).toEqual({ home_score: 0, away_score: 3 });
 	});
 
-	// 15. Returns empty existing predictions when no selected prediction
+	// 14. Returns empty existing predictions when no selected prediction
 	it('returns empty existing predictions when no selected prediction', async () => {
 		(getPoolById as any).mockResolvedValue(defaultPool);
 		// Membership gate query (IDOR check) → is a member
@@ -352,10 +311,6 @@ describe('predict page load', () => {
 		(getAllTeams as any).mockResolvedValue([]);
 		(getUserPredictions as any).mockResolvedValue([]); // no predictions
 		// Auto-create membership check → NOT a member
-		(query as any).mockResolvedValueOnce({ rows: [] });
-		// lockedGroups query
-		(query as any).mockResolvedValueOnce({ rows: [] });
-		// knockout matches query
 		(query as any).mockResolvedValueOnce({ rows: [] });
 		// group matches query
 		(query as any).mockResolvedValueOnce({ rows: [] });
@@ -366,9 +321,7 @@ describe('predict page load', () => {
 			url: mockUrl(),
 		} as any);
 
-		expect(result.existingGroupPreds).toEqual({});
 		expect(result.existingMatchPreds).toEqual({});
 		expect(result.selectedId).toBeNull();
-		expect(getGroupPredictions).not.toHaveBeenCalled();
 	});
 });

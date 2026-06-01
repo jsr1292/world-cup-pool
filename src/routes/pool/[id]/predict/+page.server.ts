@@ -1,4 +1,4 @@
-import { getPoolById, getAllTeams, createPrediction, getUserPredictions, getGroupPredictions } from '$lib/server/queries.js';
+import { getPoolById, getAllTeams, createPrediction, getUserPredictions } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
 import { redirect, error } from '@sveltejs/kit';
 import type { ServerLoad } from '@sveltejs/kit';
@@ -49,45 +49,14 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   const deadline = pool.deadline_group ? new Date(pool.deadline_group as string) : null;
   const isLocked = deadline ? new Date() >= deadline : false;
 
-  // Per-group lock: a group whose matches have already started/finished can no
-  // longer be predicted (the save endpoint drops it). Surface this so the UI
-  // shows it as locked instead of silently discarding the user's input.
-  const { rows: lockedRows } = await query(
-    `SELECT DISTINCT group_name FROM matches
-       WHERE phase = 'group' AND group_name IS NOT NULL
-         AND (status = 'finished' OR (kickoff_time IS NOT NULL AND kickoff_time <= NOW()))`
-  );
-  const lockedGroups: string[] = lockedRows.map((r: any) => r.group_name);
-
   // Get selected prediction from query param or first one
   const selectedLabel = url.searchParams.get('entry') || '';
-  // §7.3 — Match labels case-insensitively to mirror the /api/predictions/group
-  // uppercase normalization. Two entries differing only in case would otherwise
-  // be unselectable.
+  // §7.3 — Match labels case-insensitively (mirrors the uppercase normalization
+  // used elsewhere). Two entries differing only in case would otherwise be
+  // unselectable.
   const selectedNorm = selectedLabel?.toLowerCase() ?? '';
   let selectedPrediction = predictions.find(p => (p.label ?? '').toLowerCase() === selectedNorm) || predictions[0] || null;
   let selectedId: number | null = null;
-
-  // Load knockout matches with both teams set (available for prediction)
-  const { rows: knockoutMatches } = await query(`
-    SELECT m.id, m.phase, m.home_team_id, m.away_team_id,
-      ht.name as home_name, ht.flag_code as home_flag,
-      at.name as away_name, at.flag_code as away_flag
-    FROM matches m
-    LEFT JOIN teams ht ON ht.id = m.home_team_id
-    LEFT JOIN teams at ON at.id = m.away_team_id
-    WHERE m.phase IN ('r32','r16','qf','sf','3rd','final')
-      AND m.home_team_id IS NOT NULL
-      AND m.away_team_id IS NOT NULL
-    ORDER BY m.phase, m.id
-  `);
-
-  // Group knockout matches by phase
-  const knockoutByPhase: Record<string, any[]> = {};
-  for (const m of knockoutMatches) {
-    if (!knockoutByPhase[m.phase]) knockoutByPhase[m.phase] = [];
-    knockoutByPhase[m.phase].push(m);
-  }
 
   // Load the 72 group matches (always have both teams from the seed). The group
   // stage is predicted as scorelines now; the standings table is derived from
@@ -117,24 +86,12 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
     });
   }
 
-  // Load existing match predictions
+  // Load existing match predictions (group scorelines) for the selected entry —
+  // these seed the score inputs and the live derived-standings preview.
   const existingMatchPreds: Record<number, { home_score: number; away_score: number }> = {};
-
-  // Load group predictions for selected entry
-  const existingGroupPreds: Record<string, { pos1?: number; pos2?: number; pos3?: number; pos4?: number }> = {};
 
   if (selectedPrediction) {
     selectedId = Number(selectedPrediction.id);
-    const rows = await getGroupPredictions(selectedId) as any[];
-    for (const row of rows) {
-      existingGroupPreds[row.group_name] = {
-        pos1: row.position_1,
-        pos2: row.position_2,
-        pos3: row.position_3,
-        pos4: row.position_4,
-      };
-    }
-    // Load existing match predictions
     const { rows: mpRows } = await query(`
       SELECT match_id, home_score, away_score
       FROM match_predictions WHERE prediction_id = $1
@@ -159,10 +116,7 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
     selectedId,
     selectedLabel: selectedPrediction?.label || '',
     isLocked,
-    lockedGroups,
-    existingGroupPreds,
     groupMatchesByGroup,
-    knockoutByPhase,
     existingMatchPreds,
   };
 };

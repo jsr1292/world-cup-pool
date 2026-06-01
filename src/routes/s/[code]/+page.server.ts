@@ -26,8 +26,22 @@ export const load: PageServerLoad = async ({ params }) => {
 	let groupCorrectMap: Record<number, number> = {};
 	let bracketByPredPhase: Record<number, Record<string, number>> = {};
 	let tiebreakerMap: Record<number, any> = {};
+	let exactHitsMap: Record<number, number> = {};
 
 	if (predIds.length > 0) {
+		// True exact-scoreline hits — same tiebreaker the in-app pool view and the
+		// global leaderboard use, so the public scoreboard orders ties identically.
+		const { rows: ehRows } = await query(`
+			SELECT mp.prediction_id, COUNT(*) AS cnt
+			FROM match_predictions mp
+			JOIN matches m ON m.id = mp.match_id
+				AND m.status = 'finished' AND m.home_score IS NOT NULL AND m.away_score IS NOT NULL
+			WHERE mp.prediction_id = ANY($1::int[])
+				AND mp.home_score = m.home_score AND mp.away_score = m.away_score
+			GROUP BY mp.prediction_id
+		`, [predIds]);
+		ehRows.forEach((r: any) => { exactHitsMap[r.prediction_id] = Number(r.cnt); });
+
 		// Use ANY($1::int[]) — same pattern as pool/[id]/+page.server.ts
 		const { rows: gcRows } = await query(`
 			SELECT prediction_id, COUNT(*) as cnt
@@ -71,14 +85,18 @@ export const load: PageServerLoad = async ({ params }) => {
 			group_correct: groupCorrect,
 			bracket_correct: bracketByPhase,
 			total_correct: groupCorrect + Object.values(bracketByPhase).reduce((a: number, b: number) => a + b, 0),
+			exact_score_hits: exactHitsMap[predId] ?? 0,
 			tiebreaker_close: tiebreakerClose,
 		};
 	});
 
-	// 8e: Use identical sort criteria as pool/[id]/+page.server.ts
-	// total_score DESC → total_correct DESC → tiebreaker_close ASC → updated_at ASC
+	// Identical sort criteria to pool/[id]/+page.server.ts and the global
+	// leaderboard, so a shared scoreboard orders ties the same as the in-app view:
+	// total_score DESC → exact_score_hits DESC → total_correct DESC →
+	// tiebreaker_close ASC → updated_at ASC.
 	enriched.sort((a: any, b: any) =>
 		b.total_score - a.total_score ||
+		b.exact_score_hits - a.exact_score_hits ||
 		b.total_correct - a.total_correct ||
 		a.tiebreaker_close - b.tiebreaker_close ||
 		new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
