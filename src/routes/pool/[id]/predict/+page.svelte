@@ -29,6 +29,10 @@
   let countdown = $state('');
   // 8a: Client-side lock — true if server locked at page load OR if countdown reached zero
   const effectivelyLocked = $derived(data.isLocked || countdown === 'Cerrado');
+  // A specific group whose matches have already started/finished — predictions
+  // for it can no longer be saved (the server drops them), so lock it in the UI.
+  const isGroupStarted = (group) => data.lockedGroups?.includes(group) ?? false;
+  const isGroupLocked = (group) => effectivelyLocked || isGroupStarted(group);
   $effect(() => {
     const dl = pool.deadline_group;
     if (!dl) return;
@@ -518,13 +522,15 @@
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);">
           <div style="width: 28px; height: 28px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold);">{group}</div>
           {#if groupDone}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span><span style="color: var(--green); font-size: 11px;"> ✓</span>{:else}<span style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Grupo {group}</span>{/if}
-          {#if groupDone}
+          {#if isGroupStarted(group)}
+            <span style="margin-left: auto; font-size: 9px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 10px;">🔒 Cerrado</span>
+          {:else if groupDone}
             <span style="margin-left: auto; font-size: 9px; color: var(--green); background: rgba(0,229,160,0.1); padding: 2px 8px; border-radius: 10px;">✓ Completo</span>
           {/if}
         </div>
 
         <!-- Slot rows — each slot is a drop target -->
-        {#if effectivelyLocked}
+        {#if isGroupLocked(group)}
           <div style="display: flex; flex-direction: column; gap: 4px;">
             {#each [0,1,2,3] as slot}
               {@const team = teamAt(group, slot)}
@@ -606,7 +612,9 @@
             <div style="width: 32px; height: 32px; background: rgba(201,168,76,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: var(--gold);">{group}</div>
             <span style="font-size: 12px; font-weight: 600; color: var(--text); letter-spacing: 0.04em;">Grupo {group}</span>
           </div>
-          {#if groupDone}
+          {#if isGroupStarted(group)}
+            <span style="font-size: 9px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 3px 10px; border-radius: 10px; font-weight: 500;">🔒 Cerrado</span>
+          {:else if groupDone}
             <span style="font-size: 9px; color: var(--green); background: rgba(0,229,160,0.1); padding: 3px 10px; border-radius: 10px; font-weight: 500;">✓ Completo</span>
           {:else}
             <button
@@ -618,7 +626,7 @@
         </div>
 
         <!-- Instruction -->
-        {#if !groupDone && !effectivelyLocked}
+        {#if !groupDone && !isGroupLocked(group)}
           {@const ns = nextSlot(group)}
           <div style="font-size: 10px; color: var(--gold); margin-bottom: 10px; padding: 6px 10px; background: rgba(201,168,76,0.08); border-radius: 6px; text-align: center;">
             Toca el equipo que quedar&aacute; <strong>{POS_FULL[ns] || ''}</strong>
@@ -639,7 +647,7 @@
             {@const isRanked = rank >= 0}
             {@const isNext = !groupDone && !isRanked}
             <button
-              disabled={effectivelyLocked || (!isRanked && groupDone)}
+              disabled={isGroupLocked(group) || (!isRanked && groupDone)}
               onclick={() => tapTeam(group, team.id)}
               style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1.5px solid {isRanked ? MEDAL[rank] + '88' : isNext ? 'rgba(255,255,255,0.08)' : 'transparent'}; background: {isRanked ? MEDAL[rank] + '15' : isNext ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.01)'}; cursor: pointer; transition: all 0.2s; width: 100%; text-align: left; {isRanked ? 'opacity: 1;' : isNext ? 'opacity: 0.9;' : 'opacity: 0.35;'}"
             >

@@ -506,6 +506,21 @@
       }} style="font-size: 9px; padding: 8px 16px;">🔄 Sincronizar ahora</button>
       <span style="font-size: 9px; color: var(--text-dim);">Importa los resultados publicados (si hay proveedor configurado) y recalcula</span>
     </div>
+    <div style="margin-bottom: 14px; display: flex; gap: 8px; align-items: center;">
+      <button class="btn-ghost" onclick={async () => {
+        if (!confirm('¿Reiniciar TODOS los resultados de partidos? Esto borra los marcadores y los cruces de eliminatorias (vuelve al estado inicial) y pone todas las puntuaciones a 0. Las predicciones de los usuarios NO se borran.')) return;
+        try {
+          const res = await fetch('/api/admin/reset-results', { method: 'POST' });
+          const d = await res.json();
+          if (res.ok) {
+            localMatches = localMatches.map(m => ({ ...m, home_score: null, away_score: null, status: 'scheduled', penalty_winner_id: null, ...(m.phase !== 'group' ? { home_team_id: null, away_team_id: null, home_name: null, away_name: null } : {}) }));
+            version++;
+            alert(`Resultados reiniciados (${d.group_reset ?? 0} de grupo, ${d.knockout_reset ?? 0} de eliminatorias). Puntuaciones a 0.`);
+          } else alert('Error: ' + (d.error ?? 'desconocido'));
+        } catch { alert('Error de conexión'); }
+      }} style="font-size: 9px; padding: 8px 16px; border-color: var(--red); color: var(--red);">♻️ Reiniciar resultados</button>
+      <span style="font-size: 9px; color: var(--text-dim);">Borra todos los marcadores y cruces (datos de prueba) — no toca las predicciones</span>
+    </div>
     {#if localMatches.length === 0}
       <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px;">
         No hay partidos configurados aún.

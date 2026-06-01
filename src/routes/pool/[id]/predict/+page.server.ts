@@ -49,6 +49,16 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   const deadline = pool.deadline_group ? new Date(pool.deadline_group as string) : null;
   const isLocked = deadline ? new Date() >= deadline : false;
 
+  // Per-group lock: a group whose matches have already started/finished can no
+  // longer be predicted (the save endpoint drops it). Surface this so the UI
+  // shows it as locked instead of silently discarding the user's input.
+  const { rows: lockedRows } = await query(
+    `SELECT DISTINCT group_name FROM matches
+       WHERE phase = 'group' AND group_name IS NOT NULL
+         AND (status = 'finished' OR (kickoff_time IS NOT NULL AND kickoff_time <= NOW()))`
+  );
+  const lockedGroups: string[] = lockedRows.map((r: any) => r.group_name);
+
   // Get selected prediction from query param or first one
   const selectedLabel = url.searchParams.get('entry') || '';
   // §7.3 — Match labels case-insensitively to mirror the /api/predictions/group
@@ -121,6 +131,7 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
     selectedId,
     selectedLabel: selectedPrediction?.label || '',
     isLocked,
+    lockedGroups,
     existingGroupPreds,
     knockoutByPhase,
     existingMatchPreds,
