@@ -2,8 +2,8 @@
   let { data } = $props();
   let mode = $state('login');
   let email = $state('');
-  let emailConfirm = $state('');
   let password = $state('');
+  let passwordConfirm = $state('');
   let displayName = $state('');
   let error = $state('');
   let notice = $state('');
@@ -27,7 +27,7 @@
     const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
     const body = mode === 'login'
       ? { email, password }
-      : { email, email_confirm: emailConfirm, password, display_name: displayName };
+      : { email, password, password_confirm: passwordConfirm, display_name: displayName };
 
     try {
       const res = await fetch(endpoint, {
@@ -99,10 +99,6 @@
 
       {#if mode === 'register'}
         <div>
-          <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Confirmar correo</label>
-          <input type="email" bind:value={emailConfirm} placeholder="repite tu correo" required autocomplete="off" onpaste={(e) => e.preventDefault()} />
-        </div>
-        <div>
           <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Nombre</label>
           <input bind:value={displayName} placeholder="Tu nombre" required autocomplete="name" />
         </div>
@@ -112,6 +108,13 @@
         <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Contraseña</label>
         <input type="password" bind:value={password} placeholder="••••••••" required autocomplete={mode === 'login' ? 'current-password' : 'new-password'} />
       </div>
+
+      {#if mode === 'register'}
+        <div>
+          <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Confirmar contraseña</label>
+          <input type="password" bind:value={passwordConfirm} placeholder="repite tu contraseña" required autocomplete="new-password" onpaste={(e) => e.preventDefault()} />
+        </div>
+      {/if}
 
       {#if error}
         <p style="font-size: 10px; color: var(--red);">{error}</p>

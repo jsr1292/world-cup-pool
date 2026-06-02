@@ -74,17 +74,16 @@ export const POST: RequestHandler = async ({ request, cookies, params, url, getC
     if (!body || typeof body !== 'object') {
       return json({ error: 'Cuerpo inválido' }, { status: 400 });
     }
-    const { email, email_confirm, password, display_name } = body as Record<string, any>;
+    const { email, password, password_confirm, display_name } = body as Record<string, any>;
     if (!email || !password || !display_name) {
       return json({ error: 'Todos los campos son obligatorios' }, { status: 400 });
     }
     if (!isValidEmail(email)) {
       return json({ error: 'Correo electrónico no válido' }, { status: 400 });
     }
-    // Typo guard (works without SMTP): the two email fields must match.
-    if (typeof email_confirm === 'string' &&
-        email_confirm.trim().toLowerCase() !== String(email).trim().toLowerCase()) {
-      return json({ error: 'Los correos no coinciden' }, { status: 400 });
+    // Typo guard: the two password fields must match.
+    if (typeof password_confirm === 'string' && password_confirm !== String(password)) {
+      return json({ error: 'Las contraseñas no coinciden' }, { status: 400 });
     }
     if (!isEmailDomainAllowed(email)) {
       const dom = allowedEmailDomain();

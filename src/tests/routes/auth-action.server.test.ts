@@ -178,9 +178,9 @@ describe('POST /api/auth/[action]', () => {
 		url: new URL(`http://localhost/api/auth/${action}`), getClientAddress: () => ip,
 	});
 
-	// 7d. Confirm-email typo guard
-	it('register: returns 400 when email_confirm does not match', async () => {
-		const res = await POST(evIp('register', { email: 'bob@typsa.es', email_confirm: 'bobby@typsa.es', password: 'secret123', display_name: 'Bob' }, '10.2.0.1'));
+	// 7d. Confirm-password typo guard
+	it('register: returns 400 when password_confirm does not match', async () => {
+		const res = await POST(evIp('register', { email: 'bob@typsa.es', password: 'secret123', password_confirm: 'secret124', display_name: 'Bob' }, '10.2.0.1'));
 		expect(res.status).toBe(400);
 		const body = await res.json();
 		expect(body.error).toMatch(/no coinciden/i);
@@ -192,7 +192,7 @@ describe('POST /api/auth/[action]', () => {
 		mockEmailConfigured.mockReturnValue(true);
 		const cookies = mockCookies();
 		(createUser as ReturnType<typeof vi.fn>).mockResolvedValue({ rows: [{ id: 11 }] });
-		const res = await POST(evIp('register', { email: 'new@typsa.es', email_confirm: 'new@typsa.es', password: 'secret123', display_name: 'New' }, '10.2.0.2', cookies));
+		const res = await POST(evIp('register', { email: 'new@typsa.es', password: 'secret123', password_confirm: 'secret123', display_name: 'New' }, '10.2.0.2', cookies));
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.verify).toBe(true);
