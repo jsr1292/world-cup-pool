@@ -209,10 +209,9 @@
 {#if data?.user}
 <div class="bottom-nav">
   {#each navItems as item}
-    <a href={item.path} class:active={isActive(item.path)}
+    <a href={item.path} class:active={isActive(item.path)} aria-label={item.label}
        onclick={() => { try { navigator.vibrate(5); } catch {} }}>
       <svg class="nav-icon-mobile"><use href="/icon.svg#{item.icon}" /></svg>
-      <span class="nav-label">{item.label}</span>
     </a>
   {/each}
 </div>
@@ -245,21 +244,15 @@
   }
 
   .nav-icon-mobile {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     fill: none;
     stroke: currentColor;
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
     display: block;
-    margin: 0 auto 2px;
-  }
-
-  .nav-label {
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    margin: 0 auto;
   }
 
   /* Mobile top bar */

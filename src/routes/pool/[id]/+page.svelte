@@ -296,10 +296,7 @@
   {#if tab === 'predictions'}
     {#if data.predictions.length === 0}
       <div style="text-align: center; padding: 40px 20px;">
-        <div style="font-size: 40px; margin-bottom: 12px;">⚽</div>
-        <h3 style="font-size: 16px; color: var(--gold); margin-bottom: 8px;">¡Empieza a predecir!</h3>
-        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 20px;">Rellena los resultados de cada grupo y luego el cuadro eliminatorio.</p>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 320px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; max-width: 320px; margin: 0 auto 24px;">
           <a href="/pool/{pool.id}/predict" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 20px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none;">
             <span style="font-size: 24px;">📋</span>
             <span style="font-size: 12px; font-weight: 600; color: var(--text);">Fase de Grupos</span>
@@ -311,6 +308,8 @@
             <span style="font-size: 9px; color: var(--text-muted);">Cuadro completo</span>
           </a>
         </div>
+        <h3 style="font-size: 16px; color: var(--gold); margin-bottom: 8px;">¡Empieza a predecir!</h3>
+        <p style="font-size: 11px; color: var(--text-muted);">Rellena los resultados de cada grupo y luego el cuadro eliminatorio.</p>
       </div>
     {:else}
       {#each data.predictions as pred}
