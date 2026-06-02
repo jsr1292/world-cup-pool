@@ -2,6 +2,7 @@
   import { browser } from '$app/environment';
   import '../app.css';
   import { page } from '$app/stores';
+  import { invalidateAll } from '$app/navigation';
   import { toast } from '$lib/toast.js';
   import { logout } from '$lib/logout.js';
   import { WORLD_CUP_KICKOFF_MS, WORLD_CUP_DURATION_MS } from '$lib/constants.js';
@@ -25,6 +26,62 @@
   $effect(() => {
     if (!browser) return;
     isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  });
+
+  // ── Pull-to-refresh (touch only) ───────────────────────────────────────────
+  // Drag down from the very top of the page to re-run the current route's load
+  // functions via invalidateAll(). Window is the scroller on mobile.
+  let ptrY = $state(0);           // visual offset of the indicator while pulling
+  let ptrActive = $state(false);  // finger is dragging a pull
+  let refreshing = $state(false); // invalidateAll() in flight
+  const PTR_THRESHOLD = 64;       // px of pull (post-resistance) to trigger
+  const PTR_MAX = 90;
+
+  $effect(() => {
+    if (!browser) return;
+    let startY = null;            // gesture start Y, or null when not eligible
+
+    const onStart = (e) => {
+      if (refreshing || e.touches.length !== 1) { startY = null; return; }
+      // Only arm when already scrolled to the very top.
+      startY = window.scrollY <= 0 ? e.touches[0].clientY : null;
+    };
+    const onMove = (e) => {
+      if (startY == null || refreshing) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy <= 0 || window.scrollY > 0) { ptrActive = false; ptrY = 0; return; }
+      // Resistance curve so the pull feels rubbery and never runs away.
+      ptrY = Math.min(dy * 0.5, PTR_MAX);
+      ptrActive = true;
+      if (e.cancelable) e.preventDefault(); // suppress native overscroll while pulling
+    };
+    const onEnd = async () => {
+      if (startY == null) return;
+      const trigger = ptrActive && ptrY >= PTR_THRESHOLD;
+      startY = null;
+      ptrActive = false;
+      if (trigger) {
+        refreshing = true;
+        ptrY = 56; // rest position while the spinner shows
+        try { await invalidateAll(); } finally {
+          refreshing = false;
+          ptrY = 0;
+        }
+      } else {
+        ptrY = 0;
+      }
+    };
+
+    window.addEventListener('touchstart', onStart, { passive: true });
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd, { passive: true });
+    window.addEventListener('touchcancel', onEnd, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', onStart);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('touchcancel', onEnd);
+    };
   });
 
   // Live countdown
@@ -217,6 +274,18 @@
 
 </div>
 
+<!-- Pull-to-refresh indicator (touch). Hidden above the fold until pulled. -->
+{#if browser}
+  <div class="ptr-indicator" class:ptr-snap={!ptrActive}
+    style="transform: translateX(-50%) translateY({ptrY}px); opacity: {Math.min(ptrY / PTR_THRESHOLD, 1)};">
+    <svg class="ptr-spinner" class:spin={refreshing} width="20" height="20" viewBox="0 0 24 24"
+      style={refreshing ? '' : `transform: rotate(${ptrY * 3}deg);`}>
+      <circle cx="12" cy="12" r="9" fill="none" stroke="var(--gold)" stroke-width="2.5"
+        stroke-linecap="round" stroke-dasharray="42" stroke-dashoffset="14" />
+    </svg>
+  </div>
+{/if}
+
 <!-- Mobile Bottom Nav — OUTSIDE the wrapper so position:fixed is truly viewport-relative -->
 {#if data?.user}
 <div class="bottom-nav">
@@ -386,6 +455,28 @@
   @media (min-width: 768px) {
     .top-bar { display: none; }
   }
+
+  /* Pull-to-refresh indicator */
+  .ptr-indicator {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 4px);
+    left: 50%;
+    margin-top: -46px; /* parked above the fold; slides in via translateY */
+    z-index: 60;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--bg-card-solid);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+  }
+  .ptr-indicator.ptr-snap { transition: transform 0.25s ease, opacity 0.25s ease; }
+  .ptr-spinner.spin { animation: ptr-spin 0.7s linear infinite; transform-origin: 50% 50%; }
+  @keyframes ptr-spin { to { transform: rotate(360deg); } }
 
   /* Portrait lock for touch phones (iOS ignores the manifest's orientation). */
   .rotate-lock { display: none; }
