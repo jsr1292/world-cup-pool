@@ -5,7 +5,7 @@
   let { data } = $props();
   let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
   const tabIndexOrder = ['predictions', 'leaderboard', 'members', 'summary', 'results', 'scoring'];
-  let slideDir = $state<'left' | 'right'>('left');
+  let slideDir = $state<'left' | 'right' | ''>('');
   function switchTab(newTab: string) {
     if (newTab === tab) return; // already here — don't replay the slide (the "wiggle")
     haptic(8);
@@ -221,8 +221,10 @@
     {/each}
   </div>
 
-  <!-- Tab Content with slide animation -->
-  <div class="tab-content-wrapper slide-{slideDir}" onanimationend={() => slideDir = 'left'}>
+  <!-- Tab Content with slide animation. After the slide finishes we reset to a
+       NEUTRAL state (no slide-* class) — resetting to 'left' used to change the
+       class and replay the animation when arriving from the right (the wiggle). -->
+  <div class="tab-content-wrapper" class:slide-left={slideDir === 'left'} class:slide-right={slideDir === 'right'} onanimationend={() => slideDir = ''}>
   <!-- Clasificación -->
   {#if tab === 'leaderboard'}
     {#if data.leaderboard == null}

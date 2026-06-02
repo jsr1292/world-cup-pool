@@ -478,9 +478,13 @@
   .ptr-spinner.spin { animation: ptr-spin 0.7s linear infinite; transform-origin: 50% 50%; }
   @keyframes ptr-spin { to { transform: rotate(360deg); } }
 
-  /* Portrait lock for touch phones (iOS ignores the manifest's orientation). */
+  /* Portrait lock for touch phones (iOS ignores the manifest's orientation).
+     Gate on max-HEIGHT: in landscape a phone's width is its long edge (often
+     >820px on modern iPhones), so a max-width rule never matched. The short
+     edge (height) in landscape is ~375–430px on phones and ≥600px on tablets,
+     so max-height cleanly targets phones only. */
   .rotate-lock { display: none; }
-  @media (max-width: 820px) and (orientation: landscape) and (pointer: coarse) {
+  @media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
     .rotate-lock {
       display: flex;
       position: fixed;
