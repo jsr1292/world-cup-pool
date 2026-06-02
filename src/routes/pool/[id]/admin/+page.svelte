@@ -279,6 +279,42 @@
       version++;
     }
   }
+
+  // ── Remove a member from this pool ─────────────────────────────────────────
+  let showRemove = $state(false);
+  let removeUserId = $state(null);
+  let removeDisplayName = $state('');
+  let removing = $state(false);
+
+  function askRemoveMember(userId, displayName) {
+    removeUserId = userId;
+    removeDisplayName = displayName;
+    showRemove = true;
+  }
+  function cancelRemove() {
+    showRemove = false;
+    removeUserId = null;
+    removeDisplayName = '';
+  }
+  async function doRemoveMember() {
+    if (removing) return;
+    removing = true;
+    const userId = removeUserId;
+    const res = await fetch('/api/admin/member/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pool_id: pool.id, user_id: userId }),
+    });
+    removing = false;
+    if (res.ok) {
+      _members = _members.filter(m => m.user_id !== userId);
+      version++;
+      cancelRemove();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      alert('No se pudo eliminar: ' + (d.error ?? 'error'));
+    }
+  }
 </script>
 
 <svelte:head>
@@ -538,16 +574,29 @@
     />
     <div style="display: flex; flex-direction: column; gap: 4px;">
       {#each filteredMembers as member}
-        <div style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px;">
-          <span style="font-size: 12px;">{member.display_name}</span>
-          {#if pool.buy_in > 0}
-            <button
-              onclick={() => togglePaid(member.entry_id, member.has_paid, member.display_name, member.user_id)}
-              style="font-size: 9px; padding: 4px 10px; border-radius: 4px; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid {member.has_paid ? 'var(--green)' : 'var(--red)'}; background: {member.has_paid ? 'rgba(0,229,160,0.1)' : 'rgba(255,77,106,0.1)'}; color: {member.has_paid ? 'var(--green)' : 'var(--red)'}; cursor: pointer;"
-            >
-              {member.has_paid ? '✓ Pagado' : '✗ Pendiente'}
-            </button>
-          {/if}
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px;">
+          <span style="font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {member.display_name}
+            {#if member.user_id === pool.created_by}<span style="font-size: 8px; color: var(--gold); letter-spacing: 0.08em; text-transform: uppercase; margin-left: 4px;">Organizador</span>{/if}
+          </span>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            {#if pool.buy_in > 0}
+              <button
+                onclick={() => togglePaid(member.entry_id, member.has_paid, member.display_name, member.user_id)}
+                style="font-size: 9px; padding: 4px 10px; border-radius: 4px; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid {member.has_paid ? 'var(--green)' : 'var(--red)'}; background: {member.has_paid ? 'rgba(0,229,160,0.1)' : 'rgba(255,77,106,0.1)'}; color: {member.has_paid ? 'var(--green)' : 'var(--red)'}; cursor: pointer;"
+              >
+                {member.has_paid ? '✓ Pagado' : '✗ Pendiente'}
+              </button>
+            {/if}
+            {#if member.user_id !== pool.created_by}
+              <button
+                onclick={() => askRemoveMember(member.user_id, member.display_name)}
+                title="Eliminar de la quiniela"
+                aria-label="Eliminar a {member.display_name} de la quiniela"
+                style="font-size: 12px; line-height: 1; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer;"
+              >✕</button>
+            {/if}
+          </div>
         </div>
       {/each}
     </div>
@@ -669,6 +718,31 @@
           <button onclick={() => doTogglePaid(confirmEntryId, false, confirmOdUserId)}
             style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--red); border-radius: 6px; background: rgba(255,77,106,0.15); color: var(--red); cursor: pointer; font-weight: 500;">
             Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Remove Member Confirmation Dialog -->
+  {#if showRemove}
+    <div style="position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);"
+      role="dialog" aria-modal="true">
+      <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px; max-width: 340px; width: 90%;"
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => { if (e.key === 'Escape') cancelRemove(); }}>
+        <div style="font-size: 13px; font-weight: 600; color: var(--red); margin-bottom: 8px;">⚠️ Eliminar miembro</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">
+          ¿Eliminar a <strong style="color: var(--text);">{removeDisplayName}</strong> de esta quiniela? Se borrarán sus pronósticos y desaparecerá de la clasificación. <strong style="color: var(--red);">Esta acción no se puede deshacer.</strong>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button onclick={cancelRemove}
+            style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer;">
+            Cancelar
+          </button>
+          <button onclick={doRemoveMember} disabled={removing}
+            style="font-size: 11px; padding: 8px 16px; border: 1px solid var(--red); border-radius: 6px; background: rgba(255,77,106,0.15); color: var(--red); cursor: pointer; font-weight: 500;">
+            {removing ? 'Eliminando…' : 'Eliminar'}
           </button>
         </div>
       </div>
