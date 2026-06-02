@@ -149,6 +149,18 @@
       </div>
     </div>
 
+    {#if countdownText}
+      <div class="sidebar-countdown" title="Primer partido · 11 de junio de 2026">
+        <span class="sidebar-countdown-label">El Mundial arranca en</span>
+        <span class="sidebar-countdown-value">{countdownText}</span>
+      </div>
+    {:else if browser}
+      {@const diff = WORLD_CUP_KICKOFF_MS - Date.now()}
+      {#if diff > -WORLD_CUP_DURATION_MS}
+        <div class="sidebar-countdown"><span class="sidebar-countdown-value live">⚽ En juego</span></div>
+      {/if}
+    {/if}
+
     <div class="sidebar-nav">
 
     {#each navItems as item}
@@ -314,6 +326,30 @@
     border-color: rgba(0,229,160,0.2);
     background: rgba(0,229,160,0.06);
   }
+  .sidebar-countdown {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 4px 0 14px;
+    padding: 10px 12px;
+    border: 1px solid rgba(201,168,76,0.2);
+    border-radius: 10px;
+    background: rgba(201,168,76,0.06);
+  }
+  .sidebar-countdown-label {
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .sidebar-countdown-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+  .sidebar-countdown-value.live { color: var(--green); }
   .top-bar-avatar {
     width: 28px;
     height: 28px;
