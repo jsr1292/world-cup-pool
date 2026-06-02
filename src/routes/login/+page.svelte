@@ -9,6 +9,12 @@
   let notice = $state('');
   let loading = $state(false);
 
+  // Live confirm-password check (register only): true once the user has typed
+  // something in the confirm box and it doesn't match the password.
+  const passwordMismatch = $derived(
+    mode === 'register' && passwordConfirm.length > 0 && passwordConfirm !== password
+  );
+
   function switchMode(m) { mode = m; error = ''; notice = ''; }
 
   // Honor a ?redirect= target (e.g. from an invite link) — but only safe local
@@ -112,7 +118,11 @@
       {#if mode === 'register'}
         <div>
           <label style="display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.12em; text-transform: uppercase;">Confirmar contraseña</label>
-          <input type="password" bind:value={passwordConfirm} placeholder="repite tu contraseña" required autocomplete="new-password" onpaste={(e) => e.preventDefault()} />
+          <input type="password" bind:value={passwordConfirm} placeholder="repite tu contraseña" required autocomplete="new-password" onpaste={(e) => e.preventDefault()}
+            style={passwordMismatch ? 'border-color: var(--red);' : ''} aria-invalid={passwordMismatch} />
+          {#if passwordMismatch}
+            <p style="font-size: 9px; color: var(--red); margin-top: 5px;">Las contraseñas no coinciden</p>
+          {/if}
         </div>
       {/if}
 
@@ -123,7 +133,7 @@
         <p style="font-size: 10px; color: var(--green); line-height: 1.5;">{notice}</p>
       {/if}
 
-      <button type="submit" class="btn-primary" style="width: 100%;" disabled={loading}>
+      <button type="submit" class="btn-primary" style="width: 100%;" disabled={loading || passwordMismatch}>
         {loading ? '...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
       </button>
 
