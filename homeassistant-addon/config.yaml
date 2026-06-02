@@ -73,7 +73,7 @@ schema:
   # Too low collapses all users into one rate-limit bucket; too high lets the
   # client spoof its IP. Default 1.
   xff_depth: int(1,5)
-  # Restrict sign-ups to one email domain, e.g. "typsa.es" (no leading @).
+  # Restrict sign-ups to one email domain, e.g. "example.com" (no leading @).
   # Leave BLANK to allow any domain.
   allowed_email_domain: str?
   # Public HTTPS base URL used in password-reset email links, e.g.
@@ -86,7 +86,7 @@ schema:
   smtp_port: int(1,65535)?
   smtp_user: str?
   smtp_pass: password?
-  # From header, e.g. "Mundial 2026 <no-reply@typsa.es>".
+  # From header, e.g. "Mundial 2026 <no-reply@example.com>".
   smtp_from: str?
   # ── Hands-off live results (optional) ──────────────────────────────────────
   # API-Football key (api-sports.io). With this set, the app can import match

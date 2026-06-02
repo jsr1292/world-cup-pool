@@ -100,7 +100,7 @@ Admins manage scoring rules and deadlines, enter results, reset a user's passwor
 
 - Log in with **email + password**; a public `@handle` is derived from the email
   (the email is never shown to other members).
-- **Restrict sign-ups to one domain** with `ALLOWED_EMAIL_DOMAIN` (e.g. `typsa.es`);
+- **Restrict sign-ups to one domain** with `ALLOWED_EMAIL_DOMAIN` (e.g. `example.com`);
   blank = any domain. Keep your deployment URL private among your group.
 - **Password reset:** self-service at `/forgot` when SMTP is configured; otherwise
   an admin resets it from the pool admin page.

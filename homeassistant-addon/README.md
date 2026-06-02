@@ -40,7 +40,7 @@ each start, `run.sh`:
 | `admin_username` | string (optional) | — | If set, the **existing** user with this username is promoted to admin on startup (idempotent). Leave blank if you promote manually. |
 | `run_setup` | bool | `false` | If on, runs migrations + seeds teams + seeds the 104 match fixtures on startup. Turn on for the **first** boot against a fresh database; safe to leave on (idempotent) or switch off afterward. |
 | `xff_depth` | int | `1` | Trusted-proxy count for reading the client IP (rate-limiting). See the comment in the config form. |
-| `allowed_email_domain` | string (optional) | — | Restrict sign-ups to this email domain (e.g. `typsa.es`). Blank = any domain. |
+| `allowed_email_domain` | string (optional) | — | Restrict sign-ups to this email domain (e.g. `example.com`). Blank = any domain. |
 | `public_base_url` | string (optional) | — | Public HTTPS base URL for password-reset links, e.g. `https://you.duckdns.org`. |
 | `smtp_host` / `smtp_port` / `smtp_user` / `smtp_pass` / `smtp_from` | string / int / masked | — / `587` / — | SMTP settings for password-reset emails. Leave `smtp_host` blank to disable self-service reset (use admin reset instead). |
 | `api_football_key` | masked (optional) | — | API-Football (api-sports.io) key. With this set, the app can import results automatically. |
@@ -66,7 +66,7 @@ out of the box (USA, Czechia, Korea Republic, Côte d'Ivoire, Türkiye, …).
 ### Login & password reset
 
 Accounts log in with **email + password**. To restrict who can register, set
-`allowed_email_domain` (e.g. `typsa.es`). For self-service "forgot password",
+`allowed_email_domain` (e.g. `example.com`). For self-service "forgot password",
 fill the `smtp_*` fields and `public_base_url` (the reset link must use your
 public DuckDNS HTTPS URL). If SMTP is left blank, you reset passwords as admin.
 

@@ -1,6 +1,6 @@
 /**
  * Email format + signup-domain policy. The allowed signup domain is configured
- * via ALLOWED_EMAIL_DOMAIN (e.g. "typsa.es"). If it's unset/blank, ANY domain
+ * via ALLOWED_EMAIL_DOMAIN (e.g. "example.com"). If it's unset/blank, ANY domain
  * is allowed — so the repo ships with no built-in restriction.
  */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
