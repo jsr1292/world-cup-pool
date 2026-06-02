@@ -25,7 +25,7 @@
 
   const phaseOrder = ['r32', 'r16', 'qf', 'sf', '3rd', 'final'];
 
-  function teamName(id: number) { return data.teams[id]?.name || 'TBD'; }
+  function teamName(id: number) { const n = data.teams[id]?.name; return n ? shortName(n) : 'TBD'; }
   function teamFlag(id: number) { return flagEmoji(data.teams[id]?.flag_code || ''); }
 
   const groupPreds = $derived.by(() => {
@@ -61,7 +61,7 @@
     groupPredLookup[gp.group_name] = [gp.position_1, gp.position_2, gp.position_3, gp.position_4];
   }
 
-  function getTeamName(id: number) { return data.resultsTeamCache[id]?.name || 'TBD'; }
+  function getTeamName(id: number) { const n = data.resultsTeamCache[id]?.name; return n ? shortName(n) : 'TBD'; }
   function getTeamFlag(id: number) { return flagEmoji(data.resultsTeamCache[id]?.flag_code || ''); }
   function isGroupCorrect(groupName: string, position: number, actualTeamId: number) {
     const predicted = groupPredLookup[groupName]?.[position - 1];
@@ -303,7 +303,7 @@
           <a href="/pool/{pool.id}/predict" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 20px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none;">
             <span style="font-size: 24px;">📋</span>
             <span style="font-size: 12px; font-weight: 600; color: var(--text);">Fase de Grupos</span>
-            <span style="font-size: 9px; color: var(--text-muted);">Predice 1º 2º 3º 4º</span>
+            <span style="font-size: 9px; color: var(--text-muted);">Predice 1 · X · 2</span>
           </a>
           <a href="/pool/{pool.id}/bracket" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 20px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none;">
             <span style="font-size: 24px;">⚔️</span>
@@ -319,7 +319,7 @@
             <a href="/pool/{pool.id}/predict" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none;">
               <span style="font-size: 24px;">📋</span>
               <span style="font-size: 12px; font-weight: 600; color: var(--text);">Fase de Grupos</span>
-              <span style="font-size: 9px; color: var(--text-muted);">Predice 1º 2º 3º 4º</span>
+              <span style="font-size: 9px; color: var(--text-muted);">Predice 1 · X · 2</span>
             </a>
             <a href="/pool/{pool.id}/bracket" style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 10px; background: rgba(232,201,106,0.06); border: 1px solid rgba(232,201,106,0.15); border-radius: 8px; text-decoration: none;">
               <span style="font-size: 24px;">⚔️</span>
@@ -370,7 +370,7 @@
     {@const n = (k, d = 0) => Number(s?.[k] ?? d)}
     <div style="display: flex; flex-direction: column; gap: 12px;">
       <p style="font-size: 11px; color: var(--text-muted); line-height: 1.55;">
-        Sumas puntos prediciendo los marcadores de los partidos (grupos y eliminatorias) y qué equipos avanzan en el cuadro. Cuanto más afinada la predicción, más puntos.
+        Sumas puntos acertando el resultado (1/X/2) de los partidos de grupos, qué equipos avanzan en el cuadro eliminatorio, y el marcador de la final (desempate).
       </p>
 
       <!-- Groups -->

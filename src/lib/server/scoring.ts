@@ -230,10 +230,9 @@ export async function calculateBracketScores(
 }
 
 /**
- * Calculate match prediction scores for all predictions in a pool.
- * Awards points_earned on match_predictions rows:
- *   - match_outcome points for correct 1/X/2
- *   - exact_score points on top for exact scoreline
+ * Calculate match-prediction scores for all predictions in a pool. Group stage
+ * is predicted as 1/X/2, so this awards match_outcome points for a correct
+ * result only (no goal-difference/exact-score tiers). Group matches only.
  * Uses bulk unnest() UPDATE instead of per-row loops.
  */
 export async function calculateMatchScores(

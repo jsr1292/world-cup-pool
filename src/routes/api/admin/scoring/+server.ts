@@ -7,7 +7,10 @@ import { parseJsonBody } from '$lib/server/json-body.js';
 import { errCode } from '$lib/server/err-code.js';
 
 const VALID_RULES = new Set([
-  'match_outcome', 'goal_difference', 'exact_score', 'group_position',
+  // match_outcome = points per correct 1/X/2 group result; group_position = bonus
+  // per correct derived standing (off by default). goal_difference/exact_score were
+  // dropped with the W/D/L model and are no longer accepted.
+  'match_outcome', 'group_position',
   'knockout_r32', 'knockout_r16', 'knockout_qf', 'knockout_sf',
   'knockout_final', 'knockout_winner', 'third_place',
 ]);

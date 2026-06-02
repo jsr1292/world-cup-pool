@@ -157,7 +157,7 @@ describe('POST /api/admin/scoring', () => {
 		mockQuery.mockResolvedValueOnce({ rows: [{ created_by: 1 }] });
 		mockQuery.mockResolvedValue({ rows: [] });
 
-		const rules = { match_outcome: 3, exact_score: 5 };
+		const rules = { match_outcome: 3, group_position: 5 };
 		const response = await POST({
 			request: mockRequest({ pool_id: 1, rules }),
 			locals: mockLocals(1),
@@ -177,7 +177,7 @@ describe('POST /api/admin/scoring', () => {
 		expect(mockQuery).toHaveBeenNthCalledWith(
 			3,
 			expect.stringContaining('INSERT INTO scoring_config'),
-			[1, 'exact_score', 5],
+			[1, 'group_position', 5],
 		);
 	});
 
@@ -187,7 +187,7 @@ describe('POST /api/admin/scoring', () => {
 
 		const rules = {
 			match_outcome: 3,
-			exact_score: -1,
+			knockout_qf: -1,
 			group_position: 'bad' as any,
 			knockout_r16: NaN,
 		};
