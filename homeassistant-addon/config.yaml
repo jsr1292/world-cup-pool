@@ -1,7 +1,7 @@
 # Home Assistant add-on manifest for the World Cup Pool app.
 # HA renders the configuration form from the `schema` below.
 name: World Cup Pool
-version: "1.0.52"
+version: "1.0.53"
 slug: world-cup-pool
 description: >-
   Private FIFA World Cup 2026 prediction pool (SvelteKit + PostgreSQL/Neon).
