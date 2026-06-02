@@ -18,6 +18,11 @@
 
   const pool = data.pool;
 
+  // Payment status of the logged-in user (money pools only). `members` carries
+  // each member's has_paid; match it to the current userId.
+  const myMembership = $derived(data.members.find((mem: any) => mem.user_id === data.userId));
+  const owesBuyIn = $derived(pool.buy_in > 0 && !!myMembership && !myMembership.has_paid);
+
   $effect(() => {
     headerTitle.set({ text: pool.name, emoji: pool.emoji || '🏆', showBack: false, poolName: pool.name, poolEmoji: pool.emoji || '🏆' });
     return () => { headerTitle.set({ text: 'Mundial 2026', emoji: '🏆', showBack: false, poolName: null, poolEmoji: null }); };
@@ -190,6 +195,19 @@
       </div>
     </div>
   </div>
+
+  <!-- Payment-pending banner (money pools, current user not yet marked paid) -->
+  {#if owesBuyIn}
+    <div style="margin-bottom: 16px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; background: rgba(201,168,76,0.08); border: 1px solid var(--gold); border-radius: 10px;">
+      <span style="font-size: 18px;">💰</span>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 12px; font-weight: 600; color: var(--gold);">Entrada pendiente de pago</div>
+        <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px; line-height: 1.4;">
+          Aún no se ha registrado tu pago de <strong>{pool.buy_in}€</strong>. Paga al organizador; te marcará como pagado. Tus pronósticos cuentan igualmente.
+        </div>
+      </div>
+    </div>
+  {/if}
 
   <!-- Tabs -->
   <div class="pool-tabs">
