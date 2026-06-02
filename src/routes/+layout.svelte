@@ -141,7 +141,7 @@
   <nav class="sidebar">
     <div class="sidebar-header">
       <div style="display: flex; align-items: center; gap: 10px;">
-        <div style="width: 36px; height: 36px; background: linear-gradient(135deg, var(--gold), #b8943f); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px;">🏆</div>
+        <div style="width: 36px; height: 36px; background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.22); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px;">🏆</div>
         <div>
           <div style="font-family: 'Libre Baskerville', serif; font-size: 17px; color: var(--gold); line-height: 1.2;">Mundial 2026</div>
           <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.14em; text-transform: uppercase; margin-top: 2px;">Quiniela</div>
