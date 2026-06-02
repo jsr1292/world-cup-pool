@@ -7,6 +7,7 @@
   const tabIndexOrder = ['predictions', 'leaderboard', 'members', 'summary', 'results', 'scoring'];
   let slideDir = $state<'left' | 'right'>('left');
   function switchTab(newTab: string) {
+    if (newTab === tab) return; // already here — don't replay the slide (the "wiggle")
     haptic(8);
     const oldIdx = tabIndexOrder.indexOf(tab);
     const newIdx = tabIndexOrder.indexOf(newTab);

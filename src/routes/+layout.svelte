@@ -229,6 +229,16 @@
 </div>
 {/if}
 
+<!-- Phone landscape lock. The PWA manifest requests portrait (honored on
+     Android); iOS ignores it, so on a touch phone held sideways we cover the UI
+     and ask the user to rotate back — effectively portrait-only everywhere. -->
+<div class="rotate-lock" aria-hidden="true">
+  <div class="rotate-lock-inner">
+    <div style="font-size: 34px;">🔄</div>
+    <p>Gira el teléfono a vertical</p>
+  </div>
+</div>
+
 <style>
   .nav-link {
     display: flex;
@@ -281,7 +291,7 @@
     background: var(--bg-nav);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(201, 168, 76, 0.12);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     padding: max(12px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
   }
 
@@ -298,16 +308,9 @@
     gap: 8px;
     font-family: 'Inter', sans-serif;
     font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    background: linear-gradient(135deg, #e8c96a 0%, #c9a84c 40%, #f0d98c 60%, #b8943f 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .top-bar-brand svg {
-    filter: drop-shadow(0 0 4px rgba(201, 168, 76, 0.4));
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text);
   }
 
   .countdown {
@@ -355,23 +358,20 @@
     height: 28px;
     border-radius: 50%;
     background: var(--bg-card);
-    border: 2px solid transparent;
-    background-image: linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #e8c96a, #c9a84c, #b8943f);
-    background-origin: border-box;
-    background-clip: padding-box, border-box;
+    border: 1px solid rgba(201, 168, 76, 0.3);
     color: var(--gold);
     font-size: 11px;
-    font-weight: 700;
+    font-weight: 600;
     display: flex;
     align-items: center;
     justify-content: center;
     text-decoration: none;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: border-color 0.2s;
   }
 
   .top-bar-avatar:hover {
-    box-shadow: 0 0 8px rgba(201, 168, 76, 0.3);
+    border-color: rgba(201, 168, 76, 0.6);
   }
 
   .theme-toggle {
@@ -385,5 +385,26 @@
   /* Desktop: hide top bar, show sidebar */
   @media (min-width: 768px) {
     .top-bar { display: none; }
+  }
+
+  /* Portrait lock for touch phones (iOS ignores the manifest's orientation). */
+  .rotate-lock { display: none; }
+  @media (max-width: 820px) and (orientation: landscape) and (pointer: coarse) {
+    .rotate-lock {
+      display: flex;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      background: var(--bg);
+    }
+    .rotate-lock-inner p {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
   }
 </style>
