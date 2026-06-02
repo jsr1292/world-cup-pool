@@ -3,10 +3,12 @@ import type { PoolClient } from 'pg';
 import { rankGroup, type GsMatch } from '../group-standings.js';
 
 export const DEFAULT_SCORING_RULES: Record<string, number> = {
+  // Group stage is predicted as 1/X/2 (win/draw/loss) — one point per correct
+  // result. No goal-difference/exact-score tiers (no scores are predicted), and
+  // the derived-standings bonus is off by default (set group_position > 0 to
+  // reward getting the final group table right).
   match_outcome: 1,
-  goal_difference: 1,
-  exact_score: 3,
-  group_position: 2,
+  group_position: 0,
   knockout_r32: 2,
   knockout_r16: 3,
   knockout_qf: 4,
@@ -240,10 +242,6 @@ export async function calculateMatchScores(
   client: PoolClient
 ): Promise<void> {
 	const outcomePts = rules.match_outcome;
-	const exactPts = rules.exact_score;
-	// Middle tier (Kicktipp-style): correct outcome AND correct goal difference
-	// but NOT the exact scoreline. 0 if unset (back-compat with old configs).
-	const gdPts = rules.goal_difference ?? 0;
 
   // #7/#9 idempotency: zero all match-prediction points for the pool BEFORE
   // computing. Predictions whose match is no longer finished (reverted) are
@@ -308,18 +306,12 @@ export async function calculateMatchScores(
 		else if (mp.home_score < mp.away_score) predOutcome = '2';
 		else predOutcome = 'X';
 
-    // Tiered, on top of a correct outcome (exact ⊂ correct-GD ⊂ correct-outcome):
-    //   exact scoreline      → outcome + exact_score   (default 1 + 3 = 4)
-    //   correct GD, not exact → outcome + goal_difference (default 1 + 1 = 2)
-    //   correct outcome only  → outcome                  (default 1)
+    // Group matches are predicted as 1/X/2 (win/draw/loss) only — award the
+    // outcome points for a correct result. No goal-difference/exact-score tiers,
+    // because no actual scoreline is predicted (the only scoreline is the final,
+    // and that's the leaderboard tiebreaker, not a points source).
     if (predOutcome === m.outcome) {
       pts += outcomePts;
-      const exact = mp.home_score === m.homeScore && mp.away_score === m.awayScore;
-      if (exact) {
-        pts += exactPts;
-      } else if ((mp.home_score - mp.away_score) === (m.homeScore - m.awayScore)) {
-        pts += gdPts;
-      }
     }
 
     ids.push(mp.id);

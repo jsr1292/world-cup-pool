@@ -52,8 +52,9 @@ export const load: PageServerLoad = async ({ locals }) => {
       GROUP BY mp.prediction_id
     ),
     group_correct AS (
+      -- correct 1/X/2 match results (W/D/L model)
       SELECT prediction_id, COUNT(*) as cnt
-      FROM group_predictions WHERE points_earned > 0
+      FROM match_predictions WHERE points_earned > 0
       GROUP BY prediction_id
     ),
     bracket_correct AS (
@@ -76,10 +77,9 @@ export const load: PageServerLoad = async ({ locals }) => {
     LEFT JOIN group_correct gc ON gc.prediction_id = p.id
     LEFT JOIN bracket_correct bc ON bc.prediction_id = p.id
     GROUP BY u.id
-    -- #10 — Canonical tiebreak chain, unified with the pool leaderboard, ending
-    -- in deterministic keys so equal users always order the same way.
+    -- Canonical tiebreak chain (W/D/L model), unified with the pool leaderboard:
+    -- points → correct picks → final-score closeness → updated_at → id.
     ORDER BY total_score DESC,
-             exact_score_hits DESC,
              total_correct DESC,
              MIN(tc.closeness) ASC NULLS LAST,
              MAX(p.updated_at) ASC,

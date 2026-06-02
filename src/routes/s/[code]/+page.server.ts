@@ -42,10 +42,10 @@ export const load: PageServerLoad = async ({ params }) => {
 		`, [predIds]);
 		ehRows.forEach((r: any) => { exactHitsMap[r.prediction_id] = Number(r.cnt); });
 
-		// Use ANY($1::int[]) — same pattern as pool/[id]/+page.server.ts
+		// "Group correct" = correct 1/X/2 match results (W/D/L model).
 		const { rows: gcRows } = await query(`
 			SELECT prediction_id, COUNT(*) as cnt
-			FROM group_predictions
+			FROM match_predictions
 			WHERE prediction_id = ANY($1::int[]) AND points_earned > 0
 			GROUP BY prediction_id
 		`, [predIds]);
@@ -92,11 +92,9 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	// Identical sort criteria to pool/[id]/+page.server.ts and the global
 	// leaderboard, so a shared scoreboard orders ties the same as the in-app view:
-	// total_score DESC → exact_score_hits DESC → total_correct DESC →
-	// tiebreaker_close ASC → updated_at ASC.
+	// total_score DESC → total_correct DESC → final-score closeness ASC → updated_at.
 	enriched.sort((a: any, b: any) =>
 		b.total_score - a.total_score ||
-		b.exact_score_hits - a.exact_score_hits ||
 		b.total_correct - a.total_correct ||
 		a.tiebreaker_close - b.tiebreaker_close ||
 		new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()

@@ -214,19 +214,22 @@
     finally { matchSaving = false; }
   }
 
-  function setMatchScore(matchId, side, value) {
-    const score = matchScores[matchId] || { home: null, away: null };
-    if (side === 'home') score.home = value;
-    else score.away = value;
-    matchScores[matchId] = score;
+  // Group matches are predicted as 1/X/2 (home win / draw / away win). We encode
+  // the pick as a canonical scoreline in the existing match-scores machinery —
+  // 1 → 1-0, X → 0-0, 2 → 0-1 — so the same save + standings-derivation flow is
+  // reused; only the input (these buttons) and the points (outcome-only) change.
+  function getOutcome(matchId) {
+    const s = matchScores[matchId];
+    if (!s || s.home == null || s.away == null) return null;
+    if (s.home > s.away) return '1';
+    if (s.home < s.away) return '2';
+    return 'X';
+  }
+  function setOutcome(matchId, outcome) {
+    const map = { '1': { home: 1, away: 0 }, 'X': { home: 0, away: 0 }, '2': { home: 0, away: 1 } };
+    matchScores[matchId] = { ...map[outcome] };
     _activeMatchEdits.add(Number(matchId));
     autoSaveMatchScores();
-  }
-
-  function getMatchScore(matchId, side) {
-    const s = matchScores[matchId];
-    if (!s) return '';
-    return side === 'home' ? (s.home ?? '') : (s.away ?? '');
   }
 
 </script>
@@ -239,10 +242,10 @@
   <div style="margin-bottom: 20px;">
     <h1 style="font-family: 'Libre Baskerville', serif; font-size: 18px; color: var(--gold);">Pronósticos de Fase de Grupos</h1>
     <p style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
-      Predice el marcador de los 6 partidos de cada grupo. La clasificación se calcula sola.
+      Pronostica el resultado de cada partido — <strong>1</strong> (gana local) · <strong>X</strong> (empate) · <strong>2</strong> (gana visitante). La clasificación se calcula sola con tus aciertos.
     </p>
     <p style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
-      Resultado (1/X/2): <strong style="color: var(--gold);">+1</strong> · + diferencia de goles: <strong style="color: var(--gold);">+1</strong> · marcador exacto: <strong style="color: var(--gold);">+3</strong> · cada puesto acertado de la tabla: <strong style="color: var(--gold);">+2</strong>
+      Cada resultado acertado: <strong style="color: var(--gold);">+1</strong> punto.
     </p>
 
     <!-- Progress bar -->
@@ -341,38 +344,33 @@
           {/if}
         </div>
 
-        <!-- Fixtures: enter each scoreline, in chronological order.
+        <!-- Fixtures: pick 1 / X / 2 (quiniela style), in chronological order.
              Date on the left (shown when it changes), time on the right. -->
-        <div style="display: flex; flex-direction: column; gap: 2px;">
+        <div style="display: flex; flex-direction: column; gap: 3px;">
           {#each fixtures as match, i}
             {@const mLocked = match.locked || effectivelyLocked}
             {@const dayChanged = i === 0 || dayKey(match.kickoff) !== dayKey(fixtures[i - 1]?.kickoff)}
+            {@const pick = getOutcome(match.id)}
             <div style="display: flex; align-items: center; gap: 5px; padding: 1px 0; {mLocked ? 'opacity: 0.55;' : ''}">
               <span style="font-size: 9px; color: var(--gold); width: 36px; flex-shrink: 0; text-transform: capitalize; line-height: 1.1;">{match.kickoff && dayChanged ? dateShort(match.kickoff) : ''}</span>
               <div style="flex: 1; display: flex; align-items: center; gap: 4px; justify-content: flex-end; min-width: 0;">
-                <span style="font-size: 11px; font-weight: 500; color: var(--text); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(match.home_name)}</span>
+                <span style="font-size: 11px; font-weight: {pick === '1' ? '700' : '500'}; color: {pick === '1' ? 'var(--gold)' : 'var(--text)'}; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(match.home_name)}</span>
                 <span style="font-size: 13px; flex-shrink: 0;">{@html flagEmoji(match.home_flag)}</span>
               </div>
-              <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
-                <input
-                  type="number" min="0" max="20" inputmode="numeric" placeholder="-"
-                  value={getMatchScore(match.id, 'home')}
-                  oninput={(e) => setMatchScore(match.id, 'home', e.target.value === '' ? null : Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
-                  disabled={mLocked}
-                  style="width: 28px; text-align: center; font-size: 14px; font-weight: 700; padding: 3px 2px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 5px; color: var(--gold);"
-                />
-                <span style="font-size: 10px; color: var(--text-muted);">–</span>
-                <input
-                  type="number" min="0" max="20" inputmode="numeric" placeholder="-"
-                  value={getMatchScore(match.id, 'away')}
-                  oninput={(e) => setMatchScore(match.id, 'away', e.target.value === '' ? null : Math.max(0, Math.min(20, parseInt(e.target.value) || 0)))}
-                  disabled={mLocked}
-                  style="width: 28px; text-align: center; font-size: 14px; font-weight: 700; padding: 3px 2px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 5px; color: var(--gold);"
-                />
+              <div style="display: flex; align-items: stretch; gap: 2px; flex-shrink: 0;">
+                {#each ['1', 'X', '2'] as o}
+                  <button type="button" disabled={mLocked}
+                    onclick={() => setOutcome(match.id, o)}
+                    title={o === '1' ? 'Gana ' + shortName(match.home_name) : o === '2' ? 'Gana ' + shortName(match.away_name) : 'Empate'}
+                    style="width: 24px; padding: 4px 0; font-size: 12px; font-weight: 700; border-radius: 5px; cursor: {mLocked ? 'default' : 'pointer'};
+                      border: 1px solid {pick === o ? 'var(--gold)' : 'var(--border)'};
+                      background: {pick === o ? 'var(--gold)' : 'var(--bg-surface)'};
+                      color: {pick === o ? '#1a1305' : 'var(--text-muted)'};">{o}</button>
+                {/each}
               </div>
               <div style="flex: 1; display: flex; align-items: center; gap: 4px; min-width: 0;">
                 <span style="font-size: 13px; flex-shrink: 0;">{@html flagEmoji(match.away_flag)}</span>
-                <span style="font-size: 11px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(match.away_name)}</span>
+                <span style="font-size: 11px; font-weight: {pick === '2' ? '700' : '500'}; color: {pick === '2' ? 'var(--gold)' : 'var(--text)'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{shortName(match.away_name)}</span>
               </div>
               <span style="font-size: 9px; color: var(--text-dim); width: 32px; flex-shrink: 0; text-align: right;">{#if match.locked}🔒{:else if match.kickoff}{timeLabel(match.kickoff)}{/if}</span>
             </div>

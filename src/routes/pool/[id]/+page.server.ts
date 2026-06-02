@@ -93,9 +93,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     `, [predIds]);
     ehRows.forEach((r: any) => { exactHitsMap[r.prediction_id] = Number(r.cnt); });
 
+    // "Group correct" = correct 1/X/2 match results (W/D/L model). Match
+    // predictions earn points only for a correct outcome, so count those.
     const { rows: gcRows } = await query(`
       SELECT prediction_id, COUNT(*) as cnt
-      FROM group_predictions
+      FROM match_predictions
       WHERE prediction_id = ANY($1::int[]) AND points_earned > 0
       GROUP BY prediction_id
     `, [predIds]);
@@ -143,12 +145,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     };
   });
 
-  // #10 — Canonical tiebreak chain, unified with the global leaderboard:
-  // total_score DESC → exact_score_hits DESC → total_correct DESC →
-  // tiebreaker closeness ASC → updated_at ASC → id ASC (fully deterministic).
+  // Canonical tiebreak chain (W/D/L model): total_score DESC → total_correct DESC
+  // → final-score closeness ASC → updated_at ASC → id ASC. The final-score
+  // prediction (tiebreaker_close) is the intended decider, so nothing sits above
+  // it except points and number of correct picks.
   enrichedLeaderboard.sort((a: any, b: any) => {
     if (b.total_score !== a.total_score) return b.total_score - a.total_score;
-    if (b.exact_score_hits !== a.exact_score_hits) return b.exact_score_hits - a.exact_score_hits;
     if (b.total_correct !== a.total_correct) return b.total_correct - a.total_correct;
     // §4.11 — null tiebreaker_close sorts after any numeric value.
     const at = a.tiebreaker_close ?? Number.POSITIVE_INFINITY;

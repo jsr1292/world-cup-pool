@@ -376,15 +376,14 @@
       <!-- Groups -->
       <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
         <div style="font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 8px;">🏆 Fase de grupos</div>
-        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Predice el marcador de los 6 partidos de cada grupo. La clasificación de la tabla se calcula sola a partir de tus marcadores.</p>
-        <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px;">Por cada partido, los aciertos se acumulan:</p>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Pronostica el resultado de cada partido — <strong>1</strong> (gana local), <strong>X</strong> (empate) o <strong>2</strong> (gana visitante). La clasificación de cada grupo se calcula sola a partir de tus aciertos.</p>
         <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text);">
-          <div style="display: flex; justify-content: space-between;"><span>Acertar el resultado (1 / X / 2)</span><strong style="color: var(--gold);">+{n('match_outcome')}</strong></div>
-          <div style="display: flex; justify-content: space-between;"><span>+ acertar la diferencia de goles</span><strong style="color: var(--gold);">+{n('goal_difference')}</strong></div>
-          <div style="display: flex; justify-content: space-between;"><span>+ acertar el marcador exacto</span><strong style="color: var(--gold);">+{n('exact_score')}</strong></div>
-          <div style="display: flex; justify-content: space-between; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px;"><span>Cada puesto acertado de la tabla final</span><strong style="color: var(--gold);">+{n('group_position')}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Cada resultado acertado (1 / X / 2)</span><strong style="color: var(--gold);">+{n('match_outcome')}</strong></div>
+          {#if n('group_position') > 0}
+            <div style="display: flex; justify-content: space-between; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px;"><span>Cada puesto acertado de la tabla final</span><strong style="color: var(--gold);">+{n('group_position')}</strong></div>
+          {/if}
         </div>
-        <p style="font-size: 9px; color: var(--text-dim); margin-top: 8px; line-height: 1.5;">Ej.: predices 2-1 y acaba 3-2 → resultado + diferencia = <strong>{n('match_outcome') + n('goal_difference')} pts</strong>. Marcador exacto = <strong>{n('match_outcome') + n('exact_score')} pts</strong>. La tabla suma hasta {n('group_position') * 4} pts más por grupo.</p>
+        <p style="font-size: 9px; color: var(--text-dim); margin-top: 8px; line-height: 1.5;">Hasta <strong>{6 * n('match_outcome')} pts</strong> por grupo (6 partidos) · <strong>{72 * n('match_outcome')}</strong> en total.</p>
       </div>
 
       <!-- Bracket -->
