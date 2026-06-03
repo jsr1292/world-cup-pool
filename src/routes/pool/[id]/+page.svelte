@@ -24,6 +24,19 @@
   const myMembership = $derived(data.members.find((mem: any) => mem.user_id === data.userId));
   const owesBuyIn = $derived(pool.buy_in > 0 && !!myMembership && !myMembership.has_paid);
 
+  // Prize pot (money pools). The pot is the buy-in × members who have PAID; the
+  // split mirrors the admin's "Reparto de premios" (1st 60% / 2nd 25% / 3rd 15%).
+  const PRIZE_SPLITS = [
+    { label: '1.º', pct: 0.6 },
+    { label: '2.º', pct: 0.25 },
+    { label: '3.º', pct: 0.15 },
+  ];
+  const paidCount = $derived(data.members.filter((m: any) => m.has_paid).length);
+  const memberCount = $derived(data.members.length);
+  const pot = $derived((Number(pool.buy_in) || 0) * paidCount);
+  const curSymbol = ({ EUR: '€', USD: '$', GBP: '£' } as Record<string, string>)[pool.currency] ?? '';
+  const fmtMoney = (n: number) => curSymbol ? `${n.toFixed(2)}${curSymbol}` : `${n.toFixed(2)} ${pool.currency || ''}`.trim();
+
   $effect(() => {
     headerTitle.set({ text: pool.name, emoji: pool.emoji || '🏆', showBack: false, poolName: pool.name, poolEmoji: pool.emoji || '🏆' });
     return () => { headerTitle.set({ text: 'Mundial 2026', emoji: '🏆', showBack: false, poolName: null, poolEmoji: null }); };
@@ -183,9 +196,9 @@
         <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted);">
           <span>👥 {data.members.length} miembros</span>
           {#if pool.buy_in > 0}
-            <span>💰 {pool.buy_in}€ entrada</span>
-            {#if pool.prize_pool > 0}
-              <span style="color: var(--gold);">🏆 Bote: {pool.prize_pool}€</span>
+            <span>💰 {fmtMoney(Number(pool.buy_in) || 0)} entrada</span>
+            {#if pot > 0}
+              <span style="color: var(--gold);">🏆 Bote: {fmtMoney(pot)}</span>
             {/if}
           {/if}
         </div>
@@ -427,6 +440,29 @@
         <div style="font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 6px;">⚖️ Desempate</div>
         <p style="font-size: 11px; color: var(--text-muted); line-height: 1.5;">Si dos personas terminan empatadas a puntos, gana quien más se acerque al marcador real de la final.</p>
       </div>
+
+      <!-- Prize split (money pools only) -->
+      {#if pool.buy_in > 0}
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 14px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 8px;">💰 Reparto del bote</div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">
+            <span>Entrada por persona</span><strong style="color: var(--text);">{fmtMoney(Number(pool.buy_in) || 0)}</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+            <span>Bote actual ({paidCount}/{memberCount} pagado{paidCount === 1 ? '' : 's'})</span>
+            <strong style="color: var(--gold);">{fmtMoney(pot)}</strong>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text); border-top: 1px solid var(--border); padding-top: 8px;">
+            {#each PRIZE_SPLITS as split}
+              <div style="display: flex; justify-content: space-between;">
+                <span>{split.label} puesto <span style="color: var(--text-dim); font-size: 10px;">({(split.pct * 100).toFixed(0)}%)</span></span>
+                <strong style="color: var(--gold);">{pot > 0 ? fmtMoney(pot * split.pct) : '—'}</strong>
+              </div>
+            {/each}
+          </div>
+          <p style="font-size: 9px; color: var(--text-dim); margin-top: 8px; line-height: 1.5;">El bote crece a medida que los participantes pagan su entrada. El organizador gestiona los pagos y la entrega del premio.</p>
+        </div>
+      {/if}
 
       <p style="font-size: 10px; color: var(--text-dim); text-align: center;">Puntuación configurada por el creador de la quiniela.</p>
     </div>
