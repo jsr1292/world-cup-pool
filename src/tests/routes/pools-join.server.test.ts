@@ -12,6 +12,7 @@ vi.mock('$lib/server/queries.js', () => ({
 
 vi.mock('$lib/server/cache.js', () => ({
 	invalidateCachedSession: vi.fn(),
+	invalidateGlobalLeaderboard: vi.fn(),
 }));
 
 import { query } from '$lib/server/db.js';

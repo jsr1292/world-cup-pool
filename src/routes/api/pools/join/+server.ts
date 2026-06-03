@@ -1,6 +1,7 @@
 import { errCode } from '$lib/server/err-code.js';
 import { getPoolByInvite, joinPool } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
+import { invalidateGlobalLeaderboard } from '$lib/server/cache.js';
 import { json, type RequestHandler } from '@sveltejs/kit';
 
 const MAX_POOL_MEMBERS = 200; // hard cap; adjust if pools need to be larger
@@ -36,6 +37,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     const joined = await joinPool(pool.id, locals.user.id);
     if (!joined) return json({ error: 'Ya estás en esta quiniela' }, { status: 409 });
+
+    // The global board is scoped by pool membership, so a new member changes who
+    // the joiner (and this pool's existing members) can see — drop the cache.
+    invalidateGlobalLeaderboard();
 
     return json({ pool_id: pool.id });
   } catch (e) {

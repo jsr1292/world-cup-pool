@@ -1,5 +1,6 @@
 import { createPool } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
+import { invalidateGlobalLeaderboard } from '$lib/server/cache.js';
 import { json, type RequestHandler } from '@sveltejs/kit';
 
 async function canCreatePools(userId: number): Promise<boolean> {
@@ -36,6 +37,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     if (!isFinite(buyin) || buyin < 0) return json({ error: 'buy_in debe ser un número positivo' }, { status: 400 });
 
     const result = await createPool(name.trim(), locals.user.id, buyin, allow_multiple_predictions);
+    // Creator auto-joins a new pool → their membership-scoped global board changes.
+    invalidateGlobalLeaderboard();
     return json({ id: Number(result.id), invite_code: result.inviteCode });
   } catch (e) {
     console.error('[api/pools] POST error:', e);
