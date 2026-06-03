@@ -76,15 +76,20 @@
     matchPredLookup[mp.match_id] = { pred_home: mp.pred_home, pred_away: mp.pred_away, points_earned: mp.points_earned };
   }
 
-  // Determine color coding for match score prediction
+  // Determine color coding for a group 1/X/2 prediction (W/D/L model: a pick is
+  // either correct — any positive points — or wrong; no exact/goal-diff tiers).
   function getMatchResultClass(matchId) {
     const mp = matchPredLookup[matchId];
     if (!mp || mp.points_earned == null) return null;
-    // Tiers (default rule values): exact 4, goal-difference 2, outcome 1.
-    if (mp.points_earned >= 4) return 'exact';
-    if (mp.points_earned >= 2) return 'gd';
-    if (mp.points_earned >= 1) return 'outcome';
-    return 'wrong';
+    return mp.points_earned >= 1 ? 'outcome' : 'wrong';
+  }
+
+  // The 1/X/2 pick stored as a canonical scoreline (1-0 / 0-0 / 0-1).
+  function pickLabel(mp) {
+    if (!mp) return '';
+    if (mp.pred_home > mp.pred_away) return '1';
+    if (mp.pred_home < mp.pred_away) return '2';
+    return 'X';
   }
 </script>
 
@@ -212,11 +217,11 @@
             <!-- Prediction comparison + Match score prediction -->
             {#if isFinished && mp}
               {@const ptsLabel = mp.points_earned > 0 ? `+${mp.points_earned}pts` : '0pts'}
-              {@const resultColor = mp.points_earned >= 4 ? 'var(--green)' : mp.points_earned >= 1 ? '#ffc800' : 'var(--red)'}
+              {@const resultColor = mp.points_earned >= 1 ? 'var(--green)' : 'var(--red)'}
               <div style="font-size: 10px; padding: 0 0 8px 0; text-align: center; color: var(--text-muted);">
-                Tu marcador: <strong style="color: var(--text);">{mp.pred_home} - {mp.pred_away}</strong>
+                Tu pronóstico: <strong style="color: var(--text);">{pickLabel(mp)}</strong>
                 · <span style="color: {resultColor}; font-weight: 600;">{ptsLabel}</span>
-                · {#if mp.points_earned >= 4}<span style="color: var(--green);">✓ Exacto</span>{:else if mp.points_earned >= 2}<span style="color: #ffc800;">✓ Diferencia</span>{:else if mp.points_earned >= 1}<span style="color: #ffc800;">✓ Resultado</span>{:else}<span style="color: var(--red);">✗</span>{/if}
+                · {#if mp.points_earned >= 1}<span style="color: var(--green);">✓ Acertado</span>{:else}<span style="color: var(--red);">✗ Fallado</span>{/if}
               </div>
             {:else if isFinished}
               {@const actualWinner = homeWin ? match.home_team_id : awayWin ? match.away_team_id : (match.penalty_winner_id || null)}

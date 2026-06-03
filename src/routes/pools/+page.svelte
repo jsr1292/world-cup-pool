@@ -1,9 +1,8 @@
 <script lang="ts">
-  import PullToRefresh from '$lib/components/PullToRefresh.svelte';
   let { data } = $props();
 </script>
 
-<PullToRefresh onRefresh={async () => { window.location.reload(); }}>
+<div>
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
     <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold);">
       {data.pools.length === 0 ? '¡Bienvenido!' : 'Mis Quinielas'}
@@ -73,4 +72,4 @@
       {/each}
     </div>
   {/if}
-</PullToRefresh>
+</div>

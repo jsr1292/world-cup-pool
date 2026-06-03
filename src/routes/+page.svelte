@@ -1,9 +1,8 @@
 <script>
-  import PullToRefresh from '$lib/components/PullToRefresh.svelte';
   let { data } = $props();
 </script>
 
-<PullToRefresh onRefresh={async () => { window.location.reload(); }}>
+<div>
   <div>
     <!-- Mobile: simple header -->
     <div class="home-hero-mobile">
@@ -120,7 +119,7 @@
       </div>
     </section>
   </div>
-</PullToRefresh>
+</div>
 
 <style>
   .home-hero-mobile { display: block; margin-bottom: 20px; }

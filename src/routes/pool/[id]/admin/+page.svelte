@@ -118,24 +118,25 @@
   ];
   let totalPool = $derived((pool.buy_in || 0) * data.stats.totalPaid);
 
+  // The canonical, in-order set of scoring rules (matches DEFAULT_SCORING_RULES /
+  // the API's VALID_RULES). The old 1X2-with-bonuses rules (goal_difference,
+  // exact_score, final_exact_score, the *_winner variants) were dropped with the
+  // W/D/L model — they're no longer shown or accepted.
+  const SCORING_RULES = [
+    'match_outcome', 'group_position',
+    'knockout_r32', 'knockout_r16', 'knockout_qf', 'knockout_sf',
+    'knockout_final', 'knockout_winner', 'third_place',
+  ];
   const ruleLabels = {
-    match_outcome: 'Resultado partido',
-    goal_difference: 'Diferencia de goles',
-    exact_score: 'Resultado exacto',
-    group_position: 'Posición en grupo',
+    match_outcome: 'Resultado partido (1/X/2)',
+    group_position: 'Posición en la tabla del grupo',
     knockout_r32: 'Dieciseisavos (R32)',
     knockout_r16: 'Octavos de final',
     knockout_qf: 'Cuartos de final',
     knockout_sf: 'Semifinal',
-    knockout_final: 'Final',
-    knockout_winner: 'Campeón',
-    final_exact_score: 'Resultado exacto final',
-    r32_winner: 'R32 Ganador',
-    r16_winner: 'Octavos Ganador',
-    qf_winner: 'Cuartos Ganador',
-    sf_winner: 'Semifinal Ganador',
-    final_winner: 'Final Ganador',
-    third_place: '3er lugar',
+    knockout_final: 'Llegar a la final',
+    knockout_winner: 'Campeón (adicional)',
+    third_place: '3.er puesto',
   };
 
   function label(rule) {
@@ -145,10 +146,14 @@
   async function saveScoring() {
     saving = true;
     message = '';
+    // Send only the canonical rules — a pool created before the W/D/L change may
+    // still carry stale keys (goal_difference…) in _scoring that the API rejects.
+    const rules = {};
+    for (const r of SCORING_RULES) if (_scoring[r] != null) rules[r] = Number(_scoring[r]);
     const res = await fetch('/api/admin/scoring', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pool_id: pool.id, rules: _scoring }),
+      body: JSON.stringify({ pool_id: pool.id, rules }),
     });
     saving = false;
     if (res.ok) { message = '✓ Guardado'; setTimeout(() => message = '', 2000); }
@@ -466,13 +471,13 @@
   <div style="margin-bottom: 24px;">
     <h2 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">Puntuación</h2>
     <div style="display: flex; flex-direction: column; gap: 4px;">
-      {#each Object.entries(scoring) as [rule, points]}
+      {#each SCORING_RULES as rule}
         <div style="display: flex; align-items: center; gap: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px;">
           <span style="flex: 1; font-size: 11px; color: var(--text-muted);">{label(rule)}</span>
           <input
             type="number"
             min="0"
-            value={points}
+            value={Number(scoring[rule] ?? 0)}
             onchange={(e) => { _scoring[rule] = Number(e.target.value); version++; }}
             style="width: 60px; text-align: center; padding: 4px 6px; font-size: 12px;"
           />
