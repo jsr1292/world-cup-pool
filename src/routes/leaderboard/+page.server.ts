@@ -5,7 +5,10 @@ import { getCachedGlobalLeaderboard, setCachedGlobalLeaderboard } from '$lib/ser
 export const load: PageServerLoad = async ({ locals }) => {
   const currentUserId = locals.user?.id;
 
-  const cached = getCachedGlobalLeaderboard();
+  // Not logged in → nothing to show (the route is auth-gated anyway).
+  if (!currentUserId) return { leaderboard: [], currentUserId: null };
+
+  const cached = getCachedGlobalLeaderboard(currentUserId);
   if (cached) return { leaderboard: cached, currentUserId };
 
   // Get the actual final match score for tiebreaker closeness
@@ -76,6 +79,10 @@ export const load: PageServerLoad = async ({ locals }) => {
     LEFT JOIN exact_hits eh ON eh.prediction_id = p.id
     LEFT JOIN group_correct gc ON gc.prediction_id = p.id
     LEFT JOIN bracket_correct bc ON bc.prediction_id = p.id
+    -- Privacy: only people who share at least one pool with the viewer, and only
+    -- their scores from those shared pools (a member of pool A must never see
+    -- members of an unrelated pool B in the global standings).
+    WHERE p.pool_id IN (SELECT pool_id FROM pool_members WHERE user_id = $1)
     GROUP BY u.id
     -- Canonical tiebreak chain (W/D/L model), unified with the pool leaderboard:
     -- points → correct picks → final-score closeness → updated_at → id.
@@ -85,7 +92,7 @@ export const load: PageServerLoad = async ({ locals }) => {
              MAX(p.updated_at) ASC,
              u.id ASC
     LIMIT 100
-  `);
+  `, [currentUserId]);
 
   const leaderboard = rows.map((row, i) => ({
     rank: i + 1,
@@ -98,6 +105,6 @@ export const load: PageServerLoad = async ({ locals }) => {
     exact_score_hits: row.exact_score_hits || 0,
   }));
 
-  setCachedGlobalLeaderboard(leaderboard);
+  setCachedGlobalLeaderboard(currentUserId, leaderboard);
   return { leaderboard, currentUserId };
 };

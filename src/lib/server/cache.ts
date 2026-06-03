@@ -81,23 +81,26 @@ interface TTLEntry<T> {
 }
 
 // ─── Global leaderboard (F-17) ─────────────────────────────────────────────
-let _globalLeaderboard: TTLEntry<any[]> | null = null;
+// Keyed by VIEWER user id: the "global" board is scoped to the pools the viewer
+// belongs to, so two members of different pools must not share a cached result.
+const _globalLeaderboard = new Map<number, TTLEntry<any[]>>();
 const GLOBAL_LB_TTL = 30_000; // 30 seconds
 
-export function getCachedGlobalLeaderboard(): any[] | null {
-	if (_globalLeaderboard && Date.now() < _globalLeaderboard.expiresAt) {
-		return _globalLeaderboard.data;
-	}
-	_globalLeaderboard = null;
+export function getCachedGlobalLeaderboard(userId: number): any[] | null {
+	const e = _globalLeaderboard.get(userId);
+	if (e && Date.now() < e.expiresAt) return e.data;
+	if (e) _globalLeaderboard.delete(userId);
 	return null;
 }
 
-export function setCachedGlobalLeaderboard(data: any[]): void {
-	_globalLeaderboard = { data, expiresAt: Date.now() + GLOBAL_LB_TTL };
+export function setCachedGlobalLeaderboard(userId: number, data: any[]): void {
+	// Cheap unbounded-growth guard: clear if it ever gets large.
+	if (_globalLeaderboard.size > 5_000) _globalLeaderboard.clear();
+	_globalLeaderboard.set(userId, { data, expiresAt: Date.now() + GLOBAL_LB_TTL });
 }
 
 export function invalidateGlobalLeaderboard(): void {
-	_globalLeaderboard = null;
+	_globalLeaderboard.clear();
 }
 
 // ─── Per-pool leaderboard (F-19) ───────────────────────────────────────────
