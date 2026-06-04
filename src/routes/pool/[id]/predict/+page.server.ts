@@ -89,6 +89,9 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   // Load existing match predictions (group scorelines) for the selected entry —
   // these seed the score inputs and the live derived-standings preview.
   const existingMatchPreds: Record<number, { home_score: number; away_score: number }> = {};
+  // Stored group-table order per group (encodes any manual tiebreak the player
+  // set). Seeds the live preview so the client and the saved bracket agree.
+  const groupOrders: Record<string, number[]> = {};
 
   if (selectedPrediction) {
     selectedId = Number(selectedPrediction.id);
@@ -98,6 +101,14 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
     `, [selectedId]);
     for (const row of mpRows) {
       existingMatchPreds[row.match_id] = { home_score: row.home_score, away_score: row.away_score };
+    }
+    const { rows: gpRows } = await query(`
+      SELECT group_name, position_1, position_2, position_3, position_4
+      FROM group_predictions WHERE prediction_id = $1
+    `, [selectedId]);
+    for (const r of gpRows) {
+      groupOrders[r.group_name] = [r.position_1, r.position_2, r.position_3, r.position_4]
+        .filter((x: number | null) => x != null);
     }
   }
 
@@ -118,5 +129,6 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
     isLocked,
     groupMatchesByGroup,
     existingMatchPreds,
+    groupOrders,
   };
 };

@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { untrack } from 'svelte';
   import { showToast } from '$lib/toast';
+  import { haptic } from '$lib/haptic';
   import { flagEmoji, shortName } from '$lib/teams.js';
   import { rankGroup } from '$lib/group-standings.js';
 
@@ -83,17 +84,27 @@
         gs.push({ homeTeamId: m.home_team_id, awayTeamId: m.away_team_id, homeScore: s.home, awayScore: s.away });
       }
     }
-    const order = rankGroup(gs);
+    // Apply the player's manual order (if any) as the tiebreak among teams level
+    // on points — same call the server uses, so preview and saved bracket agree.
+    const order = rankGroup(gs, groupOrders[group]);
+    const pts = {};
+    for (const g of gs) {
+      pts[g.homeTeamId] = pts[g.homeTeamId] || 0;
+      pts[g.awayTeamId] = pts[g.awayTeamId] || 0;
+      if (g.homeScore > g.awayScore) pts[g.homeTeamId] += 3;
+      else if (g.homeScore < g.awayScore) pts[g.awayTeamId] += 3;
+      else { pts[g.homeTeamId] += 1; pts[g.awayTeamId] += 1; }
+    }
     const teamMap = {};
     for (const t of (data.teamsByGroup?.[group] || [])) teamMap[Number(t.id)] = t;
     const rankedIds = new Set(order.map(Number));
     const rows = [];
     for (const id of order) {
       const team = teamMap[Number(id)];
-      if (team) rows.push({ team, ranked: true });
+      if (team) rows.push({ team, ranked: true, points: pts[Number(id)] ?? 0 });
     }
     for (const t of (data.teamsByGroup?.[group] || [])) {
-      if (!rankedIds.has(Number(t.id))) rows.push({ team: t, ranked: false });
+      if (!rankedIds.has(Number(t.id))) rows.push({ team: t, ranked: false, points: 0 });
     }
     return { rows, complete: groupComplete(group) };
   }
@@ -162,6 +173,57 @@
       matchScores = next;
     });
   });
+
+  // Manual group-table order (the player's tiebreak among teams level on points).
+  // Seeded from the server; updated optimistically on each ▲▼ move.
+  const groupOrdersInit = $derived.by(() => ({ ...(data.groupOrders || {}) }));
+  let groupOrders = $state({});
+  const _activeGroupEdits = new Set();
+  $effect(() => {
+    const fresh = JSON.parse(JSON.stringify(groupOrdersInit));
+    untrack(() => {
+      const next = { ...groupOrders };
+      for (const [g, ord] of Object.entries(fresh)) {
+        if (!_activeGroupEdits.has(g)) next[g] = ord;
+      }
+      groupOrders = next;
+    });
+  });
+
+  // Move a team up/down among teammates LEVEL ON POINTS (the only legal reorder).
+  async function moveTeam(group, index, dir) {
+    if (effectivelyLocked) return;
+    const rows = derivedStandings(group).rows;
+    const j = index + dir;
+    if (j < 0 || j >= rows.length) return;
+    if (!rows[index].ranked || !rows[j].ranked) return;
+    if (rows[index].points !== rows[j].points) return; // points are the hard constraint
+    const order = rows.map((r) => Number(r.team.id));
+    [order[index], order[j]] = [order[j], order[index]];
+    _activeGroupEdits.add(group);
+    groupOrders = { ...groupOrders, [group]: order };
+    haptic(8);
+    await saveGroupOrder(group, order);
+  }
+
+  async function saveGroupOrder(group, order) {
+    if (!data.selectedId) return;
+    try {
+      const res = await fetch('/api/predictions/group-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prediction_id: data.selectedId, group_name: group, order }),
+      });
+      if (res.ok) {
+        _activeGroupEdits.delete(group);
+      } else {
+        const b = await res.json().catch(() => ({}));
+        showToast('⚠️ ' + (b.error || 'No se pudo guardar el orden'));
+      }
+    } catch {
+      showToast('⚠️ Error al guardar el orden');
+    }
+  }
 
   // Cleanup timers on component destroy
   $effect(() => {
@@ -319,7 +381,7 @@
 
   <!-- Legend (once, instead of repeating in every card) -->
   <p style="font-size: 9px; color: var(--text-dim); margin-bottom: 10px; line-height: 1.4;">
-    <span style="color: var(--green);">●</span> 1.º y 2.º clasifican · <span style="color: #b87333;">●</span> mejores 3.º a la repesca · los empates de la tabla se deshacen por criterios FIFA (dif. de goles, goles…).
+    <span style="color: var(--green);">●</span> 1.º y 2.º clasifican · <span style="color: #b87333;">●</span> mejores 3.º a la repesca · si dos equipos quedan <strong>empatados a puntos</strong>, usa las flechas <span style="color: var(--gold);">▲▼</span> para ordenarlos a tu gusto (eso decide el cuadro).
   </p>
 
   <!-- Group prediction cards: predict 6 scorelines, table derives itself -->
@@ -388,9 +450,20 @@
             {#each ds.rows as row, i}
               {@const pos = i + 1}
               {@const accent = pos <= 2 ? 'var(--green)' : pos === 3 ? '#b87333' : 'var(--text-dim)'}
+              {@const canUp = complete && !effectivelyLocked && row.ranked && i > 0 && ds.rows[i - 1].ranked && ds.rows[i - 1].points === row.points}
+              {@const canDown = complete && !effectivelyLocked && row.ranked && i < ds.rows.length - 1 && ds.rows[i + 1].ranked && ds.rows[i + 1].points === row.points}
               <div style="display: flex; align-items: center; gap: 6px; padding: 2px 5px; border-radius: 4px; background: {pos <= 2 ? 'rgba(0,229,160,0.06)' : pos === 3 ? 'rgba(184,115,51,0.06)' : 'transparent'}; {pos === 2 ? 'border-bottom: 1px solid rgba(0,229,160,0.22);' : ''}">
                 <span style="width: 13px; color: {accent}; font-size: 9px; font-weight: 800; flex-shrink: 0; text-align: center;">{pos}</span>
                 <span style="font-size: 11px; font-weight: {pos <= 2 ? '600' : '400'}; color: {row.ranked ? 'var(--text)' : 'var(--text-dim)'}; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span style="font-size: 12px; margin-right: 4px;">{@html flagEmoji(row.team.flag_code)}</span>{shortName(row.team.name)}</span>
+                {#if complete}<span style="font-size: 8px; color: var(--text-dim); flex-shrink: 0; min-width: 24px; text-align: right;">{row.points} pt{row.points === 1 ? '' : 's'}</span>{/if}
+                {#if canUp || canDown}
+                  <span style="display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; margin-left: 2px;" title="Empate a puntos — ordénalos a tu gusto">
+                    <button type="button" aria-label="Subir" disabled={!canUp} onclick={() => moveTeam(group, i, -1)}
+                      style="line-height: 0.7; font-size: 9px; padding: 1px 4px; border: 1px solid var(--border); border-radius: 3px; background: {canUp ? 'rgba(201,168,76,0.12)' : 'transparent'}; color: {canUp ? 'var(--gold)' : 'var(--text-dim)'}; cursor: {canUp ? 'pointer' : 'default'}; opacity: {canUp ? 1 : 0.35};">▲</button>
+                    <button type="button" aria-label="Bajar" disabled={!canDown} onclick={() => moveTeam(group, i, 1)}
+                      style="line-height: 0.7; font-size: 9px; padding: 1px 4px; border: 1px solid var(--border); border-radius: 3px; background: {canDown ? 'rgba(201,168,76,0.12)' : 'transparent'}; color: {canDown ? 'var(--gold)' : 'var(--text-dim)'}; cursor: {canDown ? 'pointer' : 'default'}; opacity: {canDown ? 1 : 0.35};">▼</button>
+                  </span>
+                {/if}
               </div>
             {/each}
           </div>

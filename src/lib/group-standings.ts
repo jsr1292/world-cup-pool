@@ -35,7 +35,7 @@ export interface GsMatch {
 // predicted table: only the scorelines the user entered). Teams are discovered
 // from the matches, so a partial group ranks just the teams that have played;
 // the caller pads the remaining positions with null.
-export function rankGroup(matches: GsMatch[]): number[] {
+export function rankGroup(matches: GsMatch[], preferredOrder?: number[]): number[] {
 	// Overall per-team aggregate (points / goals for / goals against).
 	const teams: Record<number, { points: number; gf: number; ga: number }> = {};
 	function ensure(id: number) {
@@ -53,6 +53,21 @@ export function rankGroup(matches: GsMatch[]): number[] {
 	}
 
 	const ids = Object.keys(teams).map(Number);
+
+	// Manual-tiebreak mode: a caller-supplied order decides among teams LEVEL ON
+	// POINTS, overriding GD/GF/head-to-head (the player's explicit choice). Points
+	// remain the hard constraint — a team can never outrank one with more points.
+	// Teams absent from preferredOrder fall to the end of their points group by id.
+	// (Used only for the PREDICTED table; the ACTUAL table passes no preferredOrder
+	// and keeps the strict FIFA chain below.)
+	if (preferredOrder && preferredOrder.length) {
+		const idx = new Map(preferredOrder.map((id, i) => [id, i] as const));
+		return ids.slice().sort((a, b) =>
+			(teams[b].points - teams[a].points) ||
+			((idx.get(a) ?? Number.MAX_SAFE_INTEGER) - (idx.get(b) ?? Number.MAX_SAFE_INTEGER)) ||
+			(a - b)
+		);
+	}
 
 	// Head-to-head stats among an exact subset of teams (only matches BETWEEN
 	// those teams count).

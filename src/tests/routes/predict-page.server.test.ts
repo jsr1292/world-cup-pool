@@ -65,6 +65,7 @@ function setupDefaultMocks(overrides: {
 	(query as any).mockResolvedValueOnce({ rows: groupMatchRows });
 	if (predictions.length > 0) {
 		(query as any).mockResolvedValueOnce({ rows: matchPredRows }); // match predictions query
+		(query as any).mockResolvedValueOnce({ rows: overrides.groupOrderRows ?? [] }); // group_predictions order query
 	}
 }
 
@@ -174,7 +175,8 @@ describe('predict page load', () => {
 		(query as any)
 			.mockResolvedValueOnce({ rows: [{ 1: 1 }] }) // auto-create membership check: is a member
 			.mockResolvedValueOnce({ rows: [] }) // group matches
-			.mockResolvedValueOnce({ rows: [] }); // match predictions for selected (auto-created) entry
+			.mockResolvedValueOnce({ rows: [] }) // match predictions for selected (auto-created) entry
+			.mockResolvedValueOnce({ rows: [] }); // group_predictions order query
 		(createPrediction as any).mockResolvedValue(undefined);
 
 		const result = await load({

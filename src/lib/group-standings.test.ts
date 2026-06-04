@@ -85,4 +85,41 @@ describe('rankGroup', () => {
 		expect(rankGroup(group([[10, 20, 1, 0]]))).toEqual([10, 20]);
 		expect(rankGroup([])).toEqual([]);
 	});
+
+	describe('manual tiebreak (preferredOrder)', () => {
+		// 10 & 20 finish level on points; 20 is naturally ahead on GD (it scored
+		// more). Default ranks 20 first.
+		const tied = group([
+			[10, 30, 1, 0], [10, 40, 0, 0],   // 10: W,D vs 30/40 → 4 pts, gd +1
+			[20, 30, 1, 0], [20, 40, 1, 0],   // 20: W,W vs 30/40 → 6 pts ... not tied
+		]);
+
+		it('preferredOrder overrides GD/H2H among teams LEVEL ON POINTS', () => {
+			// Two teams genuinely level on points: both beat 30, both lost to 40.
+			const g = group([
+				[10, 30, 1, 0], [10, 40, 0, 1],   // 10: 3 pts (W,L)
+				[20, 30, 1, 0], [20, 40, 0, 1],   // 20: 3 pts (W,L) — identical to 10
+				[40, 30, 1, 0],                    // 40: beats 30 too
+			]);
+			// Default: 10 and 20 tied on everything → id order (10 before 20).
+			const def = rankGroup(g);
+			expect(def.indexOf(10)).toBeLessThan(def.indexOf(20));
+			// Manual order asks for 20 above 10 → honored (still below 40 on points).
+			const manual = rankGroup(g, [40, 20, 10, 30]);
+			expect(manual.indexOf(20)).toBeLessThan(manual.indexOf(10));
+		});
+
+		it('NEVER places a team above one with more points, even if asked', () => {
+			// 40 has the most points here; asking to put 30 (fewer pts) first is ignored.
+			const order = rankGroup(tied, [30, 40, 20, 10]);
+			// 20 (6 pts) must still outrank 10 (4 pts) and 30 (0). Points dominate.
+			expect(order[order.length - 1]).not.toBe(20); // 20 can't be last
+			// The top team must be the highest-points team (20), not the requested 30.
+			expect(order[0]).toBe(20);
+		});
+
+		it('is a no-op vs default when no preferredOrder is given (back-compat)', () => {
+			expect(rankGroup(tied)).toEqual(rankGroup(tied, undefined));
+		});
+	});
 });

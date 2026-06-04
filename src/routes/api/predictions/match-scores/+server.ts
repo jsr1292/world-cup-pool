@@ -170,13 +170,25 @@ export const POST: RequestHandler = async ({ request, locals }) => {
             WHERE mp.prediction_id = $1 AND m.phase = 'group' AND m.group_name = $2`,
           [prediction_id, group_name]
         );
+        // Preserve the player's existing order as a manual tiebreak: teams that
+        // stay level on points keep whatever order they had (incl. any manual
+        // reordering they set); only points changes re-sort the table.
+        const { rows: prevRows } = await client.query(
+          'SELECT position_1, position_2, position_3, position_4 FROM group_predictions WHERE prediction_id = $1 AND group_name = $2',
+          [prediction_id, group_name]
+        );
+        const prev = prevRows[0];
+        const preferredOrder: number[] | undefined = prev
+          ? [prev.position_1, prev.position_2, prev.position_3, prev.position_4].filter((x) => x != null)
+          : undefined;
         const order = rankGroup(
           gms.map((r): GsMatch => ({
             homeTeamId: r.home_team_id,
             awayTeamId: r.away_team_id,
             homeScore: r.home_score,
             awayScore: r.away_score,
-          }))
+          })),
+          preferredOrder
         );
         if (order.length === 0) {
           // No scorelines left for this group → clear the derived standing.
