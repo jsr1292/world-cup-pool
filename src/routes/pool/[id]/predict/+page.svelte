@@ -44,6 +44,21 @@
     return () => { cancelled = true; clearInterval(iv); };
   });
 
+  // Human-readable deadline date/times, in the VIEWER's local zone. Set in an
+  // effect (client-only) so SSR and hydration agree (server tz would differ).
+  let knockoutDeadlineText = $state('');
+  let groupDeadlineText = $state('');
+  function fmtDeadline(v) {
+    if (!v) return '';
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+  $effect(() => {
+    knockoutDeadlineText = fmtDeadline(pool.deadline_knockout);
+    groupDeadlineText = fmtDeadline(pool.deadline_group);
+  });
+
   // ─── Group standings (derived from predicted scorelines) ───────────────
   // The group stage is predicted as 6 scorelines per group; the final table is
   // DERIVED from them with the shared FIFA ranking (the same rankGroup the server
@@ -336,7 +351,7 @@
       <div style="margin-top: 12px; padding: 11px 13px; background: rgba(201,168,76,0.12); border: 1px solid var(--gold); border-radius: 8px;">
         <div style="font-size: 11px; font-weight: 700; color: var(--gold); margin-bottom: 4px;">⚠️ Esta quiniela tiene 2 partes — no te quedes solo con los grupos</div>
         <div style="font-size: 10px; color: var(--text-muted); line-height: 1.55; margin-bottom: 8px;">
-          <strong style="color: var(--text);">1·</strong> Fase de grupos (esta página) &nbsp;·&nbsp; <strong style="color: var(--text);">2·</strong> Cuadro eliminatorio: quién avanza + el marcador de la final. <strong style="color: var(--gold);">Las dos se bloquean en la misma fecha límite</strong>, así que rellena también el cuadro a tiempo.
+          <strong style="color: var(--text);">1·</strong> Fase de grupos (esta página) &nbsp;·&nbsp; <strong style="color: var(--text);">2·</strong> Cuadro eliminatorio: quién avanza + el marcador de la final. {#if knockoutDeadlineText}El cuadro se bloquea el <strong style="color: var(--gold);">{knockoutDeadlineText}</strong> — rellénalo también a tiempo.{:else}Rellénalo también antes de la fecha límite.{/if}
         </div>
         <a href="/pool/{pool.id}/bracket" class="btn-primary" style="font-size: 10px; padding: 7px 14px; display: inline-block; text-decoration: none;">⚔️ Ir al cuadro eliminatorio →</a>
       </div>
@@ -354,7 +369,7 @@
 
     {#if countdown && countdown !== 'Cerrado' && !effectivelyLocked}
       <div style="margin-top: 8px; padding: 8px 12px; background: rgba(201,168,76,0.1); border: 1px solid var(--gold); border-radius: 6px; font-size: 10px; color: var(--gold);">
-        ⏰ Cierre en: {countdown}
+        ⏰ Cierre en: {countdown}{#if groupDeadlineText} · {groupDeadlineText}{/if}
       </div>
     {/if}
     {#if effectivelyLocked}
@@ -537,7 +552,7 @@
         {/if}
       </p>
       <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5;">
-        Elige quién avanza en el cuadro y predice el marcador de la final. Se bloquea en la misma fecha límite que los grupos.
+        Elige quién avanza en el cuadro y predice el marcador de la final.{#if knockoutDeadlineText} Se bloquea el <strong style="color: var(--gold);">{knockoutDeadlineText}</strong>.{:else} Se bloquea en la fecha límite.{/if}
       </p>
       <a href="/pool/{pool.id}/bracket" class="btn-primary" style="font-size: 11px; padding: 10px 24px; display: inline-block; text-decoration: none;">⚔️ Ir al Cuadro Eliminatorio →</a>
     </div>
