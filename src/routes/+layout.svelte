@@ -48,6 +48,9 @@
     };
     const onMove = (e) => {
       if (startY == null || refreshing) return;
+      // A second finger landing mid-pull would jump touches[0] and fake a big
+      // delta — bail out of the gesture instead.
+      if (e.touches.length !== 1) { ptrActive = false; ptrY = 0; startY = null; return; }
       const dy = e.touches[0].clientY - startY;
       if (dy <= 0 || window.scrollY > 0) { ptrActive = false; ptrY = 0; return; }
       // Resistance curve so the pull feels rubbery and never runs away.

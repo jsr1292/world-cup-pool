@@ -198,16 +198,22 @@
     if (j < 0 || j >= rows.length) return;
     if (!rows[index].ranked || !rows[j].ranked) return;
     if (rows[index].points !== rows[j].points) return; // points are the hard constraint
+    const prevOrder = groupOrders[group];
     const order = rows.map((r) => Number(r.team.id));
     [order[index], order[j]] = [order[j], order[index]];
     _activeGroupEdits.add(group);
     groupOrders = { ...groupOrders, [group]: order };
     haptic(8);
-    await saveGroupOrder(group, order);
+    await saveGroupOrder(group, order, prevOrder);
   }
 
-  async function saveGroupOrder(group, order) {
+  async function saveGroupOrder(group, order, prevOrder) {
     if (!data.selectedId) return;
+    const revert = () => {
+      // Undo the optimistic update so the preview matches what's actually saved.
+      groupOrders = { ...groupOrders, [group]: prevOrder };
+      _activeGroupEdits.delete(group);
+    };
     try {
       const res = await fetch('/api/predictions/group-order', {
         method: 'POST',
@@ -218,9 +224,11 @@
         _activeGroupEdits.delete(group);
       } else {
         const b = await res.json().catch(() => ({}));
+        revert();
         showToast('⚠️ ' + (b.error || 'No se pudo guardar el orden'));
       }
     } catch {
+      revert();
       showToast('⚠️ Error al guardar el orden');
     }
   }

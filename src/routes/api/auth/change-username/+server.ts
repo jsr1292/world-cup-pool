@@ -32,6 +32,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     // Privilege-escalation guard: never let a user take the configured admin
     // handle (the boot auto-promote matches on username = ADMIN_USERNAME).
+    // INVARIANT: usernames are ALWAYS stored lowercased (deriveHandle + the
+    // normalize above), so comparing against the lowercased ADMIN_USERNAME blocks
+    // every form a user could actually hold. The promote queries
+    // ([action]/+server.ts, apply-config.mjs) match `username` case-sensitively;
+    // do NOT relax them to lower(username) without keeping this guard lowercased.
     const adminUser = (process.env.ADMIN_USERNAME || '').trim().toLowerCase();
     if (adminUser && adminUser !== 'null' && username === adminUser) {
       return json({ error: 'Ese nombre de usuario no está disponible' }, { status: 409 });

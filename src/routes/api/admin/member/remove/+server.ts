@@ -21,10 +21,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     if (!parsed.body || typeof parsed.body !== 'object') {
       return json({ error: 'Cuerpo inválido' }, { status: 400 });
     }
-    const { pool_id, user_id } = parsed.body as { pool_id?: number; user_id?: number };
+    const body = parsed.body as { pool_id?: unknown; user_id?: unknown };
+    const pool_id = Number(body.pool_id);
+    const user_id = Number(body.user_id);
 
-    if (!pool_id) return json({ error: 'Falta pool_id' }, { status: 400 });
-    if (!user_id) return json({ error: 'Falta user_id' }, { status: 400 });
+    if (!Number.isInteger(pool_id) || pool_id <= 0) return json({ error: 'Falta pool_id' }, { status: 400 });
+    if (!Number.isInteger(user_id) || user_id <= 0) return json({ error: 'Falta user_id' }, { status: 400 });
 
     const { rows: poolRows } = await query('SELECT created_by FROM pools WHERE id = $1', [pool_id]);
     const pool = poolRows[0] ?? null;
