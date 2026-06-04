@@ -8,6 +8,10 @@
   let error = $state('');
   let notice = $state('');
   let loading = $state(false);
+  // After a failed login, offer a one-tap switch to register (carrying the email
+  // over). We DON'T reveal whether the email exists — the hint shows on any
+  // failed login, so it never leaks account existence.
+  let showRegisterHint = $state(false);
 
   // Live confirm-password check (register only): true once the user has typed
   // something in the confirm box and it doesn't match the password.
@@ -15,7 +19,7 @@
     mode === 'register' && passwordConfirm.length > 0 && passwordConfirm !== password
   );
 
-  function switchMode(m) { mode = m; error = ''; notice = ''; }
+  function switchMode(m) { mode = m; error = ''; notice = ''; showRegisterHint = false; }
 
   // Honor a ?redirect= target (e.g. from an invite link) — but only safe local
   // paths, never an absolute/protocol-relative URL (open-redirect guard).
@@ -27,7 +31,7 @@
 
   async function handleSubmit(e) {
     e.preventDefault();
-    error = ''; notice = '';
+    error = ''; notice = ''; showRegisterHint = false;
     loading = true;
 
     const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
@@ -44,6 +48,8 @@
       const data = await res.json();
       if (!res.ok) {
         error = data.error || 'Error';
+        // Offer the register shortcut after a failed login (not on rate-limit).
+        if (mode === 'login' && res.status !== 429 && email.trim()) showRegisterHint = true;
       } else if (data.verify) {
         // SMTP on: account created but must confirm via email before logging in.
         notice = data.mailFailed
@@ -128,6 +134,12 @@
 
       {#if error}
         <p style="font-size: 10px; color: var(--red);">{error}</p>
+      {/if}
+      {#if showRegisterHint}
+        <button type="button" onclick={() => switchMode('register')}
+          style="background: rgba(201,168,76,0.1); border: 1px solid var(--gold); border-radius: 6px; padding: 9px 12px; font-size: 10px; color: var(--gold); cursor: pointer; text-align: center; line-height: 1.5;">
+          ¿No tienes cuenta? <strong>Crear una con este correo →</strong>
+        </button>
       {/if}
       {#if notice}
         <p style="font-size: 10px; color: var(--green); line-height: 1.5;">{notice}</p>
