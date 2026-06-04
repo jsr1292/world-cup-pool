@@ -407,6 +407,7 @@
       {@const complete = entered === 6 && fixtures.length === 6}
       {@const allLocked = fixtures.length > 0 && fixtures.every(m => m.locked)}
       {@const ds = derivedStandings(group)}
+      {@const hasTie = complete && !effectivelyLocked && ds.rows.some((r, i) => i > 0 && r.ranked && ds.rows[i - 1].ranked && ds.rows[i - 1].points === r.points)}
 
       <div class="group-card" style="background: var(--bg-card); border: 1px solid {complete ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 9px; padding: 10px 11px; {complete ? 'box-shadow: 0 0 10px rgba(201,168,76,0.07);' : ''}">
         <!-- Group header -->
@@ -461,6 +462,12 @@
             <span style="font-size: 8px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">Clasificación</span>
             {#if !complete}<span style="font-size: 8px; color: var(--text-dim); font-style: italic;">provisional</span>{/if}
           </div>
+          {#if hasTie}
+            <div style="display: flex; align-items: center; gap: 5px; margin-bottom: 5px; padding: 4px 7px; background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.3); border-radius: 5px; font-size: 9px; color: var(--gold); line-height: 1.3;">
+              <span style="font-size: 11px;">⚖️</span>
+              <span>Empate a puntos — usa las flechas <strong>▲▼</strong> para elegir el orden.</span>
+            </div>
+          {/if}
           <div style="display: flex; flex-direction: column; {complete ? '' : 'opacity: 0.7;'}">
             {#each ds.rows as row, i}
               {@const pos = i + 1}
