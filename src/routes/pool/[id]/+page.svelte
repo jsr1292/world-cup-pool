@@ -31,6 +31,11 @@
     { label: '2.º', pct: 0.25 },
     { label: '3.º', pct: 0.15 },
   ];
+  // Completeness of the user's primary entry (for the "finish your picks" banner).
+  const myCompletion = $derived(data.predictions.length > 0 ? data.completion?.[data.predictions[0].id] : null);
+  const groupsDone = $derived(!!myCompletion && myCompletion.groups >= myCompletion.groupsTotal);
+  const predComplete = $derived(!!myCompletion && groupsDone && myCompletion.bracketDone && myCompletion.tiebreakerDone);
+
   const paidCount = $derived(data.members.filter((m: any) => m.has_paid).length);
   const memberCount = $derived(data.members.length);
   const pot = $derived((Number(pool.buy_in) || 0) * paidCount);
@@ -221,6 +226,32 @@
         </div>
       </div>
     </div>
+  {/if}
+
+  <!-- Prediction-completeness banner (only once the user has started an entry) -->
+  {#if myCompletion}
+    {#if predComplete}
+      <div style="margin-bottom: 16px; padding: 10px 14px; display: flex; align-items: center; gap: 8px; background: rgba(0,229,160,0.07); border: 1px solid rgba(0,229,160,0.3); border-radius: 10px;">
+        <span style="font-size: 15px;">✅</span>
+        <span style="font-size: 11px; color: var(--green);">Tus pronósticos están <strong>completos y guardados</strong>.</span>
+      </div>
+    {:else}
+      <div style="margin-bottom: 16px; padding: 12px 14px; background: rgba(201,168,76,0.08); border: 1px solid var(--gold); border-radius: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span style="font-size: 16px;">📋</span>
+          <span style="font-size: 12px; font-weight: 600; color: var(--gold);">Aún te faltan pronósticos</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+          <span>{groupsDone ? '✅' : '⬜'} Grupos <strong style="color: var(--text);">{myCompletion.groups}/{myCompletion.groupsTotal}</strong></span>
+          <span>{myCompletion.bracketDone ? '✅' : '⬜'} Cuadro eliminatorio</span>
+          <span>{myCompletion.tiebreakerDone ? '✅' : '⬜'} Marcador de la final</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <a href="/pool/{pool.id}/{groupsDone ? 'bracket' : 'predict'}" class="btn-primary" style="display: inline-block; font-size: 10px; padding: 7px 16px;">Completar →</a>
+          <span style="font-size: 9px; color: var(--text-dim);">Tus respuestas se guardan solas a medida que las haces.</span>
+        </div>
+      </div>
+    {/if}
   {/if}
 
   <!-- Tabs -->

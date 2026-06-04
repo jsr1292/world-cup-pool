@@ -250,8 +250,39 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     userBracketPredsFull = ubpRows;
   }
 
+  // Completion status per entry — for the "finish your predictions" banner.
+  // groups: how many of the 72 group matches are picked. bracketDone: the user
+  // reached the final (a 'final' row only exists once every prior round is
+  // filled, since the bracket cascades). tiebreakerDone: a final-score row exists.
+  const completion: Record<number, { groups: number; groupsTotal: number; bracketDone: boolean; tiebreakerDone: boolean }> = {};
+  if (predictions.length > 0) {
+    const entryIds = predictions.map((e: any) => e.id);
+    const { rows: gmc } = await query(
+      `SELECT mp.prediction_id, COUNT(*)::int AS c
+       FROM match_predictions mp JOIN matches m ON m.id = mp.match_id AND m.phase = 'group'
+       WHERE mp.prediction_id = ANY($1::int[]) GROUP BY mp.prediction_id`, [entryIds]);
+    const groupCount: Record<number, number> = {};
+    gmc.forEach((r: any) => { groupCount[r.prediction_id] = Number(r.c); });
+    const { rows: fin } = await query(
+      `SELECT prediction_id, COUNT(*)::int AS c FROM bracket_predictions
+       WHERE prediction_id = ANY($1::int[]) AND phase = 'final' GROUP BY prediction_id`, [entryIds]);
+    const finalCount: Record<number, number> = {};
+    fin.forEach((r: any) => { finalCount[r.prediction_id] = Number(r.c); });
+    const { rows: tb } = await query(
+      `SELECT prediction_id FROM tiebreaker WHERE prediction_id = ANY($1::int[])`, [entryIds]);
+    const tbSet = new Set(tb.map((r: any) => r.prediction_id));
+    for (const e of predictions as any[]) {
+      completion[e.id] = {
+        groups: groupCount[e.id] ?? 0,
+        groupsTotal: 72,
+        bracketDone: (finalCount[e.id] ?? 0) >= 2,
+        tiebreakerDone: tbSet.has(e.id),
+      };
+    }
+  }
+
   return {
-    pool, members, leaderboard: enrichedLeaderboard, scoring, predictions,
+    pool, members, leaderboard: enrichedLeaderboard, scoring, predictions, completion,
     isAdmin: locals.user ? (pool as any).created_by === locals.user.id : false,
     userId: locals.user?.id ?? null,
     teams,
