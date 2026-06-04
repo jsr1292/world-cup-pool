@@ -337,7 +337,7 @@
               {entry.display_name?.[0]?.toUpperCase() || '?'}
             </div>
             <div style="flex: 1; min-width: 0;">
-              <div style="font-size: 13px; font-weight: 600; {entry.user_id === data.userId ? 'color: var(--gold);' : ''}">{i + 1}. {entry.display_name}{entry.label ? ` (${entry.label})` : ''}</div>
+              <div style="font-size: 13px; font-weight: 600; {entry.user_id === data.userId ? 'color: var(--gold);' : ''}">{i + 1}. {entry.display_name}{#if pool.allow_multiple_predictions}<span style="color: var(--text-muted); font-weight: 400;"> · {entry.label || 'Principal'}</span>{:else if entry.label}<span style="color: var(--text-muted); font-weight: 400;"> ({entry.label})</span>{/if}</div>
               <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">
                 {#if entry.group_correct > 0}
                   <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">Grupos: {entry.group_correct}</span>
