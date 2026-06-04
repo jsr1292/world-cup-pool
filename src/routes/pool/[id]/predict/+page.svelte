@@ -330,6 +330,18 @@
       Cada resultado acertado: <strong style="color: var(--gold);">+{outcomePts}</strong> punto{outcomePts === 1 ? '' : 's'}.{#if groupPosPts > 0} Además, <strong style="color: var(--gold);">+{groupPosPts}</strong> por cada puesto acertado de la tabla final de cada grupo.{/if}
     </p>
 
+    <!-- Two-part reminder: people finish the groups and forget the knockout,
+         which locks at the same deadline. Make it unmissable. -->
+    {#if !effectivelyLocked && data.selectedId}
+      <div style="margin-top: 12px; padding: 11px 13px; background: rgba(201,168,76,0.12); border: 1px solid var(--gold); border-radius: 8px;">
+        <div style="font-size: 11px; font-weight: 700; color: var(--gold); margin-bottom: 4px;">⚠️ Esta quiniela tiene 2 partes — no te quedes solo con los grupos</div>
+        <div style="font-size: 10px; color: var(--text-muted); line-height: 1.55; margin-bottom: 8px;">
+          <strong style="color: var(--text);">1·</strong> Fase de grupos (esta página) &nbsp;·&nbsp; <strong style="color: var(--text);">2·</strong> Cuadro eliminatorio: quién avanza + el marcador de la final. <strong style="color: var(--gold);">Las dos se bloquean en la misma fecha límite</strong>, así que rellena también el cuadro a tiempo.
+        </div>
+        <a href="/pool/{pool.id}/bracket" class="btn-primary" style="font-size: 10px; padding: 7px 14px; display: inline-block; text-decoration: none;">⚔️ Ir al cuadro eliminatorio →</a>
+      </div>
+    {/if}
+
     <!-- Progress bar -->
     <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
       <div style="flex: 1; max-width: 280px; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden;">
@@ -516,15 +528,18 @@
 
   <!-- Bracket CTA -->
   {#if !effectivelyLocked && data.selectedId}
-    <div style="margin-top: 20px; padding: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
-      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+    <div style="margin-top: 20px; padding: 16px; background: rgba(201,168,76,0.1); border: 1px solid var(--gold); border-radius: 8px; text-align: center;">
+      <p style="font-size: 12px; font-weight: 600; color: var(--gold); margin-bottom: 4px;">
         {#if groupsCompleted >= totalGroups}
-          ¡Grupos completados! Ahora elige quién avanza en el cuadro y el marcador de la final.
+          ✅ Grupos completos — ahora falta la 2.ª parte
         {:else}
-          Predice también el cuadro eliminatorio: quién avanza y el marcador de la final ({groupsCompleted}/{totalGroups} grupos listos)
+          Aún no has terminado: falta el cuadro eliminatorio
         {/if}
       </p>
-      <a href="/pool/{pool.id}/bracket" class="btn-primary" style="font-size: 11px; padding: 10px 24px; display: inline-block; text-decoration: none;">⚔️ Cuadro Eliminatorio →</a>
+      <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5;">
+        Elige quién avanza en el cuadro y predice el marcador de la final. Se bloquea en la misma fecha límite que los grupos.
+      </p>
+      <a href="/pool/{pool.id}/bracket" class="btn-primary" style="font-size: 11px; padding: 10px 24px; display: inline-block; text-decoration: none;">⚔️ Ir al Cuadro Eliminatorio →</a>
     </div>
   {/if}
 </div>
