@@ -179,6 +179,7 @@
   const groupOrdersInit = $derived.by(() => ({ ...(data.groupOrders || {}) }));
   let groupOrders = $state({});
   const _activeGroupEdits = new Set();
+  let _reorderHintShown = false;
   $effect(() => {
     const fresh = JSON.parse(JSON.stringify(groupOrdersInit));
     untrack(() => {
@@ -204,6 +205,12 @@
     _activeGroupEdits.add(group);
     groupOrders = { ...groupOrders, [group]: order };
     haptic(8);
+    // The bracket seeds its matchups from this order, so a reorder can shift an
+    // already-filled cuadro. Nudge once so the user knows to review it.
+    if (!_reorderHintShown) {
+      _reorderHintShown = true;
+      showToast('ℹ️ Orden actualizado. Si ya rellenaste el cuadro, revísalo: las eliminatorias se reordenan con el grupo.');
+    }
     await saveGroupOrder(group, order, prevOrder);
   }
 
