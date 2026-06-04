@@ -30,11 +30,6 @@
       "name": "Mis Quinielas",
       "url": "/",
       "description": "Ver mis quinielas"
-    },
-    {
-      "name": "Clasificación",
-      "url": "/leaderboard",
-      "description": "Ver clasificación global"
     }
   ]
 }

@@ -159,7 +159,9 @@
 
   const navItems = [
     { path: '/', label: 'Inicio', icon: 'home' },
-    { path: '/leaderboard', label: 'Clasificación', icon: 'trophy' },
+    // No global cross-pool leaderboard: pools are independent contests with their
+    // own scoring, so a summed global board just rewarded being in more pools.
+    // Each pool's own Clasificación tab is the real ranking.
     ...(data?.user?.is_admin ? [{ path: '/admin', label: 'Admin', icon: 'settings' }] : []),
     { path: '/profile', label: 'Perfil', icon: 'user' },
   ];
