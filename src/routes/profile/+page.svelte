@@ -9,46 +9,41 @@
   let changing = $state(false);
   let changeResult = $state(null) as { ok: boolean; msg: string } | null;
 
-  // Username change
-  let newUsername = $state('');
-  let changingUsername = $state(false);
-  let usernameResult = $state(null) as { ok: boolean; msg: string } | null;
-  let usernameUsed = $state(data.usernameChangesUsed ?? 0);
-  const usernameMax = data.usernameChangesMax ?? 3;
-  const usernameRemaining = $derived(Math.max(0, usernameMax - usernameUsed));
+  // Display-name change (the name shown in each pool's Clasificación)
+  let newName = $state('');
+  let changingName = $state(false);
+  let nameResult = $state(null) as { ok: boolean; msg: string } | null;
+  let nameUsed = $state(data.displayNameChangesUsed ?? 0);
+  const nameMax = data.displayNameChangesMax ?? 3;
+  const nameRemaining = $derived(Math.max(0, nameMax - nameUsed));
 
-  async function changeUsername() {
-    const u = newUsername.trim().toLowerCase();
-    if (!/^[a-z0-9_]{3,20}$/.test(u)) {
-      usernameResult = { ok: false, msg: 'Usa 3–20 caracteres: letras, números o guion bajo' };
-      return;
-    }
-    if (u === data.user.username) {
-      usernameResult = { ok: false, msg: 'Ese ya es tu nombre de usuario' };
-      return;
-    }
-    changingUsername = true;
-    usernameResult = null;
+  async function changeName() {
+    const n = newName.replace(/\s+/g, ' ').trim();
+    if (n.length < 1) { nameResult = { ok: false, msg: 'Escribe un nombre' }; return; }
+    if (n.length > 50) { nameResult = { ok: false, msg: 'Máximo 50 caracteres' }; return; }
+    if (n === data.user.display_name) { nameResult = { ok: false, msg: 'Ese ya es tu nombre' }; return; }
+    changingName = true;
+    nameResult = null;
     try {
-      const res = await fetch('/api/auth/change-username', {
+      const res = await fetch('/api/auth/change-display-name', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: u }),
+        body: JSON.stringify({ display_name: n }),
       });
       const d = await res.json();
       if (d.ok) {
-        usernameResult = { ok: true, msg: `Nombre de usuario actualizado a @${d.username}` };
-        usernameUsed = usernameMax - (d.remaining ?? 0);
-        newUsername = '';
-        // Reload so the new @handle shows everywhere (sidebar, leaderboards).
+        nameResult = { ok: true, msg: `Nombre actualizado a ${d.display_name}` };
+        nameUsed = nameMax - (d.remaining ?? 0);
+        newName = '';
+        // Reload so the new name shows everywhere (sidebar, leaderboards).
         setTimeout(() => window.location.reload(), 900);
       } else {
-        usernameResult = { ok: false, msg: d.error || 'Error' };
+        nameResult = { ok: false, msg: d.error || 'Error' };
       }
     } catch {
-      usernameResult = { ok: false, msg: 'Error de conexión' };
+      nameResult = { ok: false, msg: 'Error de conexión' };
     }
-    changingUsername = false;
+    changingName = false;
   }
 
   let isDark = $state(false);
@@ -126,38 +121,35 @@
     </div>
   </div>
 
-  <!-- Change Username -->
+  <!-- Change display name -->
   <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px;">
-    <div style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">🪪 Nombre de usuario</div>
+    <div style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">🪪 Nombre</div>
     <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5;">
-      Tu nombre público es <strong style="color: var(--gold);">@{data.user.username}</strong>. Es lo que ven los demás en las clasificaciones (tu correo nunca se muestra).
+      Tu nombre actual es <strong style="color: var(--gold);">{data.user.display_name}</strong>. Es el que ven los demás en la clasificación de cada quiniela (tu correo nunca se muestra).
     </p>
 
-    {#if usernameRemaining > 0}
+    {#if nameRemaining > 0}
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <div>
-          <label style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase; display: block; margin-bottom: 4px;">Nuevo nombre de usuario</label>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="font-size: 14px; color: var(--text-muted);">@</span>
-            <input bind:value={newUsername} placeholder="tu_nombre" autocomplete="off"
-              maxlength="20" style="flex: 1;" oninput={(e) => { e.currentTarget.value = e.currentTarget.value.toLowerCase().replace(/[^a-z0-9_]/g, ''); newUsername = e.currentTarget.value; }} />
-          </div>
-          <div style="font-size: 9px; color: var(--text-dim); margin-top: 5px;">3–20 caracteres: letras, números o guion bajo. Te quedan <strong>{usernameRemaining}</strong> de {usernameMax} cambios.</div>
+          <label style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.12em; text-transform: uppercase; display: block; margin-bottom: 4px;">Nuevo nombre</label>
+          <input bind:value={newName} placeholder="Tu nombre" autocomplete="name" maxlength="50"
+            onkeydown={(e) => { if (e.key === 'Enter') changeName(); }} />
+          <div style="font-size: 9px; color: var(--text-dim); margin-top: 5px;">Hasta 50 caracteres. Te quedan <strong>{nameRemaining}</strong> de {nameMax} cambios.</div>
         </div>
 
-        {#if usernameResult}
-          <div style="font-size: 11px; padding: 8px 12px; border-radius: 6px; background: {usernameResult.ok ? 'rgba(0,229,160,0.1)' : 'rgba(255,77,106,0.1)'}; color: {usernameResult.ok ? 'var(--green)' : 'var(--red)'};">
-            {usernameResult.msg}
+        {#if nameResult}
+          <div style="font-size: 11px; padding: 8px 12px; border-radius: 6px; background: {nameResult.ok ? 'rgba(0,229,160,0.1)' : 'rgba(255,77,106,0.1)'}; color: {nameResult.ok ? 'var(--green)' : 'var(--red)'};">
+            {nameResult.msg}
           </div>
         {/if}
 
-        <button class="btn-primary" onclick={changeUsername} disabled={changingUsername || !newUsername.trim()}>
-          {changingUsername ? 'Guardando...' : 'Cambiar nombre de usuario'}
+        <button class="btn-primary" onclick={changeName} disabled={changingName || !newName.trim()}>
+          {changingName ? 'Guardando...' : 'Cambiar nombre'}
         </button>
       </div>
     {:else}
       <div style="font-size: 11px; padding: 8px 12px; border-radius: 6px; background: rgba(255,255,255,0.04); color: var(--text-muted);">
-        Has usado tus {usernameMax} cambios de nombre de usuario. No se pueden hacer más.
+        Has usado tus {nameMax} cambios de nombre. No se pueden hacer más.
       </div>
     {/if}
   </div>
