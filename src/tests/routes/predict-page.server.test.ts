@@ -6,6 +6,7 @@ vi.mock('$lib/server/queries.js', () => ({
 	getAllTeams: vi.fn(),
 	createPrediction: vi.fn(),
 	getUserPredictions: vi.fn(),
+	getScoringConfig: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock('$lib/server/db.js', () => ({

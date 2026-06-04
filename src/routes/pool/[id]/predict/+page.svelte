@@ -180,6 +180,10 @@
   let groupOrders = $state({});
   const _activeGroupEdits = new Set();
   let _reorderHintShown = false;
+
+  // Effective scoring (defaults + pool overrides) for the intro copy.
+  const outcomePts = $derived(Number(data.scoring?.match_outcome ?? 1));
+  const groupPosPts = $derived(Number(data.scoring?.group_position ?? 0));
   $effect(() => {
     const fresh = JSON.parse(JSON.stringify(groupOrdersInit));
     untrack(() => {
@@ -323,7 +327,7 @@
       Pronostica el resultado de cada partido — <strong>1</strong> (gana local) · <strong>X</strong> (empate) · <strong>2</strong> (gana visitante). La clasificación se calcula sola con tus aciertos.
     </p>
     <p style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
-      Cada resultado acertado: <strong style="color: var(--gold);">+1</strong> punto.
+      Cada resultado acertado: <strong style="color: var(--gold);">+{outcomePts}</strong> punto{outcomePts === 1 ? '' : 's'}.{#if groupPosPts > 0} Además, <strong style="color: var(--gold);">+{groupPosPts}</strong> por cada puesto acertado de la tabla final de cada grupo.{/if}
     </p>
 
     <!-- Progress bar -->

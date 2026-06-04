@@ -1,4 +1,5 @@
-import { getPoolById, getAllTeams, createPrediction, getUserPredictions } from '$lib/server/queries.js';
+import { getPoolById, getAllTeams, createPrediction, getUserPredictions, getScoringConfig } from '$lib/server/queries.js';
+import { DEFAULT_SCORING_RULES } from '$lib/server/scoring.js';
 import { query } from '$lib/server/db.js';
 import { redirect, error } from '@sveltejs/kit';
 import type { ServerLoad } from '@sveltejs/kit';
@@ -18,6 +19,10 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   if (m.length === 0 && pool.created_by !== locals.user.id) {
     throw error(403, 'No eres miembro de esta quiniela');
   }
+
+  // Effective scoring rules (defaults + this pool's overrides) so the intro can
+  // show the real per-result value and the optional table-position bonus.
+  const scoring = { ...DEFAULT_SCORING_RULES, ...(await getScoringConfig(poolId)) } as Record<string, number>;
 
   const teams = await getAllTeams() as any[];
 
@@ -130,5 +135,6 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
     groupMatchesByGroup,
     existingMatchPreds,
     groupOrders,
+    scoring,
   };
 };
