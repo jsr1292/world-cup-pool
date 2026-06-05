@@ -213,6 +213,12 @@
     initialized = true;
     initState();
     bump();
+    // If initState's recascade had to drop a now-invalid 3rd-place pick (e.g. the
+    // group was reordered after the bracket was filled), persist the corrected
+    // bracket right away so the stale DB row can't keep blocking later saves.
+    if (_cascadeClearedThisTick && data.selectedId && !data.isLocked) {
+      autoSaveBracket();
+    }
   });
 
   let _cascadeClearedThisTick = false;
@@ -223,14 +229,31 @@
       const m = R32_MAP[i];
       if (m.t1g === WILDCARD) continue;
       _teams.r32[i][0] = getGroupTeam(m.t1g, m.t1p);
-      // Only auto-fill team2 from group predictions if user hasn't explicitly picked
-      if (!_picks.r32[i][1]) {
-        // For a wildcard 3rd-place slot keep the user's chosen occupant
-        // (_thirdSlots). getGroupTeam(WILDCARD,…) returns null, which would
-        // wipe the 3rd-place team the instant it's selected.
-        _teams.r32[i][1] = m.t2g === WILDCARD
-          ? (_thirdSlots[i] ?? null)
-          : getGroupTeam(m.t2g, m.t2p);
+
+      if (m.t2g === WILDCARD) {
+        // Wildcard 3rd-place slot. A group reorder can change who finishes 3rd —
+        // or promote the chosen team to 1st/2nd, where it becomes a DIRECT
+        // qualifier in another R32 slot. If the saved 3rd-place pick is no longer
+        // a valid 3rd of an eligible group, DROP it: otherwise it lingers as a
+        // stale pick that collides (same team in two R32 slots) and the save is
+        // rejected with "Equipo repetido en fase r32".
+        const cur = _thirdSlots[i] ?? null;
+        const eligible = THIRD_GROUP_MAP[i] || [];
+        const haveStandings = eligible.some(g => data.groupPredictions?.[g]?.pos3 != null);
+        const stillValid = cur != null && eligible.some(g => data.groupPredictions?.[g]?.pos3 === cur);
+        if (cur != null && haveStandings && !stillValid) {
+          _thirdSlots[i] = null;
+          _teams.r32[i][1] = null;
+          _picks.r32[i][1] = false;
+          if (!_cascadeClearedThisTick) {
+            _cascadeClearedThisTick = true;
+            showToast('ℹ️ Un 3.º cambió al reordenar el grupo — vuelve a elegirlo en el cuadro');
+          }
+        } else if (!_picks.r32[i][1]) {
+          _teams.r32[i][1] = cur;
+        }
+      } else if (!_picks.r32[i][1]) {
+        _teams.r32[i][1] = getGroupTeam(m.t2g, m.t2p);
       }
     }
 
