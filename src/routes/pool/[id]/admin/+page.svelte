@@ -24,6 +24,22 @@
 
   const pool = $derived(data.pool);
 
+  // Prediction-completion helpers (admin overview of who's finished).
+  function entryCompletion(entry) {
+    return entry?.entry_id != null ? (data.completion?.[entry.entry_id] ?? null) : null;
+  }
+  function missingText(c) {
+    if (!c) return '';
+    const parts = [];
+    if (c.groups < c.groupsTotal) parts.push(`grupos (${c.groups}/${c.groupsTotal})`);
+    if (!c.bracketDone) parts.push('cuadro');
+    if (!c.tiebreakerDone) parts.push('marcador final');
+    return parts.join(' · ');
+  }
+  const completedCount = $derived(
+    (data.entries ?? []).filter(e => entryCompletion(e)?.complete).length
+  );
+
   // ── Match results entry (group + knockout) ─────────────────────────────────
   const PHASE_ORDER = ['group', 'r32', 'r16', 'qf', 'sf', '3rd', 'final'];
   const PHASE_TITLES = {
@@ -565,6 +581,31 @@
       {#if restoreMsg}
         <span style="font-size: 11px; color: {restoreMsg.startsWith('✓') ? 'var(--green)' : 'var(--text-muted)'};">{restoreMsg}</span>
       {/if}
+    </div>
+  </div>
+
+  <!-- Prediction completion overview -->
+  <div style="margin-bottom: 24px;">
+    <h2 style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">Pronósticos completados</h2>
+    <p style="font-size: 10px; color: var(--text-dim); margin-bottom: 10px;">
+      <strong style="color: {completedCount === (data.entries?.length ?? 0) ? 'var(--green)' : 'var(--gold)'};">{completedCount}/{data.entries?.length ?? 0}</strong> han completado todo (grupos + cuadro + marcador final). Avisa a quien le falte algo.
+    </p>
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      {#each (data.entries ?? []) as entry}
+        {@const c = entryCompletion(entry)}
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--bg-card); border: 1px solid {c?.complete ? 'rgba(0,229,160,0.25)' : 'var(--border)'}; border-radius: 6px; padding: 8px 12px;">
+          <span style="font-size: 12px; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {entry.display_name}{#if pool.allow_multiple_predictions && entry.entry_label} <span style="color: var(--text-muted);">· {entry.entry_label}</span>{/if}
+          </span>
+          {#if !entry.entry_id}
+            <span style="font-size: 9px; color: var(--text-dim); white-space: nowrap;">⬜ No ha empezado</span>
+          {:else if c?.complete}
+            <span style="font-size: 9px; color: var(--green); white-space: nowrap; font-weight: 600;">✅ Completo</span>
+          {:else}
+            <span style="font-size: 9px; color: var(--gold); text-align: right;">⬜ Falta: {missingText(c)}</span>
+          {/if}
+        </div>
+      {/each}
     </div>
   </div>
 

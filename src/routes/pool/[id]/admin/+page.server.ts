@@ -54,11 +54,38 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     finishedMatches: fmRows[0].c,
   };
 
+  // Completion status per entry — so the admin can see who has finished all
+  // their predictions and who's missing something (groups / bracket / final).
+  const completion: Record<number, { groups: number; groupsTotal: number; bracketDone: boolean; tiebreakerDone: boolean; complete: boolean }> = {};
+  const entryIds = (entries as any[]).map(e => e.entry_id).filter((id): id is number => id != null);
+  if (entryIds.length > 0) {
+    const { rows: gmc } = await query(
+      `SELECT mp.prediction_id, COUNT(*)::int AS c
+       FROM match_predictions mp JOIN matches m ON m.id = mp.match_id AND m.phase = 'group'
+       WHERE mp.prediction_id = ANY($1::int[]) GROUP BY mp.prediction_id`, [entryIds]);
+    const groupCount: Record<number, number> = {};
+    gmc.forEach((r: any) => { groupCount[r.prediction_id] = Number(r.c); });
+    const { rows: fin } = await query(
+      `SELECT prediction_id, COUNT(*)::int AS c FROM bracket_predictions
+       WHERE prediction_id = ANY($1::int[]) AND phase = 'final' GROUP BY prediction_id`, [entryIds]);
+    const finalCount: Record<number, number> = {};
+    fin.forEach((r: any) => { finalCount[r.prediction_id] = Number(r.c); });
+    const { rows: tb } = await query(
+      `SELECT prediction_id FROM tiebreaker WHERE prediction_id = ANY($1::int[])`, [entryIds]);
+    const tbSet = new Set(tb.map((r: any) => r.prediction_id));
+    for (const id of entryIds) {
+      const groups = groupCount[id] ?? 0;
+      const bracketDone = (finalCount[id] ?? 0) >= 2;
+      const tiebreakerDone = tbSet.has(id);
+      completion[id] = { groups, groupsTotal: 72, bracketDone, tiebreakerDone, complete: groups >= 72 && bracketDone && tiebreakerDone };
+    }
+  }
+
   // Match results are GLOBAL (one matches table scores every pool), so only a
   // site admin enters them — /api/admin/results enforces this. Expose the flag
   // so the UI shows the results-entry section only to site admins (a non-admin
   // pool creator would otherwise see controls that 403 on save).
   const isSiteAdmin = !!locals.user.is_admin;
 
-  return { pool, members, entries, scoring, matches, teams, stats, isSiteAdmin };
+  return { pool, members, entries, scoring, matches, teams, stats, isSiteAdmin, completion };
 };
