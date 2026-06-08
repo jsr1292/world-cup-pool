@@ -75,7 +75,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     const tbSet = new Set(tb.map((r: any) => r.prediction_id));
     for (const id of entryIds) {
       const groups = groupCount[id] ?? 0;
-      const bracketDone = (finalCount[id] ?? 0) >= 2;
+      const bracketDone = (finalCount[id] ?? 0) >= 1; // a 'final' row = champion picked (only winners are stored)
       const tiebreakerDone = tbSet.has(id);
       completion[id] = { groups, groupsTotal: 72, bracketDone, tiebreakerDone, complete: groups >= 72 && bracketDone && tiebreakerDone };
     }

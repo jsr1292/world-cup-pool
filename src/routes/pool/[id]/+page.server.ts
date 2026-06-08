@@ -252,8 +252,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
   // Completion status per entry — for the "finish your predictions" banner.
   // groups: how many of the 72 group matches are picked. bracketDone: the user
-  // reached the final (a 'final' row only exists once every prior round is
-  // filled, since the bracket cascades). tiebreakerDone: a final-score row exists.
+  // picked a champion — only the WINNER of each match is stored, so the 'final'
+  // phase holds exactly ONE row (the champion) once the bracket is filled all the
+  // way; reaching it implies every prior round is done. tiebreakerDone: a
+  // final-score row exists.
   const completion: Record<number, { groups: number; groupsTotal: number; bracketDone: boolean; tiebreakerDone: boolean }> = {};
   if (predictions.length > 0) {
     const entryIds = predictions.map((e: any) => e.id);
@@ -275,7 +277,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       completion[e.id] = {
         groups: groupCount[e.id] ?? 0,
         groupsTotal: 72,
-        bracketDone: (finalCount[e.id] ?? 0) >= 2,
+        bracketDone: (finalCount[e.id] ?? 0) >= 1,
         tiebreakerDone: tbSet.has(e.id),
       };
     }
