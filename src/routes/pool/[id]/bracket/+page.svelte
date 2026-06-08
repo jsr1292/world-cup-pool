@@ -143,22 +143,29 @@
       t.r32.push([team1, team2]);
       exp.r32.push([false, false]);
     }
-    for (let i = 0; i < 32; i++) {
-      const slot = i + 1, mi = Math.floor(i / 2), ti = i % 2;
-      if (data.existingBracket?.r32?.[slot]) {
-        t.r32[mi][ti] = data.existingBracket.r32[slot];
-        // saveBracket persists a slot value ONLY when it was the WINNER pick
-        // (`exp[j] ? team : null`), so any non-null restored value means the
-        // user picked this team to advance — restore the winner flag.
-        // Previously wildcard ti=1 slots were restored as "occupant only",
-        // which dropped a correctly-saved 3rd-place advancer: it stopped
-        // cascading forward AND was wiped on the next autosave (null write).
-        exp.r32[mi][ti] = true;
-        // For wildcard R32 matches, also remember this 3rd-place team as the
-        // slot's occupant so the third-place selector shows it as chosen.
-        if (ti === 1 && R32_MAP[mi].t2g === WILDCARD) {
-          _thirdSlots[mi] = data.existingBracket.r32[slot];
+    // Restore R32 per MATCH so wildcard 3rd-place slots can be read correctly.
+    // For a wildcard match "1D vs 3rd": slot 1 is the user-picked 3rd-place
+    // OCCUPANT, now persisted regardless of who wins; slot 0 (the direct team)
+    // is stored only when it's the winner. So: the direct team won iff its slot
+    // is present; otherwise the 3rd-place team is the advancer. For normal
+    // matches a stored slot is simply the winner.
+    for (let mi = 0; mi < 16; mi++) {
+      const s0 = data.existingBracket?.r32?.[mi * 2 + 1] ?? null;
+      const s1 = data.existingBracket?.r32?.[mi * 2 + 2] ?? null;
+      if (R32_MAP[mi].t2g === WILDCARD) {
+        if (s1 != null) {
+          t.r32[mi][1] = s1;
+          _thirdSlots[mi] = s1; // the chosen 3rd-place team occupies this slot
         }
+        if (s0 != null) {
+          t.r32[mi][0] = s0;
+          exp.r32[mi][0] = true;   // the direct team advanced
+        } else if (s1 != null) {
+          exp.r32[mi][1] = true;   // the 3rd-place team advanced
+        }
+      } else {
+        if (s0 != null) { t.r32[mi][0] = s0; exp.r32[mi][0] = true; }
+        if (s1 != null) { t.r32[mi][1] = s1; exp.r32[mi][1] = true; }
       }
     }
 
@@ -508,7 +515,15 @@
           const exp = _picks[phase][i];
           for (let j = 0; j < 2; j++) {
             const slot = i * 2 + j + 1;
-            picks[phase][slot] = exp[j] ? pt[i][j] : null;
+            // A wildcard R32 slot-1 holds the user's chosen 3rd-place team — a
+            // prediction in itself. Persist it even when it's not the match
+            // winner, otherwise picking a 3rd team without advancing it is lost
+            // on reload.
+            if (phase === 'r32' && j === 1 && R32_MAP[i].t2g === WILDCARD && _thirdSlots[i] != null) {
+              picks[phase][slot] = _thirdSlots[i];
+            } else {
+              picks[phase][slot] = exp[j] ? pt[i][j] : null;
+            }
           }
         }
       }
