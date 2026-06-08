@@ -224,7 +224,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     qf: 'r16',
     sf: 'qf',
     final: 'sf',
-    '3rd': 'sf',
+    // The 3rd-place match is contested by the two semifinal LOSERS — who are
+    // exactly the QF winners that didn't reach the final. The stored 'sf' picks
+    // are the semifinal WINNERS (finalists), so validating 3rd-place teams
+    // against 'sf' could NEVER pass (a loser is never a winner). They ARE QF
+    // winners, so validate against 'qf'.
+    '3rd': 'qf',
   };
 
   // §2.6 — When the client doesn't re-send the preceding phase, hydrate it

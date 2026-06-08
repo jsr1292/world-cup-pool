@@ -142,6 +142,40 @@ describe('POST /api/predictions/bracket', () => {
 		expect(res.status).toBe(400);
 	});
 
+	it('accepts a 3rd-place pick validated against QF (3rd teams are SF losers = QF winners, not SF winners)', async () => {
+		(query as any).mockResolvedValueOnce({ rows: [{ user_id: 1, pool_id: 5 }] }); // ownership
+		(query as any).mockResolvedValueOnce({ rows: [{ 1: 1 }] });                   // membership
+		(query as any).mockResolvedValueOnce({ rows: [{ deadline_knockout: null }] }); // deadline
+		(query as any).mockResolvedValueOnce({ rows: [] });                            // started phases
+		(query as any).mockResolvedValueOnce({ rows: [] });                            // #4 existing: qf
+		(query as any).mockResolvedValueOnce({ rows: [] });                            // #4 existing: 3rd
+		(query as any).mockResolvedValueOnce({ rows: [{ team_id: 10 }, { team_id: 20 }] }); // preceding r16 (for qf)
+		const clientQuery = vi.fn().mockResolvedValue({ rows: [] });
+		(getClient as any).mockResolvedValue({ query: clientQuery, release: vi.fn() });
+		// Team 20 is a QF winner; picking it as the 3rd-place winner must be ACCEPTED.
+		const res = await POST({
+			request: mockRequest({ prediction_id: 1, picks: { qf: { 1: 10, 2: 20 }, '3rd': { 1: 20 } } }),
+			locals: mockLocals(1),
+		});
+		expect(res.status).toBe(200);
+	});
+
+	it('rejects a 3rd-place team that was not a QF winner', async () => {
+		(query as any).mockResolvedValueOnce({ rows: [{ user_id: 1, pool_id: 5 }] });
+		(query as any).mockResolvedValueOnce({ rows: [{ 1: 1 }] });
+		(query as any).mockResolvedValueOnce({ rows: [{ deadline_knockout: null }] });
+		(query as any).mockResolvedValueOnce({ rows: [] });
+		(query as any).mockResolvedValueOnce({ rows: [] }); // #4 qf
+		(query as any).mockResolvedValueOnce({ rows: [] }); // #4 3rd
+		(query as any).mockResolvedValueOnce({ rows: [{ team_id: 10 }, { team_id: 20 }] }); // preceding r16 (for qf)
+		const res = await POST({
+			request: mockRequest({ prediction_id: 1, picks: { qf: { 1: 10, 2: 20 }, '3rd': { 1: 30 } } }),
+			locals: mockLocals(1),
+		});
+		expect(res.status).toBe(400);
+		expect((await res.json()).error).toContain('qf');
+	});
+
 	it('#4: Returns 400 when a team would be duplicated across slots in a phase', async () => {
 		(query as any).mockResolvedValueOnce({ rows: [{ user_id: 1, pool_id: 5 }] }); // ownership
 		(query as any).mockResolvedValueOnce({ rows: [{ 1: 1 }] });                   // membership
