@@ -1,8 +1,13 @@
 import { query } from '$lib/server/db.js';
 import { getPoolById, getPoolMembers, getPoolEntries, getScoringConfig } from '$lib/server/queries.js';
 import { DEFAULT_SCORING_RULES } from '$lib/server/scoring.js';
+import { THIRD_GROUP_MAP } from '$lib/bracket-2026.js';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
+
+// R32 wildcard 3rd-place slots (slot = matchIndex*2 + 2); a full bracket fills all.
+const WILDCARD_THIRD_SLOTS = Object.keys(THIRD_GROUP_MAP).map((mi) => Number(mi) * 2 + 2);
+const EXPECTED_THIRDS = WILDCARD_THIRD_SLOTS.length;
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   if (!locals.user) throw error(401, 'No autorizado');
@@ -70,12 +75,19 @@ export const load: PageServerLoad = async ({ params, locals }) => {
        WHERE prediction_id = ANY($1::int[]) AND phase = 'final' GROUP BY prediction_id`, [entryIds]);
     const finalCount: Record<number, number> = {};
     fin.forEach((r: any) => { finalCount[r.prediction_id] = Number(r.c); });
+    const { rows: thirds } = await query(
+      `SELECT prediction_id, COUNT(*)::int AS c FROM bracket_predictions
+       WHERE prediction_id = ANY($1::int[]) AND phase = 'r32' AND slot = ANY($2::int[]) AND team_id IS NOT NULL
+       GROUP BY prediction_id`, [entryIds, WILDCARD_THIRD_SLOTS]);
+    const thirdCount: Record<number, number> = {};
+    thirds.forEach((r: any) => { thirdCount[r.prediction_id] = Number(r.c); });
     const { rows: tb } = await query(
       `SELECT prediction_id FROM tiebreaker WHERE prediction_id = ANY($1::int[])`, [entryIds]);
     const tbSet = new Set(tb.map((r: any) => r.prediction_id));
     for (const id of entryIds) {
       const groups = groupCount[id] ?? 0;
-      const bracketDone = (finalCount[id] ?? 0) >= 1; // a 'final' row = champion picked (only winners are stored)
+      // Champion picked AND all R32 wildcard 3rd-place slots chosen.
+      const bracketDone = (finalCount[id] ?? 0) >= 1 && (thirdCount[id] ?? 0) >= EXPECTED_THIRDS;
       const tiebreakerDone = tbSet.has(id);
       completion[id] = { groups, groupsTotal: 72, bracketDone, tiebreakerDone, complete: groups >= 72 && bracketDone && tiebreakerDone };
     }
