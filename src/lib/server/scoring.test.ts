@@ -378,6 +378,62 @@ describe('calculateBracketScores', () => {
 		await calculateBracketScores(1, DEFAULT_RULES, client);
 		expect(unnestPts(clientQuery)).toEqual([14, 6]); // champion 14, runner-up 6
 	});
+
+	// ── Audit fix: a wildcard R32 match stores the chosen 3rd-place "occupant"
+	//    in the even slot (2i+2) even when the player advanced the DIRECT team
+	//    (odd slot 2i+1). That non-advancing occupant must NOT earn R32 points
+	//    just because that team wins its real R32 match elsewhere.
+	it('does NOT award R32 points to a non-advancing wildcard 3rd-place occupant', async () => {
+		// Two finished R32 matches. The player advanced team 10 (slot 1) in a
+		// wildcard match and chose team 20 as the slot-2 occupant. Team 20 wins
+		// its OWN real R32 match → it is in the winners set — but the player did
+		// not advance it, so the occupant row (slot 2) must score 0.
+		setup(
+			[
+				{ id: 1, phase: 'r32', home_team_id: 10, away_team_id: 99, home_score: 2, away_score: 0, penalty_winner_id: null },
+				{ id: 2, phase: 'r32', home_team_id: 20, away_team_id: 98, home_score: 1, away_score: 0, penalty_winner_id: null },
+			],
+			[
+				{ id: 500, prediction_id: 1, phase: 'r32', slot: 1, team_id: 10 }, // advanced direct team → scores
+				{ id: 501, prediction_id: 1, phase: 'r32', slot: 2, team_id: 20 }, // occupant, not advanced → 0
+			]
+		);
+		const client = { query: clientQuery, release: vi.fn() } as unknown as PoolClient;
+		await calculateBracketScores(1, DEFAULT_RULES, client);
+		expect(unnestPts(clientQuery)).toEqual([DEFAULT_RULES.knockout_r32, 0]); // [2, 0]
+	});
+
+	it('DOES award R32 points to a wildcard occupant the player actually advanced', async () => {
+		// Only the occupant (slot 2) is stored — the player advanced the 3rd-place
+		// team and left the direct slot (slot 1) empty. It IS the advancer, so it
+		// scores when it wins. (Also covers a normal match where the away side
+		// advanced: a lone even slot with no sibling odd slot.)
+		setup(
+			[{ id: 2, phase: 'r32', home_team_id: 20, away_team_id: 98, home_score: 1, away_score: 0, penalty_winner_id: null }],
+			[{ id: 501, prediction_id: 1, phase: 'r32', slot: 2, team_id: 20 }]
+		);
+		const client = { query: clientQuery, release: vi.fn() } as unknown as PoolClient;
+		await calculateBracketScores(1, DEFAULT_RULES, client);
+		expect(unnestPts(clientQuery)).toEqual([DEFAULT_RULES.knockout_r32]); // [2]
+	});
+
+	it('scopes the sibling-slot check per entry (occupant in entry A ≠ advancer in entry B)', async () => {
+		// Same slot numbers across two entries must not cross-contaminate: entry 1
+		// advanced the direct team (so slot-2 occupant is non-advancing), while
+		// entry 2 advanced the occupant (lone slot 2 → it IS the advancer).
+		setup(
+			[{ id: 2, phase: 'r32', home_team_id: 20, away_team_id: 98, home_score: 1, away_score: 0, penalty_winner_id: null }],
+			[
+				{ id: 500, prediction_id: 1, phase: 'r32', slot: 1, team_id: 10 },
+				{ id: 501, prediction_id: 1, phase: 'r32', slot: 2, team_id: 20 }, // entry 1 occupant → 0
+				{ id: 600, prediction_id: 2, phase: 'r32', slot: 2, team_id: 20 }, // entry 2 advancer → 2
+			]
+		);
+		const client = { query: clientQuery, release: vi.fn() } as unknown as PoolClient;
+		await calculateBracketScores(1, DEFAULT_RULES, client);
+		// id 500 (team 10) didn't win match 2 → 0; id 501 occupant → 0; id 600 advancer → 2
+		expect(unnestPts(clientQuery)).toEqual([0, 0, DEFAULT_RULES.knockout_r32]);
+	});
 });
 
 // ── calculateAllScores ────────────────────────────────────────────────────

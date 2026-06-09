@@ -133,8 +133,9 @@ describe('POST /api/predictions/bracket', () => {
 		// #4: existing-rows lookups (one per phase: r16, qf) — empty for a fresh save
 		(query as any).mockResolvedValueOnce({ rows: [] });
 		(query as any).mockResolvedValueOnce({ rows: [] });
-		// §2.6: getPrecedingTeams('r32') for R16 phase — not in body picks
-		(query as any).mockResolvedValueOnce({ rows: [{ team_id: 10 }] });
+		// §2.6: getPrecedingTeams('r32') for R16 phase — not in body picks.
+		// r32 advancer set is per-match (slot 2i+1 else 2i+2); team 10 in slot 1.
+		(query as any).mockResolvedValueOnce({ rows: [{ slot: 1, team_id: 10 }] });
 		const res = await POST({
 			request: mockRequest({ prediction_id: 1, picks: { r16: { 1: 10 }, qf: { 1: 30 } } }),
 			locals: mockLocals(1),
@@ -201,8 +202,10 @@ describe('POST /api/predictions/bracket', () => {
 		// #4: existing-rows lookups (one per phase: r16, qf) — empty for a fresh save
 		(query as any).mockResolvedValueOnce({ rows: [] });
 		(query as any).mockResolvedValueOnce({ rows: [] });
-		// §2.6: getPrecedingTeams('r32') for r16 validation — r32 not in body picks
-		(query as any).mockResolvedValueOnce({ rows: [{ team_id: 10 }, { team_id: 20 }] });
+		// §2.6: getPrecedingTeams('r32') for r16 validation — r32 not in body picks.
+		// Advancers are per-match (slot 2i+1 else 2i+2): team 10 (match 0, slot 1)
+		// and team 20 (match 1, slot 3).
+		(query as any).mockResolvedValueOnce({ rows: [{ slot: 1, team_id: 10 }, { slot: 3, team_id: 20 }] });
 
 		const clientQuery = vi.fn().mockResolvedValue({ rows: [] });
 		const mockRelease = vi.fn();
@@ -239,5 +242,44 @@ describe('POST /api/predictions/bracket', () => {
 		);
 		expect(clientQuery).toHaveBeenCalledWith('COMMIT');
 		expect(mockRelease).toHaveBeenCalled();
+	});
+
+	it('rejects an R16 pick of a non-advancing wildcard 3rd-place occupant', async () => {
+		// R32 in DB: a wildcard match (index 0) where the player advanced the
+		// DIRECT team 10 (slot 1) and chose team 20 as the slot-2 occupant. The
+		// occupant did NOT advance, so trying to push team 20 into R16 must be
+		// rejected even though 20 is a non-null R32 row. (Previously the preceding
+		// set was "all non-null R32 teams", which laundered the occupant through.)
+		(query as any).mockResolvedValueOnce({ rows: [{ user_id: 1, pool_id: 5 }] }); // ownership
+		(query as any).mockResolvedValueOnce({ rows: [{ 1: 1 }] });                   // membership
+		(query as any).mockResolvedValueOnce({ rows: [{ deadline_knockout: null }] }); // deadline
+		(query as any).mockResolvedValueOnce({ rows: [] });                            // started phases
+		(query as any).mockResolvedValueOnce({ rows: [] });                            // #4 existing: r16
+		// getPrecedingTeams('r32'): slot 1 = advanced team 10, slot 2 = occupant 20.
+		(query as any).mockResolvedValueOnce({ rows: [{ slot: 1, team_id: 10 }, { slot: 2, team_id: 20 }] });
+		const res = await POST({
+			request: mockRequest({ prediction_id: 1, picks: { r16: { 1: 20 } } }),
+			locals: mockLocals(1),
+		});
+		expect(res.status).toBe(400);
+		expect((await res.json()).error).toContain('fase previa');
+	});
+
+	it('accepts an R16 pick of the team the player actually advanced in a wildcard match', async () => {
+		// Same wildcard match, but the player advanced the DIRECT team 10 — pushing
+		// 10 into R16 must be accepted.
+		(query as any).mockResolvedValueOnce({ rows: [{ user_id: 1, pool_id: 5 }] }); // ownership
+		(query as any).mockResolvedValueOnce({ rows: [{ 1: 1 }] });                   // membership
+		(query as any).mockResolvedValueOnce({ rows: [{ deadline_knockout: null }] }); // deadline
+		(query as any).mockResolvedValueOnce({ rows: [] });                            // started phases
+		(query as any).mockResolvedValueOnce({ rows: [] });                            // #4 existing: r16
+		(query as any).mockResolvedValueOnce({ rows: [{ slot: 1, team_id: 10 }, { slot: 2, team_id: 20 }] }); // r32
+		const clientQuery = vi.fn().mockResolvedValue({ rows: [] });
+		(getClient as any).mockResolvedValue({ query: clientQuery, release: vi.fn() });
+		const res = await POST({
+			request: mockRequest({ prediction_id: 1, picks: { r16: { 1: 10 } } }),
+			locals: mockLocals(1),
+		});
+		expect(res.status).toBe(200);
 	});
 });

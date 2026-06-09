@@ -222,7 +222,7 @@
       <div style="flex: 1; min-width: 0;">
         <div style="font-size: 12px; font-weight: 600; color: var(--gold);">Entrada pendiente de pago</div>
         <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px; line-height: 1.4;">
-          Aún no se ha registrado tu pago de <strong>{pool.buy_in}€</strong>. Paga al organizador; te marcará como pagado. Tus pronósticos cuentan igualmente.
+          Aún no se ha registrado tu pago de <strong>{fmtMoney(Number(pool.buy_in) || 0)}</strong>. Paga al organizador; te marcará como pagado. Tus pronósticos cuentan igualmente.
         </div>
       </div>
     </div>

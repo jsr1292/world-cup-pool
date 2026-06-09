@@ -185,13 +185,37 @@ export async function calculateBracketScores(
 
   // Bulk SELECT all bracket predictions for the pool (by primary key id).
   const { rows: allBP } = await client.query(`
-    SELECT bp.id, bp.phase, bp.team_id
+    SELECT bp.id, bp.prediction_id, bp.phase, bp.slot, bp.team_id
     FROM bracket_predictions bp
     JOIN predictions p ON p.id = bp.prediction_id
     WHERE p.pool_id = $1
   `, [poolId]);
 
   if (allBP.length === 0) return;
+
+  // A wildcard R32 match (Group winner vs a 3rd-place team) stores the chosen
+  // 3rd-place "occupant" in the even slot (2i+2) even when the player advanced
+  // the DIRECT team (odd slot 2i+1). That occupant is NOT the player's advancer
+  // — it only records which 3rd-place side fills the slot — so it must NOT earn
+  // R32 points just because that team happens to win its real R32 match. The
+  // advancer of a match is slot 2i+1 if present, else 2i+2. So we skip scoring
+  // an even-slot R32 row whenever its sibling odd slot is also filled for the
+  // same entry. (Non-wildcard matches only ever fill one of the two slots, so
+  // this never touches them.) See audit: phantom-R32-points fix.
+  const r32SlotsByPred = new Map<number, Set<number>>();
+  for (const bp of allBP) {
+    if (bp.phase !== 'r32' || bp.team_id == null) continue;
+    let set = r32SlotsByPred.get(bp.prediction_id);
+    if (!set) { set = new Set<number>(); r32SlotsByPred.set(bp.prediction_id, set); }
+    set.add(Number(bp.slot));
+  }
+  const isNonAdvancingR32Occupant = (bp: any): boolean => {
+    if (bp.phase !== 'r32') return false;
+    const slot = Number(bp.slot);
+    if (slot % 2 !== 0) return false; // odd slot = the direct/own-side advancer
+    const siblingOdd = slot - 1; // 2i+1 for this match
+    return r32SlotsByPred.get(bp.prediction_id)?.has(siblingOdd) ?? false;
+  };
 
   // #4 — Key the UPDATE on the row id so each slot is scored exactly once
   // (the old team_id join updated every same-team row in a phase, which could
@@ -203,7 +227,10 @@ export async function calculateBracketScores(
   for (const bp of allBP) {
     const winners = phaseWinners[bp.phase];
     let pts = 0;
-    if (winners && bp.team_id && winners.has(bp.team_id)) {
+    if (isNonAdvancingR32Occupant(bp)) {
+      // 3rd-place occupant the player did not advance — never scores.
+      pts = 0;
+    } else if (winners && bp.team_id && winners.has(bp.team_id)) {
       const ruleKey = bp.phase === '3rd' ? 'third_place' : `knockout_${bp.phase}`;
       pts = rules[ruleKey] ?? 0;
       if (bp.phase === 'final') {

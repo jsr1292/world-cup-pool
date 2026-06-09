@@ -239,6 +239,37 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const precedingCache: Record<string, Set<number>> = {};
   async function getPrecedingTeams(precedingPhase: string): Promise<Set<number>> {
     if (precedingCache[precedingPhase]) return precedingCache[precedingPhase];
+
+    // R32 special case: a wildcard match stores the chosen 3rd-place "occupant"
+    // in the even slot (2i+2) even when the player advanced the DIRECT team in
+    // the odd slot (2i+1). The occupant the player did NOT advance must not be
+    // treated as having qualified for R16. So the set of teams that "came from
+    // R32" is the per-match ADVANCERS (slot 2i+1 if present, else 2i+2), built
+    // from the post-save state (DB overlaid with this request's R32 changes).
+    if (precedingPhase === 'r32') {
+      const slotTeam = new Map<number, number>();
+      const { rows } = await query(
+        'SELECT slot, team_id FROM bracket_predictions WHERE prediction_id = $1 AND phase = $2 AND team_id IS NOT NULL',
+        [prediction_id, 'r32']
+      );
+      for (const r of rows) slotTeam.set(Number(r.slot), r.team_id as number);
+      const inBodyR32 = picks['r32'];
+      if (inBodyR32) {
+        for (const [slotStr, teamId] of Object.entries(inBodyR32)) {
+          const slot = Number(slotStr);
+          if (teamId === null) slotTeam.delete(slot);
+          else slotTeam.set(slot, teamId);
+        }
+      }
+      const advancers = new Set<number>();
+      for (let i = 0; i < 16; i++) {
+        const a = slotTeam.get(2 * i + 1) ?? slotTeam.get(2 * i + 2);
+        if (a != null) advancers.add(a);
+      }
+      precedingCache['r32'] = advancers;
+      return advancers;
+    }
+
     const inBody = picks[precedingPhase];
     if (inBody) {
       precedingCache[precedingPhase] = new Set(
