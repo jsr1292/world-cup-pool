@@ -326,10 +326,13 @@
     }
   }
 
-  // Cleanup timers on component destroy
+  // On component destroy, FLUSH a pending debounced save instead of dropping it
+  // — otherwise a 1/X/2 pick made <600ms before navigating to another page is
+  // silently lost. Fire-and-forget: the SPA stays alive across client-side
+  // navigation, so the in-flight fetch completes against the entry being left.
   $effect(() => {
     return () => {
-      if (matchSaveTimer) clearTimeout(matchSaveTimer);
+      if (matchSaveTimer) { clearTimeout(matchSaveTimer); matchSaveTimer = null; saveMatchScores(); }
     };
   });
 

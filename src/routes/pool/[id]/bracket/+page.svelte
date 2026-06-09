@@ -441,6 +441,19 @@
     tieTimer = setTimeout(saveTiebreaker, 800);
   }
 
+  // Flush a pending (debounced) tiebreaker save NOW, against the CURRENT entry.
+  // Must run before any entry switch/create/copy navigation: saveTiebreaker reads
+  // data.selectedId at fire time, so a timer that survives the navigation saves
+  // the typed score onto the WRONG entry — or, after the new entry's values load,
+  // silently drops what the user typed.
+  async function flushTiebreaker() {
+    if (tieTimer) {
+      clearTimeout(tieTimer);
+      tieTimer = null;
+      await saveTiebreaker();
+    }
+  }
+
   async function saveTiebreaker() {
     if (!data.selectedId) return;
     const h = tieHome !== null && tieHome !== '' ? Number(tieHome) : null;
@@ -492,11 +505,15 @@
     return () => { cancelled = true; };
   });
 
-  // Cleanup timers on component destroy
+  // On component destroy, FLUSH pending debounced saves instead of dropping them
+  // — otherwise a pick or tiebreaker typed <800ms before navigating to another
+  // page is silently lost. Fire-and-forget: the SPA stays alive across client-side
+  // navigation, so the in-flight fetch completes; data.selectedId is captured in
+  // the closure and still points at the entry being left.
   $effect(() => {
     return () => {
-      if (autoSaveTimer) clearTimeout(autoSaveTimer);
-      if (tieTimer) clearTimeout(tieTimer);
+      if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; saveBracket(); }
+      if (tieTimer) { clearTimeout(tieTimer); tieTimer = null; saveTiebreaker(); }
     };
   });
 
@@ -610,6 +627,7 @@
       autoSaveTimer = null;
       await saveBracket();
     }
+    await flushTiebreaker();
     const url = new URL(window.location.href);
     if (entryId) url.searchParams.set('entry', String(entryId));
     else url.searchParams.delete('entry');
@@ -619,9 +637,10 @@
   async function createEntry() {
     if (!newEntryLabel.trim()) return;
     creating = true; createMsg = '';
-    // Flush any pending bracket autosave to the CURRENT entry before navigating,
-    // so a debounced save can't land on the brand-new entry.
+    // Flush any pending bracket/tiebreaker autosave to the CURRENT entry before
+    // navigating, so a debounced save can't land on the brand-new entry.
     if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; await saveBracket(); }
+    await flushTiebreaker();
     try {
       const res = await fetch('/api/predictions/entry', {
         method: 'POST',
@@ -658,6 +677,10 @@
     if (!confirm(`Esto reemplazará TODOS los pronósticos de «${tgtLabel}» con una copia de «${src?.label}». ¿Continuar?`)) return;
     copying = true; copyMsg = '';
     if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; await saveBracket(); }
+    // Flush a typed-but-unsaved tiebreaker BEFORE the copy so the copy's overwrite
+    // wins (the user asked to replace this entry); a timer surviving the copy
+    // would fire afterwards and clobber the freshly-copied tiebreaker.
+    await flushTiebreaker();
     try {
       const r = await fetch('/api/predictions/entry/copy', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
