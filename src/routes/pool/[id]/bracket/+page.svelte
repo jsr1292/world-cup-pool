@@ -413,6 +413,13 @@
   // ─── Tiebreaker ──────────────────────────────────────────────────
   let tieHome = $state(null);
   let tieAway = $state(null);
+  // The predicted final score is compared LOCAL-vs-LOCAL (the closeness metric
+  // is orientation-sensitive), so players need to know which of their two
+  // picked finalists counts as Local and which as Visitante. The final's home
+  // side is slot 0 (the SF[0] winner), the away side slot 1 — the same teams
+  // shown in the Final card above.
+  const tieHomeTeam = $derived(teamMap[teams.final?.[0]?.[0]] ?? null);
+  const tieAwayTeam = $derived(teamMap[teams.final?.[0]?.[1]] ?? null);
   let tieSaving = $state(false);
   let tieSaved = $state(false);
 
@@ -692,9 +699,19 @@
   <div class="tiebreaker-card">
     <div class="tiebreaker-title">🏆 Resultado de la Final (desempate)</div>
     <div class="tiebreaker-subtitle">No te lo saltes: si hay empate a puntos, gana quien más se acerque al marcador real de la final. Puedes rellenarlo en cualquier momento.</div>
+    {#if tieHomeTeam && tieAwayTeam}
+      <div class="tiebreaker-hint">Según tu cuadro, el <b>local</b> es <b>{shortName(tieHomeTeam.name)}</b> y el <b>visitante</b> es <b>{shortName(tieAwayTeam.name)}</b>.</div>
+    {:else}
+      <div class="tiebreaker-hint">Elige a tus dos finalistas en el cuadro para ver quién es local y quién visitante.</div>
+    {/if}
     <div class="tiebreaker-inputs">
       <div class="tiebreaker-team">
-        <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Local</span>
+        <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 2px;">Local</span>
+        {#if tieHomeTeam}
+          <span class="tiebreaker-teamname"><span class="team-flag">{@html flagEmoji(tieHomeTeam.flag_code)}</span> {shortName(tieHomeTeam.name)}</span>
+        {:else}
+          <span class="tiebreaker-teamname tiebreaker-teamname-empty">tu finalista</span>
+        {/if}
         <input
           type="number"
           min="0"
@@ -704,11 +721,17 @@
           placeholder="-"
           disabled={data.isLocked}
           class="tiebreaker-input"
+          aria-label={tieHomeTeam ? `Goles de ${shortName(tieHomeTeam.name)} (local)` : 'Goles del local'}
         />
       </div>
       <span class="tiebreaker-dash">—</span>
       <div class="tiebreaker-team">
-        <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Visitante</span>
+        <span style="font-size: 11px; color: var(--text-dim); margin-bottom: 2px;">Visitante</span>
+        {#if tieAwayTeam}
+          <span class="tiebreaker-teamname"><span class="team-flag">{@html flagEmoji(tieAwayTeam.flag_code)}</span> {shortName(tieAwayTeam.name)}</span>
+        {:else}
+          <span class="tiebreaker-teamname tiebreaker-teamname-empty">tu finalista</span>
+        {/if}
         <input
           type="number"
           min="0"
@@ -718,6 +741,7 @@
           placeholder="-"
           disabled={data.isLocked}
           class="tiebreaker-input"
+          aria-label={tieAwayTeam ? `Goles de ${shortName(tieAwayTeam.name)} (visitante)` : 'Goles del visitante'}
         />
       </div>
     </div>
@@ -1517,12 +1541,44 @@
   .tiebreaker-subtitle {
     font-size: 10px;
     color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .tiebreaker-hint {
+    font-size: 10px;
+    color: var(--text-dim);
     margin-bottom: 12px;
+    line-height: 1.4;
+  }
+
+  .tiebreaker-hint b {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .tiebreaker-teamname {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 96px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tiebreaker-teamname-empty {
+    color: var(--text-dim);
+    font-weight: 400;
+    font-style: italic;
   }
 
   .tiebreaker-inputs {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: 12px;
   }
 
@@ -1557,7 +1613,7 @@
   .tiebreaker-dash {
     font-size: 20px;
     color: var(--text-muted);
-    margin-top: 16px;
+    margin-bottom: 6px;
   }
 
   .legend-item {
