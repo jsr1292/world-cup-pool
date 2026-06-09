@@ -340,9 +340,20 @@
       }
     }
 
-    // 3rd place from SF losers
-    if (!_picks['3rd'][0][0]) _teams['3rd'][0][0] = getLoser('sf', 0);
-    if (!_picks['3rd'][0][1]) _teams['3rd'][0][1] = getLoser('sf', 1);
+    // 3rd place: the two contestants are the SF losers. Mirror the winner
+    // cascades above — if an explicit 3rd-place pick now references a team that
+    // is no longer the SF loser feeding its slot (because an earlier knockout
+    // pick changed who reaches the semifinals), CLEAR the pick. Without this the
+    // stale team lingers and every autosave is rejected by the server's
+    // cross-phase check ("Equipo X no fue seleccionado en la fase previa (qf)").
+    for (let j = 0; j < 2; j++) {
+      const loser = getLoser('sf', j);
+      if (_picks['3rd'][0][j] && _teams['3rd'][0][j] !== loser) {
+        _picks['3rd'][0][0] = false;
+        _picks['3rd'][0][1] = false;
+      }
+      _teams['3rd'][0][j] = _picks['3rd'][0][j] ? _teams['3rd'][0][j] : loser;
+    }
   }
 
   function getWinner(phase, matchIdx) {
