@@ -69,6 +69,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       return json({ id: Number(rows[0].id), label });
     } catch (e) {
       await client.query('ROLLBACK');
+      // Concurrent-create race: the FOR UPDATE lock above only covers rows that
+      // existed when this txn's SELECT ran — a row INSERTed by a parallel txn is
+      // a phantom it never sees, so the duplicate-label check passes and the
+      // INSERT hits UNIQUE(pool_id, user_id, label) instead. Same outcome as the
+      // explicit check, so answer with the same 409 rather than a 500.
+      if ((e as { code?: string })?.code === '23505') {
+        return json({ error: 'Ya existe una entrada con ese nombre' }, { status: 409 });
+      }
       throw e;
     } finally {
       client.release();

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { checkPredictionRate } from './rate-limit.js';
+import { checkPredictionRate, PRED_LIMIT } from './rate-limit.js';
 
 describe('checkPredictionRate', () => {
 	beforeEach(() => {
@@ -17,26 +17,26 @@ describe('checkPredictionRate', () => {
 		expect(checkPredictionRate(1)).toBe(true);
 	});
 
-	it('allows up to PRED_LIMIT (30) requests within the window', () => {
-		for (let i = 0; i < 29; i++) {
+	it('allows up to PRED_LIMIT requests within the window', () => {
+		for (let i = 0; i < PRED_LIMIT - 1; i++) {
 			checkPredictionRate(10);
 		}
-		// 30th request should still be allowed
+		// PRED_LIMIT-th request should still be allowed
 		expect(checkPredictionRate(10)).toBe(true);
 	});
 
-	it('blocks request 31 (returns false)', () => {
-		for (let i = 0; i < 30; i++) {
+	it('blocks request PRED_LIMIT+1 (returns false)', () => {
+		for (let i = 0; i < PRED_LIMIT; i++) {
 			checkPredictionRate(20);
 		}
-		// 31st request should be blocked
+		// One past the limit should be blocked
 		expect(checkPredictionRate(20)).toBe(false);
 	});
 
 	it('resets counter after PRED_WINDOW expires', () => {
 		const userId = 30;
 		// Exhaust the limit
-		for (let i = 0; i < 30; i++) {
+		for (let i = 0; i < PRED_LIMIT; i++) {
 			checkPredictionRate(userId);
 		}
 		expect(checkPredictionRate(userId)).toBe(false);
@@ -50,7 +50,7 @@ describe('checkPredictionRate', () => {
 
 	it('gives different users independent limits', () => {
 		// Exhaust user A
-		for (let i = 0; i < 30; i++) {
+		for (let i = 0; i < PRED_LIMIT; i++) {
 			checkPredictionRate(100);
 		}
 		expect(checkPredictionRate(100)).toBe(false);
@@ -65,18 +65,18 @@ describe('checkPredictionRate', () => {
 		expect(checkPredictionRate(userId)).toBe(true);
 		expect(checkPredictionRate(userId)).toBe(true);
 
-		// Now make 28 more to reach exactly 30 total
-		for (let i = 0; i < 28; i++) {
+		// Now make the rest to reach exactly PRED_LIMIT total
+		for (let i = 0; i < PRED_LIMIT - 2; i++) {
 			expect(checkPredictionRate(userId)).toBe(true);
 		}
-		// 31st should be blocked
+		// One past the limit should be blocked
 		expect(checkPredictionRate(userId)).toBe(false);
 	});
 
 	it('stays blocked until the window expires', () => {
 		const userId = 50;
 		// Exhaust the limit
-		for (let i = 0; i < 30; i++) {
+		for (let i = 0; i < PRED_LIMIT; i++) {
 			checkPredictionRate(userId);
 		}
 		expect(checkPredictionRate(userId)).toBe(false);

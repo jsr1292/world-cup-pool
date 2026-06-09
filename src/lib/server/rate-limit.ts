@@ -9,7 +9,12 @@
 
 const _predLimits = new Map<number, { count: number; resetAt: number }>();
 
-const PRED_LIMIT = 30;          // max saves per window
+// 90/min: an engaged player re-doing a full bracket (24 R32 picks incl. 3rd-place
+// occupants + 16 later rounds, each debounced-autosaved) plus group edits can
+// legitimately produce 40–60 saves in a minute; 30 was reachable in normal use
+// and a 429'd autosave is lost (the client shows a toast but does not retry).
+// 90 still stops runaway autosave loops, which fire hundreds per minute.
+export const PRED_LIMIT = 90;   // max saves per window
 const PRED_WINDOW = 60_000;     // 1-minute rolling window
 
 // Evict expired entries to prevent unbounded growth
