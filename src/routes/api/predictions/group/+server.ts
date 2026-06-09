@@ -1,4 +1,5 @@
 import { errCode } from '$lib/server/err-code.js';
+import { asId } from '$lib/server/json-body.js';
 import { query } from '$lib/server/db.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
@@ -9,7 +10,7 @@ import { json } from '@sveltejs/kit';
 export const GET: RequestHandler = async ({ url, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
-  const predictionId = Number(url.searchParams.get('prediction_id'));
+  const predictionId = asId(url.searchParams.get('prediction_id'));
   if (!predictionId) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
   try {

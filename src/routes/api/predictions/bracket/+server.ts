@@ -1,4 +1,5 @@
 import { errCode } from '$lib/server/err-code.js';
+import { asId } from '$lib/server/json-body.js';
 import { query, getClient } from '$lib/server/db.js';
 import {
   getTeamsMapCached,
@@ -17,7 +18,7 @@ const VALID_PHASES = new Set(['r32', 'r16', 'qf', 'sf', 'final', '3rd']);
 export const GET: RequestHandler = async ({ url, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
-  const predictionId = Number(url.searchParams.get('prediction_id'));
+  const predictionId = asId(url.searchParams.get('prediction_id'));
   if (!predictionId) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
   try {
@@ -65,14 +66,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   } catch {
     return json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const { prediction_id, picks: rawPicks } = body as {
-    prediction_id: number;
+  // A null/array body would throw on destructuring below (unhandled 500).
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return json({ error: 'Cuerpo inválido' }, { status: 400 });
+  }
+  const { prediction_id: rawPredictionId, picks: rawPicks } = body as {
+    prediction_id: unknown;
     picks: Record<string, Record<number, number | null>>;
   };
+  // Coerce to a clean int; floats/strings/overflow otherwise reach the SQL
+  // int cast and 500.
+  const prediction_id = asId(rawPredictionId);
   const picks = { ...rawPicks }; // mutable copy so we can delete started phases
   const droppedPhases: string[] = [];
 
-  if (!prediction_id || !picks) {
+  if (!prediction_id || !rawPicks) {
     return json({ error: 'Falta prediction_id o selecciones' }, { status: 400 });
   }
 

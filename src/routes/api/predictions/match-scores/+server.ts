@@ -1,4 +1,5 @@
 import { query, getClient } from '$lib/server/db.js';
+import { asId } from '$lib/server/json-body.js';
 import { calculateAllScores } from '$lib/server/scoring.js';
 import { rankGroup, type GsMatch } from '$lib/group-standings.js';
 import { invalidateCachedPoolLeaderboard, invalidateCachedPoolResults, invalidateGlobalLeaderboard } from '$lib/server/cache.js';
@@ -21,12 +22,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   } catch {
     return json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const { prediction_id, scores } = body as {
-    prediction_id: number;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return json({ error: 'Cuerpo inválido' }, { status: 400 });
+  }
+  const { prediction_id: rawPredictionId, scores } = body as {
+    prediction_id: unknown;
     scores: Record<string, { home_score: number; away_score: number }>;
   };
 
-  if (!prediction_id || !scores) {
+  // Clean int or reject — floats/strings/overflow would 500 at the SQL cast.
+  const prediction_id = asId(rawPredictionId);
+  if (!prediction_id || !scores || typeof scores !== 'object' || Array.isArray(scores)) {
     return json({ error: 'Falta prediction_id o scores' }, { status: 400 });
   }
 

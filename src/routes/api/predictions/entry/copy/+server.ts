@@ -1,4 +1,5 @@
 import { errCode } from '$lib/server/err-code.js';
+import { asId } from '$lib/server/json-body.js';
 import { query, getClient } from '$lib/server/db.js';
 import {
   invalidateCachedPoolLeaderboard,
@@ -24,8 +25,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   } catch {
     return json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const sourceId = Number(body?.source_id);
-  const targetId = Number(body?.target_id);
+  const sourceId = asId(body?.source_id) ?? 0;
+  const targetId = asId(body?.target_id) ?? 0;
   if (!sourceId || !targetId) return json({ error: 'Falta source_id o target_id' }, { status: 400 });
   if (sourceId === targetId) return json({ error: 'No puedes copiar una entrada sobre sí misma' }, { status: 400 });
 

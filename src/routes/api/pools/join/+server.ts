@@ -9,8 +9,16 @@ const MAX_POOL_MEMBERS = 200; // hard cap; adjust if pools need to be larger
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'Inicia sesión' }, { status: 401 });
 
+  // Parse outside the main try: a malformed/null body used to fall into the
+  // generic catch and surface as a 500 instead of a 400.
+  let body: any;
+  try { body = await request.json(); } catch { return json({ error: 'Cuerpo JSON inválido' }, { status: 400 }); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return json({ error: 'Cuerpo inválido' }, { status: 400 });
+  }
+
   try {
-		const { code } = await request.json();
+		const { code } = body;
 		if (!code || typeof code !== 'string') return json({ error: 'Código requerido' }, { status: 400 });
 		// §1.14 — Match generateInviteCode() which now emits 24-char uppercase
 		// base64url. Anything else is malformed.

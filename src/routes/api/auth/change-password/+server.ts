@@ -21,6 +21,9 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
     return json({ error: 'Todos los campos son obligatorios' }, { status: 400 });
   if (new_password.length < 6)
     return json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' }, { status: 400 });
+  // bcrypt only uses the first 72 bytes; cap to avoid pointless hashing work.
+  if (typeof new_password !== 'string' || new_password.length > 256 || String(current_password).length > 256)
+    return json({ error: 'La contraseña es demasiado larga (máximo 256)' }, { status: 400 });
 
   try {
     const { rows } = await query('SELECT password_hash FROM users WHERE id = $1', [locals.user.id]);

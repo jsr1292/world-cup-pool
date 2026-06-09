@@ -23,18 +23,28 @@ async function canCreatePools(userId: number): Promise<boolean> {
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
+  // Parse outside the main try: a malformed/null body used to fall into the
+  // generic catch and surface as a 500 instead of a 400.
+  let body: any;
+  try { body = await request.json(); } catch { return json({ error: 'Cuerpo JSON inválido' }, { status: 400 }); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return json({ error: 'Cuerpo inválido' }, { status: 400 });
+  }
+
   try {
     if (!await canCreatePools(locals.user.id)) {
       return json({ error: 'No tienes permiso para crear quinielas' }, { status: 403 });
     }
 
-    const body = await request.json();
     const { name, buy_in = 0, allow_multiple_predictions = false } = body;
 
-    if (!name?.trim() || name.trim().length < 2) return json({ error: 'Nombre requerido (mínimo 2 caracteres)' }, { status: 400 });
+    if (typeof name !== 'string' || !name.trim() || name.trim().length < 2) return json({ error: 'Nombre requerido (mínimo 2 caracteres)' }, { status: 400 });
     if (name.trim().length > 100) return json({ error: 'Nombre demasiado largo (máximo 100 caracteres)' }, { status: 400 });
     const buyin = Number(buy_in);
     if (!isFinite(buyin) || buyin < 0) return json({ error: 'buy_in debe ser un número positivo' }, { status: 400 });
+    // pools.buy_in is NUMERIC(10,2): anything ≥ 1e8 overflows the column and
+    // surfaces as a 500 from Postgres.
+    if (buyin > 99_999_999) return json({ error: 'buy_in demasiado grande' }, { status: 400 });
 
     const result = await createPool(name.trim(), locals.user.id, buyin, allow_multiple_predictions);
     // Creator auto-joins a new pool → their membership-scoped global board changes.

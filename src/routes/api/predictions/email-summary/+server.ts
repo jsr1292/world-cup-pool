@@ -5,6 +5,7 @@ import { isEmailConfigured, sendPredictionSummaryEmail } from '$lib/server/email
 import { buildPredictionSummary } from '$lib/server/prediction-summary.js';
 import { checkPredictionRate } from '$lib/server/rate-limit.js';
 import { errCode } from '$lib/server/err-code.js';
+import { asId } from '$lib/server/json-body.js';
 
 // POST /api/predictions/email-summary  { prediction_id }
 // Emails the logged-in user a copy of their own predictions for that entry.
@@ -22,7 +23,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   let body: unknown;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, { status: 400 }); }
-  const { prediction_id } = body as { prediction_id?: number };
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return json({ error: 'Cuerpo inválido' }, { status: 400 });
+  }
+  const prediction_id = asId((body as { prediction_id?: unknown }).prediction_id);
   if (!prediction_id) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
   try {

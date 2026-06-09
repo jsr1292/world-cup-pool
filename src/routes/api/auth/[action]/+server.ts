@@ -90,6 +90,9 @@ export const POST: RequestHandler = async ({ request, cookies, params, url, getC
       return json({ error: `Solo se permiten correos @${dom}` }, { status: 403 });
     }
     if (password.length < 6) return json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 });
+    // bcrypt only uses the first 72 bytes; a multi-KB/MB password is never
+    // legitimate and only buys the server pointless hashing work.
+    if (password.length > 256) return json({ error: 'La contraseña es demasiado larga (máximo 256)' }, { status: 400 });
     if (typeof display_name !== 'string' || display_name.trim().length < 1 || display_name.length > 50) {
       return json({ error: 'El nombre es obligatorio (máximo 50 caracteres)' }, { status: 400 });
     }

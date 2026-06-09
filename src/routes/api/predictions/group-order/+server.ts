@@ -1,4 +1,5 @@
 import { errCode } from '$lib/server/err-code.js';
+import { asId } from '$lib/server/json-body.js';
 import { query } from '$lib/server/db.js';
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { checkPredictionRate } from '$lib/server/rate-limit.js';
@@ -17,7 +18,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
   let body: any;
   try { body = await request.json(); } catch { return json({ error: 'Cuerpo JSON inválido' }, { status: 400 }); }
-  const prediction_id = Number(body?.prediction_id);
+  const prediction_id = asId(body?.prediction_id) ?? 0;
   const group_name = String(body?.group_name ?? '');
   const order: number[] | null = Array.isArray(body?.order) ? body.order.map(Number) : null;
   if (!prediction_id || !group_name || !order || order.length === 0) {

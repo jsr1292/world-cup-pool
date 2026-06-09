@@ -1,4 +1,5 @@
 import { errCode } from '$lib/server/err-code.js';
+import { asId } from '$lib/server/json-body.js';
 import { query } from '$lib/server/db.js';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
@@ -8,7 +9,7 @@ import { checkPredictionRate } from '$lib/server/rate-limit.js';
 export const GET: RequestHandler = async ({ url, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
-  const predictionId = Number(url.searchParams.get('prediction_id'));
+  const predictionId = asId(url.searchParams.get('prediction_id'));
   if (!predictionId) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
   try {
@@ -47,12 +48,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   if (!body || typeof body !== 'object') {
     return json({ error: 'Cuerpo inválido' }, { status: 400 });
   }
-  const { prediction_id, home_score, away_score } = body as {
-    prediction_id?: number;
+  const { prediction_id: rawPredictionId, home_score, away_score } = body as {
+    prediction_id?: unknown;
     home_score?: number | null;
     away_score?: number | null;
   };
 
+  // Clean int or reject — floats/strings/overflow would 500 at the SQL cast.
+  const prediction_id = asId(rawPredictionId);
   if (!prediction_id) return json({ error: 'Falta prediction_id' }, { status: 400 });
 
   // §1.6 — Reject mixed-null state. The caller must either set both goals

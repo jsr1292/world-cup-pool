@@ -9,6 +9,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   if (!locals.user) throw error(401, 'Inicia sesión');
 
   const poolId = Number(params.id);
+  // Garbage ids ("abc", "1.5", "null") otherwise reach the SQL int cast and 500.
+  if (!Number.isInteger(poolId) || poolId < 1 || poolId > 2147483647) throw error(404, 'Quiniela no encontrada');
   const pool = await getPoolById(poolId) as any;
   if (!pool) throw error(404, 'Quiniela no encontrada');
 

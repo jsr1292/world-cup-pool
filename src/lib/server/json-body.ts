@@ -14,3 +14,14 @@ export async function parseJsonBody(request: Request):
 		};
 	}
 }
+
+// §3.2 — Coerce a client-supplied id (route/query param or body field) to a
+// positive 32-bit integer, or null. `Number(x)` alone lets 1.5, "abc"→NaN,
+// Infinity, 1e20 and hex strings through to a Postgres int cast, which throws
+// and surfaces as a 500. Callers treat null as "missing/invalid" (400/404).
+export function asId(v: unknown): number | null {
+	const n =
+		typeof v === 'number' ? v :
+		typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+	return Number.isInteger(n) && n >= 1 && n <= 2147483647 ? n : null;
+}

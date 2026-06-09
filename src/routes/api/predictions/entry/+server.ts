@@ -1,13 +1,22 @@
 import { errCode } from '$lib/server/err-code.js';
+import { asId } from '$lib/server/json-body.js';
 import { query, getClient } from '$lib/server/db.js';
 import { json, type RequestHandler } from '@sveltejs/kit';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   if (!locals.user) return json({ error: 'No autorizado' }, { status: 401 });
 
+  // Parse outside the main try: a malformed/null body used to fall into the
+  // generic catch and surface as a 500 instead of a 400.
+  let body: any;
+  try { body = await request.json(); } catch { return json({ error: 'Cuerpo JSON inválido' }, { status: 400 }); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return json({ error: 'Cuerpo inválido' }, { status: 400 });
+  }
+
   try {
-    const body = await request.json();
-    const { pool_id, label = '' } = body;
+    const { label = '' } = body;
+    const pool_id = asId(body.pool_id);
 
     if (!pool_id) return json({ error: 'Falta pool_id' }, { status: 400 });
 
