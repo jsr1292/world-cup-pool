@@ -24,30 +24,35 @@
   function qfLabel(mi) { return QF_LABELS[mi] || `QF-${mi + 1}`; }
   function sfLabel(mi) { return SF_LABELS[mi] || `SF-${mi + 1}`; }
 
-  // Return 3rd-place teams from relevant groups based on user's group predictions
+  // Return 3rd-place teams from the groups eligible to feed this wildcard slot.
   function get3rdOptions(mi) {
     const groups = THIRD_GROUP_MAP[mi];
     if (!groups) return [];
-    // Collect teams already picked in other 3rd-place slots
+    // Teams already chosen as the 3rd-place team in OTHER wildcard slots.
     const alreadyPicked = new Set();
     for (let i = 0; i < 16; i++) {
       if (i === mi) continue;
       const picked = _teams.r32[i]?.[1];
       if (picked && R32_MAP[i].t2g === WILDCARD) alreadyPicked.add(picked);
     }
-    const options = [];
+    const eligible = [];
     const seen = new Set();
     for (const g of groups) {
       const gp = data.groupPredictions?.[g];
       if (gp?.pos3) {
         const team = teamMap[gp.pos3];
-        if (team && !seen.has(team.id) && !alreadyPicked.has(team.id)) {
-          options.push({ id: team.id, name: team.name, flag_code: team.flag_code, group: g });
+        if (team && !seen.has(team.id)) {
           seen.add(team.id);
+          eligible.push({ id: team.id, name: team.name, flag_code: team.flag_code, group: g, usedElsewhere: alreadyPicked.has(team.id) });
         }
       }
     }
-    return options;
+    // Normally show the teams not yet used elsewhere. But if ALL eligible teams
+    // are already taken by other wildcard slots (a combinatorial dead-end), show
+    // them anyway so the slot is never stuck — picking one MOVES it here
+    // (pick3rd clears it from the other slot), keeping the 3rds distinct.
+    const free = eligible.filter((o) => !o.usedElsewhere);
+    return free.length > 0 ? free : eligible;
   }
 
   // State for the 3rd-place team selector modal
@@ -72,6 +77,16 @@
         _picks.r32[mi][1] = false;
       }
     } else {
+      // Keep 3rd-place teams distinct: if this team already occupies another
+      // wildcard slot, move it here by clearing it there (prevents a duplicate
+      // and lets the user reassign out of a dead-end).
+      for (let i = 0; i < 16; i++) {
+        if (i !== mi && R32_MAP[i].t2g === WILDCARD && _thirdSlots[i] === teamId) {
+          _thirdSlots[i] = null;
+          _teams.r32[i][1] = null;
+          if (_picks.r32[i]?.[1]) _picks.r32[i][1] = false;
+        }
+      }
       _thirdSlots[mi] = teamId;
       _teams.r32[mi][1] = teamId;
       // Setting the occupant does NOT mark them as the winner.
@@ -736,10 +751,11 @@
         {:else}
           <div class="third-selector-grid">
             {#each options as opt}
-              <button class="third-team-btn" class:selected={pickedTeam === opt.id} onclick={() => pick3rd(thirdSelectorOpen, opt.id)}>
+              <button class="third-team-btn" class:selected={pickedTeam === opt.id} onclick={() => pick3rd(thirdSelectorOpen, opt.id)} title={opt.usedElsewhere ? 'Ya elegido en otro cruce — al elegirlo aquí se moverá' : ''}>
                 <span class="team-flag">{@html flagEmoji(opt.flag_code)}</span>
                 <span class="team-name">{shortName(opt.name)}</span>
                 <span class="third-group-badge">3º {opt.group}</span>
+                {#if opt.usedElsewhere}<span style="font-size:8px;color:var(--text-dim);">↔ otro cruce</span>{/if}
                 {#if pickedTeam === opt.id}<span class="pick-star">★</span>{/if}
               </button>
             {/each}
