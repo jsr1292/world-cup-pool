@@ -126,7 +126,15 @@
 
   // ─── Entry management ─────────────────────────────────────────────────
 
+  // Flush any pending group-score autosave to the CURRENT (old) entry before we
+  // navigate — otherwise the debounced save could fire after the switch and write
+  // the previous entry's picks onto the newly-selected one.
+  async function flushMatchScores() {
+    if (matchSaveTimer) { clearTimeout(matchSaveTimer); matchSaveTimer = null; await saveMatchScores(); }
+  }
+
   async function switchEntry(label) {
+    await flushMatchScores();
     const url = new URL($page.url);
     if (label) url.searchParams.set('entry', label);
     else url.searchParams.delete('entry');
@@ -141,6 +149,7 @@
   async function createEntry() {
     if (!newEntryLabel.trim()) return;
     creating = true; createMsg = '';
+    await flushMatchScores(); // save the current entry's edits before switching away
     try {
       const res = await fetch('/api/predictions/entry', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -171,6 +180,7 @@
   // entries the user is not currently editing so a soft navigation
   // invalidate doesn't blow away unsaved typing.
   const _activeMatchEdits = new Set();
+  let _lastMatchEntryId = null;
   $effect(() => {
     // Depend on matchScoresInit only. Reading `matchScores` here (via the
     // spread) AND writing it below previously made this effect self-triggering
@@ -178,6 +188,16 @@
     // read+merge+write inside untrack so only matchScoresInit is a dependency.
     const fresh = JSON.parse(JSON.stringify(matchScoresInit));
     untrack(() => {
+      if (data.selectedId !== _lastMatchEntryId) {
+        // Switched to a DIFFERENT entry — fully replace (don't merge), and drop
+        // the previous entry's in-progress edits. Merging would bleed the old
+        // entry's picks into the new one.
+        _lastMatchEntryId = data.selectedId;
+        _activeMatchEdits.clear();
+        matchScores = fresh;
+        return;
+      }
+      // Same entry, soft invalidate: keep the user's unsaved typing.
       const next = { ...matchScores };
       for (const [matchIdStr, score] of Object.entries(fresh)) {
         const matchId = Number(matchIdStr);
@@ -194,6 +214,7 @@
   const groupOrdersInit = $derived.by(() => ({ ...(data.groupOrders || {}) }));
   let groupOrders = $state({});
   const _activeGroupEdits = new Set();
+  let _lastGroupEntryId = null;
   let _reorderHintShown = false;
 
   // Effective scoring (defaults + pool overrides) for the intro copy.
@@ -202,6 +223,13 @@
   $effect(() => {
     const fresh = JSON.parse(JSON.stringify(groupOrdersInit));
     untrack(() => {
+      if (data.selectedId !== _lastGroupEntryId) {
+        // Entry switch — replace, don't merge (would bleed the old entry's order).
+        _lastGroupEntryId = data.selectedId;
+        _activeGroupEdits.clear();
+        groupOrders = fresh;
+        return;
+      }
       const next = { ...groupOrders };
       for (const [g, ord] of Object.entries(fresh)) {
         if (!_activeGroupEdits.has(g)) next[g] = ord;

@@ -228,19 +228,26 @@
     return p;
   });
 
-  // Initialize once on mount - use untracked to avoid infinite loop
-  let initialized = false;
+  // (Re)initialize when the selected ENTRY changes — including first mount. Only
+  // data.selectedId is a dependency (initState's data reads happen under untrack),
+  // so a same-entry soft invalidate won't clobber in-progress picks, but switching
+  // to a different/new entry rebuilds state from THAT entry instead of bleeding the
+  // previous one's bracket into it.
+  let _lastBracketEntryId = undefined;
   $effect(() => {
-    if (initialized) return;
-    initialized = true;
-    initState();
-    bump();
-    // If initState's recascade had to drop a now-invalid 3rd-place pick (e.g. the
-    // group was reordered after the bracket was filled), persist the corrected
-    // bracket right away so the stale DB row can't keep blocking later saves.
-    if (_cascadeClearedThisTick && data.selectedId && !data.isLocked) {
-      autoSaveBracket();
-    }
+    const sel = data.selectedId;
+    untrack(() => {
+      if (sel === _lastBracketEntryId) return;
+      _lastBracketEntryId = sel;
+      initState();
+      bump();
+      // If initState's recascade had to drop a now-invalid 3rd-place pick (e.g. the
+      // group was reordered after the bracket was filled), persist the corrected
+      // bracket right away so the stale DB row can't keep blocking later saves.
+      if (_cascadeClearedThisTick && sel && !data.isLocked) {
+        autoSaveBracket();
+      }
+    });
   });
 
   let _cascadeClearedThisTick = false;
