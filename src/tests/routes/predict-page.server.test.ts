@@ -7,6 +7,17 @@ vi.mock('$lib/server/queries.js', () => ({
 	createPrediction: vi.fn(),
 	getUserPredictions: vi.fn(),
 	getScoringConfig: vi.fn().mockResolvedValue({}),
+	// Real (pure) implementation so selection-by-param tests exercise it.
+	resolveSelectedPrediction: (predictions: any[], entryParam: any) => {
+		const p = (entryParam ?? '').trim();
+		if (!p) return predictions[0] ?? null;
+		if (/^\d+$/.test(p)) {
+			const byId = predictions.find((x: any) => String(x.id) === p);
+			if (byId) return byId;
+		}
+		const norm = p.toLowerCase();
+		return predictions.find((x: any) => (x.label ?? '').toLowerCase() === norm) ?? predictions[0] ?? null;
+	},
 }));
 
 vi.mock('$lib/server/db.js', () => ({

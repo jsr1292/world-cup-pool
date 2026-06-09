@@ -355,6 +355,27 @@ export async function getUserPredictions(poolId: number, userId: number): Promis
   return rows as Prediction[];
 }
 
+// Resolve which entry the ?entry=<param> URL parameter selects, from a list
+// ALREADY scoped to one user+pool. Shared by the predict, bracket and results
+// pages so they can never diverge (a divergence would load different entries on
+// different stages). Prefers an exact id match (unambiguous), then a trimmed,
+// case-insensitive label match (backwards-compatible with old label URLs), then
+// the first/default entry. Matching against ids is safe because `predictions`
+// is already the caller's own entries.
+export function resolveSelectedPrediction<T extends { id: number | string; label?: string | null }>(
+  predictions: T[],
+  entryParam: string | null | undefined
+): T | null {
+  const p = (entryParam ?? '').trim();
+  if (!p) return predictions[0] ?? null;
+  if (/^\d+$/.test(p)) {
+    const byId = predictions.find((x) => String(x.id) === p);
+    if (byId) return byId;
+  }
+  const norm = p.toLowerCase();
+  return predictions.find((x) => (x.label ?? '').toLowerCase() === norm) ?? predictions[0] ?? null;
+}
+
 export async function getPoolLeaderboard(poolId: number) {
   const { rows } = await query(
     `SELECT p.*, u.display_name, u.username,

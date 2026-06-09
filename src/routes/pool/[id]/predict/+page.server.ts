@@ -1,4 +1,4 @@
-import { getPoolById, getAllTeams, createPrediction, getUserPredictions, getScoringConfig } from '$lib/server/queries.js';
+import { getPoolById, getAllTeams, createPrediction, getUserPredictions, getScoringConfig, resolveSelectedPrediction } from '$lib/server/queries.js';
 import { DEFAULT_SCORING_RULES } from '$lib/server/scoring.js';
 import { query } from '$lib/server/db.js';
 import { redirect, error } from '@sveltejs/kit';
@@ -54,13 +54,9 @@ export const load: ServerLoad = async ({ params, locals, url }) => {
   const deadline = pool.deadline_group ? new Date(pool.deadline_group as string) : null;
   const isLocked = deadline ? new Date() >= deadline : false;
 
-  // Get selected prediction from query param or first one
-  const selectedLabel = url.searchParams.get('entry') || '';
-  // §7.3 — Match labels case-insensitively (mirrors the uppercase normalization
-  // used elsewhere). Two entries differing only in case would otherwise be
-  // unselectable.
-  const selectedNorm = selectedLabel?.toLowerCase() ?? '';
-  let selectedPrediction = predictions.find(p => (p.label ?? '').toLowerCase() === selectedNorm) || predictions[0] || null;
+  // Get selected prediction from query param (id-preferred, label fallback) or
+  // the default first entry. Shared resolver → identical on every stage.
+  let selectedPrediction = resolveSelectedPrediction(predictions, url.searchParams.get('entry'));
   let selectedId: number | null = null;
 
   // Load the 72 group matches (always have both teams from the seed). The group

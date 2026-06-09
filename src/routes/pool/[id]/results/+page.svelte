@@ -3,7 +3,6 @@
   import { goto } from '$app/navigation';
 
   let { data } = $props();
-  let selectedEntry = $state(data.selectedEntryId);
 
   const phaseLabels: Record<string, string> = {
     group: 'Fase de Grupos',
@@ -106,7 +105,7 @@
   {#if data.userPredictions.length > 0}
     <div style="display: flex; gap: 12px; align-items: center; margin: 12px 0 20px;">
       <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Tu entrada:</span>
-      <select value={selectedEntry} onchange={(e) => goto(`?entry=${(e.target as HTMLSelectElement).value}`, { invalidateAll: true })} style="font-size: 11px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; color: var(--text);">
+      <select value={data.selectedEntryId} onchange={(e) => goto(`?entry=${(e.target as HTMLSelectElement).value}`, { invalidateAll: true })} style="font-size: 11px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; color: var(--text);">
         {#each data.userPredictions as pred}
           <option value={pred.id}>{pred.label || 'Entrada principal'}</option>
         {/each}

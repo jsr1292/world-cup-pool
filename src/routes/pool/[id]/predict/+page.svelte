@@ -133,10 +133,10 @@
     if (matchSaveTimer) { clearTimeout(matchSaveTimer); matchSaveTimer = null; await saveMatchScores(); }
   }
 
-  async function switchEntry(label) {
+  async function switchEntry(entryId) {
     await flushMatchScores();
     const url = new URL($page.url);
-    if (label) url.searchParams.set('entry', label);
+    if (entryId) url.searchParams.set('entry', String(entryId));
     else url.searchParams.delete('entry');
     await goto(url.pathname + url.search, { invalidateAll: true });
   }
@@ -167,7 +167,7 @@
           if (!cr.ok) { createMsg = (await cr.json()).error || 'No se pudo copiar'; creating = false; return; }
         }
         newEntryLabel = ''; copyFromId = '';
-        await goto(`/pool/${pool.id}/predict?entry=${encodeURIComponent(d.label)}`, { invalidateAll: true });
+        await goto(`/pool/${pool.id}/predict?entry=${d.id}`, { invalidateAll: true });
       } else { createMsg = d.error || 'Error'; }
     } catch { createMsg = 'Error de conexión'; }
     creating = false;
@@ -190,8 +190,15 @@
         body: JSON.stringify({ source_id: Number(copyOntoSourceId), target_id: data.selectedId }),
       });
       const d = await r.json();
-      if (r.ok) { copyOntoSourceId = ''; await goto($page.url.pathname + $page.url.search, { invalidateAll: true }); }
-      else { copyMsg = d.error || 'No se pudo copiar'; }
+      if (r.ok) {
+        copyOntoSourceId = '';
+        // The selected entry id doesn't change, so force the state effects to take
+        // their RESET branch on the post-invalidate re-run (otherwise they'd merge
+        // stale local edits over the freshly-copied data).
+        _lastMatchEntryId = null; _lastGroupEntryId = null;
+        _activeMatchEdits.clear(); _activeGroupEdits.clear();
+        await goto($page.url.pathname + $page.url.search, { invalidateAll: true });
+      } else { copyMsg = d.error || 'No se pudo copiar'; }
     } catch { copyMsg = 'Error de conexión'; }
     copying = false;
   }
@@ -413,7 +420,7 @@
         <div style="font-size: 10px; color: var(--text-muted); line-height: 1.55; margin-bottom: 8px;">
           <strong style="color: var(--text);">1·</strong> Fase de grupos (esta página) &nbsp;·&nbsp; <strong style="color: var(--text);">2·</strong> Cuadro eliminatorio: quién avanza + el marcador de la final. {#if knockoutDeadlineText}El cuadro se bloquea el <strong style="color: var(--gold);">{knockoutDeadlineText}</strong> — rellénalo también a tiempo.{:else}Rellénalo también antes de la fecha límite.{/if}
         </div>
-        <a href="/pool/{pool.id}/bracket" class="btn-primary" style="font-size: 10px; padding: 7px 14px; display: inline-block; text-decoration: none;">⚔️ Ir al cuadro eliminatorio →</a>
+        <a href={`/pool/${pool.id}/bracket${data.selectedId ? `?entry=${data.selectedId}` : ''}`} class="btn-primary" style="font-size: 10px; padding: 7px 14px; display: inline-block; text-decoration: none;">⚔️ Ir al cuadro eliminatorio →</a>
       </div>
     {/if}
 
@@ -444,10 +451,10 @@
     <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
       <label style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Entrada:</label>
       {#if data.entries.length > 1}
-        <select value={data.selectedLabel} onchange={(e) => switchEntry(e.target.value)}
+        <select value={String(data.selectedId)} onchange={(e) => switchEntry(e.target.value)}
           style="font-size: 11px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text);">
           {#each data.entries as entry}
-            <option value={entry.label}>{entry.label} {entry.total_score > 0 ? `(${entry.total_score} pts)` : ''}</option>
+            <option value={String(entry.id)}>{entry.label} {entry.total_score > 0 ? `(${entry.total_score} pts)` : ''}</option>
           {/each}
         </select>
       {:else if data.entries.length === 1}
@@ -646,7 +653,7 @@
       <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5;">
         Elige quién avanza en el cuadro y predice el marcador de la final.{#if knockoutDeadlineText} Se bloquea el <strong style="color: var(--gold);">{knockoutDeadlineText}</strong>.{:else} Se bloquea en la fecha límite.{/if}
       </p>
-      <a href="/pool/{pool.id}/bracket" class="btn-primary" style="font-size: 11px; padding: 10px 24px; display: inline-block; text-decoration: none;">⚔️ Ir al Cuadro Eliminatorio →</a>
+      <a href={`/pool/${pool.id}/bracket${data.selectedId ? `?entry=${data.selectedId}` : ''}`} class="btn-primary" style="font-size: 11px; padding: 10px 24px; display: inline-block; text-decoration: none;">⚔️ Ir al Cuadro Eliminatorio →</a>
     </div>
   {/if}
 </div>

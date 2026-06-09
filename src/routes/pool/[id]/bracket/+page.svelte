@@ -455,7 +455,15 @@
     tieSaving = false;
   }
 
-  // Load tiebreaker on mount
+  async function loadTiebreaker(id) {
+    if (!id) return;
+    try {
+      const r = await fetch(`/api/predictions/tiebreaker?prediction_id=${id}`);
+      if (r.ok) { const d = await r.json(); tieHome = d.home_score; tieAway = d.away_score; }
+    } catch {}
+  }
+
+  // Load tiebreaker on mount / entry switch
   $effect(() => {
     const id = data.selectedId;
     if (!id) return;
@@ -582,7 +590,7 @@
     finally { saving = false; }
   }
 
-  async function switchEntry(label) {
+  async function switchEntry(entryId) {
     // §4.2 — Flush any pending autosave before switching so the last edit
     // isn't lost. Use goto for soft navigation; window.location.href would
     // also discard the carefully-built _teams/_picks state.
@@ -592,7 +600,7 @@
       await saveBracket();
     }
     const url = new URL(window.location.href);
-    if (label) url.searchParams.set('entry', label);
+    if (entryId) url.searchParams.set('entry', String(entryId));
     else url.searchParams.delete('entry');
     await goto(url.pathname + url.search, { invalidateAll: true });
   }
@@ -600,6 +608,9 @@
   async function createEntry() {
     if (!newEntryLabel.trim()) return;
     creating = true; createMsg = '';
+    // Flush any pending bracket autosave to the CURRENT entry before navigating,
+    // so a debounced save can't land on the brand-new entry.
+    if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; await saveBracket(); }
     try {
       const res = await fetch('/api/predictions/entry', {
         method: 'POST',
@@ -620,7 +631,7 @@
         showCreateEntry = false;
         newEntryLabel = ''; copyFromId = '';
         // §4.2 — Use goto for soft navigation; preserves any pending state.
-        await goto(`/pool/${data.pool.id}/bracket?entry=${encodeURIComponent(d.label)}`, { invalidateAll: true });
+        await goto(`/pool/${data.pool.id}/bracket?entry=${d.id}`, { invalidateAll: true });
       } else {
         createMsg = d.error || 'Error';
       }
@@ -646,6 +657,13 @@
         copyOntoSourceId = '';
         const url = new URL(window.location.href);
         await goto(url.pathname + url.search, { invalidateAll: true });
+        // The selected entry id is unchanged, so the init $effect (which only
+        // tracks selectedId) and the tiebreaker effect won't re-run on their own.
+        // Rebuild the bracket from the freshly-copied data explicitly.
+        _lastBracketEntryId = data.selectedId;
+        initState();
+        bump();
+        await loadTiebreaker(data.selectedId);
       } else { copyMsg = d.error || 'No se pudo copiar'; }
     } catch { copyMsg = 'Error de conexión'; }
     copying = false;
@@ -679,12 +697,12 @@
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
         {#if data.entries.length > 1}
           <select
-            value={data.selectedLabel}
+            value={String(data.selectedId)}
             onchange={(e) => switchEntry(e.target.value)}
             style="font-size: 11px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text);"
           >
             {#each data.entries as entry}
-              <option value={entry.label}>{entry.label} {entry.total_score > 0 ? `(${entry.total_score} pts)` : ''}</option>
+              <option value={String(entry.id)}>{entry.label} {entry.total_score > 0 ? `(${entry.total_score} pts)` : ''}</option>
             {/each}
           </select>
         {:else if data.entries.length === 1}
@@ -827,7 +845,7 @@
   {#if groupsPredicted < 12}
     <div class="incomplete-banner">
       <span>⚠️ Grupos incompletos ({groupsPredicted}/12) — los cruces sin predicción de grupo aparecerán como TBD.</span>
-      <a href="/pool/{data.pool.id}/predict" style="color: var(--gold); text-decoration: underline; font-size: 10px;">Rellenar grupos →</a>
+      <a href={`/pool/${data.pool.id}/predict${data.selectedId ? `?entry=${data.selectedId}` : ''}`} style="color: var(--gold); text-decoration: underline; font-size: 10px;">Rellenar grupos →</a>
     </div>
   {/if}
 
@@ -848,7 +866,7 @@
             <span style="font-size:16px;">🤷</span>
             <span>No hay equipos disponibles para este cruce.</span>
             <span style="font-size:10px;color:var(--text-dim);margin-top:4px;">Predice los grupos primero para desbloquear los 3ros.</span>
-            <a href="/pool/{data.pool.id}/predict" class="btn-primary" style="display:inline-block;margin-top:12px;font-size:11px;padding:8px 20px;">Predecir grupos →</a>
+            <a href={`/pool/${data.pool.id}/predict${data.selectedId ? `?entry=${data.selectedId}` : ''}`} class="btn-primary" style="display:inline-block;margin-top:12px;font-size:11px;padding:8px 20px;">Predecir grupos →</a>
           </div>
         {:else}
           <div class="third-selector-grid">

@@ -1,4 +1,4 @@
-import { getPoolById, getUserPredictions, getGroupPredictions, getAllTeams, createPrediction } from '$lib/server/queries.js';
+import { getPoolById, getUserPredictions, getGroupPredictions, getAllTeams, createPrediction, resolveSelectedPrediction } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
@@ -34,11 +34,9 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     }
   }
 
-  // Get selected entry from query param
-  const selectedLabel = url.searchParams.get('entry') || '';
-  // §7.3 — see predict/+page.server.ts for rationale.
-  const selectedNorm = selectedLabel?.toLowerCase() ?? '';
-  const selectedPrediction = predictions.find(p => (p.label ?? '').toLowerCase() === selectedNorm) || predictions[0] || null;
+  // Get selected entry from query param (id-preferred, label fallback) — shared
+  // resolver, identical to the predict/results stages.
+  const selectedPrediction = resolveSelectedPrediction(predictions, url.searchParams.get('entry'));
   const predictionId = selectedPrediction ? Number(selectedPrediction.id) : null;
 
   // Load group predictions

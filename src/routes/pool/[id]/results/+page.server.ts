@@ -1,9 +1,9 @@
-import { getPoolById, getUserPredictions } from '$lib/server/queries.js';
+import { getPoolById, getUserPredictions, resolveSelectedPrediction } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, url }) => {
   const poolId = Number(params.id);
   const pool = await getPoolById(poolId);
   if (!pool) throw error(404, 'Quiniela no encontrada');
@@ -47,7 +47,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   if (locals.user) {
     userPredictions = await getUserPredictions(poolId, locals.user.id) as any[];
     if (userPredictions.length > 0) {
-      selectedEntryId = userPredictions[0].id;
+      // Honour the ?entry= selector (id-preferred) instead of always entry #1.
+      const sel = resolveSelectedPrediction(userPredictions, url.searchParams.get('entry'));
+      selectedEntryId = sel ? Number(sel.id) : Number(userPredictions[0].id);
 
       // Group predictions
       const { rows: gpRows } = await query(`
