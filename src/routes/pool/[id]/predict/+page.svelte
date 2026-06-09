@@ -145,6 +145,7 @@
   let creating = $state(false);
   let createMsg = $state('');
   let showCreateEntry = $state(false);
+  let copyFromId = $state(''); // optional source entry to seed a NEW entry from
 
   async function createEntry() {
     if (!newEntryLabel.trim()) return;
@@ -157,11 +158,42 @@
       });
       const d = await res.json();
       if (res.ok) {
-        newEntryLabel = '';
+        // Optionally seed the brand-new entry from an existing one.
+        if (copyFromId) {
+          const cr = await fetch('/api/predictions/entry/copy', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_id: Number(copyFromId), target_id: d.id }),
+          });
+          if (!cr.ok) { createMsg = (await cr.json()).error || 'No se pudo copiar'; creating = false; return; }
+        }
+        newEntryLabel = ''; copyFromId = '';
         await goto(`/pool/${pool.id}/predict?entry=${encodeURIComponent(d.label)}`, { invalidateAll: true });
       } else { createMsg = d.error || 'Error'; }
     } catch { createMsg = 'Error de conexión'; }
     creating = false;
+  }
+
+  // Copy another entry's picks ONTO the currently-selected entry (overwrites it).
+  let copyOntoSourceId = $state('');
+  let copying = $state(false);
+  let copyMsg = $state('');
+  async function copyEntryOnto() {
+    if (!copyOntoSourceId || !data.selectedId) return;
+    const src = data.entries.find(e => e.id === Number(copyOntoSourceId));
+    const tgtLabel = data.selectedLabel || 'Entrada principal';
+    if (!confirm(`Esto reemplazará TODOS los pronósticos de «${tgtLabel}» con una copia de «${src?.label}». ¿Continuar?`)) return;
+    copying = true; copyMsg = '';
+    await flushMatchScores(); // persist any pending edits on the current entry first (they'll be overwritten, but keeps state consistent)
+    try {
+      const r = await fetch('/api/predictions/entry/copy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_id: Number(copyOntoSourceId), target_id: data.selectedId }),
+      });
+      const d = await r.json();
+      if (r.ok) { copyOntoSourceId = ''; await goto($page.url.pathname + $page.url.search, { invalidateAll: true }); }
+      else { copyMsg = d.error || 'No se pudo copiar'; }
+    } catch { copyMsg = 'Error de conexión'; }
+    copying = false;
   }
 
   // ─── Knockout Match Scores ─────────────────────────────────────────────
@@ -446,10 +478,42 @@
         <button onclick={createEntry} disabled={creating || !newEntryLabel.trim()} class="btn-primary" style="font-size: 9px; padding: 8px 16px; white-space: nowrap;">
           {creating ? 'Creando...' : 'Crear'}
         </button>
-        <button onclick={() => { showCreateEntry = false; newEntryLabel = ''; createMsg = ''; }}
+        <button onclick={() => { showCreateEntry = false; newEntryLabel = ''; copyFromId = ''; createMsg = ''; }}
           style="font-size: 9px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer;">✕</button>
       </div>
+      {#if data.entries.length > 0}
+        <div style="margin-top: 10px;">
+          <label style="display: block; font-size: 9px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px;">Empezar desde</label>
+          <select bind:value={copyFromId}
+            style="width: 100%; font-size: 12px; padding: 8px 10px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text);">
+            <option value="">En blanco</option>
+            {#each data.entries as entry}
+              <option value={String(entry.id)}>Copia de: {entry.label}</option>
+            {/each}
+          </select>
+          {#if copyFromId}<div style="margin-top: 4px; font-size: 9px; color: var(--text-dim);">Se copiarán todos los pronósticos; luego puedes hacer cambios.</div>{/if}
+        </div>
+      {/if}
       {#if createMsg}<div style="margin-top: 8px; font-size: 10px; color: var(--red);">{createMsg}</div>{/if}
+    </div>
+  {/if}
+
+  <!-- Copy another entry ONTO the current one (overwrite) -->
+  {#if data.entries.length > 1 && !effectivelyLocked && data.selectedId}
+    <div style="margin-bottom: 20px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+      <label style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase;">Copiar a esta entrada desde:</label>
+      <select bind:value={copyOntoSourceId}
+        style="font-size: 11px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text);">
+        <option value="">Elige una entrada…</option>
+        {#each data.entries.filter(e => e.id !== data.selectedId) as entry}
+          <option value={String(entry.id)}>{entry.label}</option>
+        {/each}
+      </select>
+      <button onclick={copyEntryOnto} disabled={copying || !copyOntoSourceId}
+        style="font-size: 9px; padding: 6px 12px; border: 1px solid var(--gold); border-radius: 6px; background: rgba(201,168,76,0.1); color: var(--gold); cursor: pointer; opacity: {copying || !copyOntoSourceId ? 0.5 : 1};">
+        {copying ? 'Copiando…' : '⧉ Copiar aquí'}
+      </button>
+      {#if copyMsg}<span style="font-size: 10px; color: var(--red);">{copyMsg}</span>{/if}
     </div>
   {/if}
 
