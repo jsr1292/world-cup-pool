@@ -1,4 +1,5 @@
 <script>
+  import { untrack } from 'svelte';
   import { showToast } from '$lib/toast';
   import { haptic } from '$lib/haptic';
   import { headerTitle } from '$lib/stores/header';
