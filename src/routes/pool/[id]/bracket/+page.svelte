@@ -66,6 +66,7 @@
   let _thirdSlots = {}; // { [mi]: teamId } — wildcard occupant only
 
   function pick3rd(mi, teamId) {
+    if (data.lockedPhases?.includes('r32')) { showToast('🔒 Esta fase ya ha comenzado'); return; }
     haptic(8);
     animatePick('r32', mi, 1);
     const currentSlot = _thirdSlots[mi] ?? null;
@@ -107,6 +108,7 @@
   // Store state in plain objects (not $state) - reactivity via version
   let _teams = {};
   let _picks = {}; // explicitPicks
+  let _savedBaseline = {}; // `${phase}:${slot}` -> team id confirmed saved on the server
 
   function bump() { version++; }
 
@@ -149,6 +151,18 @@
     // soft-switching to a different entry leaves the previous entry's
     // 3rd-place picks visible in the third-place selector modal.
     _thirdSlots = {};
+
+    // Baseline of what the SERVER currently holds (slot -> team id), used by
+    // saveBracket to send only the delta. Rebuilt whenever local state is
+    // re-seeded from server data (mount, entry switch, copy-onto, resync).
+    _savedBaseline = {};
+    if (data.existingBracket) {
+      for (const [ph, slots] of Object.entries(data.existingBracket)) {
+        for (const [slot, tid] of Object.entries(slots)) {
+          if (tid != null) _savedBaseline[`${ph}:${slot}`] = tid;
+        }
+      }
+    }
 
     t.r32 = [];
     exp.r32 = [];
@@ -394,6 +408,9 @@
   }
 
   function pickTeam(phase, matchIdx, teamIdx, teamId) {
+    // A phase whose first match has kicked off is locked server-side; refuse the
+    // edit up front instead of letting the save be dropped after the fact.
+    if (data.lockedPhases?.includes(phase)) { showToast('🔒 Esta fase ya ha comenzado'); return; }
     haptic(10);
     animatePick(phase, matchIdx, teamIdx);
     const exp = _picks[phase][matchIdx];
@@ -572,37 +589,81 @@
     return teamPath.has(`${round}:${mi}`);
   }
 
+  // Reload this entry's bracket from the server and rebuild local state.
+  // Used when the server dropped part of a save (a phase kicked off under us):
+  // the optimistic local picture no longer matches what persisted.
+  async function resyncBracket() {
+    const url = new URL(window.location.href);
+    await goto(url.pathname + url.search, { invalidateAll: true });
+    _lastBracketEntryId = data.selectedId;
+    initState();
+    bump();
+  }
+
   async function saveBracket() {
     if (!data.selectedId) return;
     saving = true; saved = false;
     try {
+      // Send only the DELTA vs the last confirmed save. A full-document save
+      // made a stale tab wipe every pick a fresher tab/device had saved in the
+      // meantime (its nulls DELETE server rows); deltas only touch slots this
+      // tab actually changed. Locked phases are excluded up front — the server
+      // would drop them (and their dependents) anyway.
       const picks = {};
+      let changes = 0;
       for (const phase of PHASES) {
-        picks[phase] = {};
+        if (data.lockedPhases?.includes(phase)) continue;
         const pt = _teams[phase];
         if (!pt) continue;
+        const phasePicks = {};
         for (let i = 0; i < pt.length; i++) {
           const exp = _picks[phase][i];
           for (let j = 0; j < 2; j++) {
             const slot = i * 2 + j + 1;
+            let val;
             // A wildcard R32 slot-1 holds the user's chosen 3rd-place team — a
             // prediction in itself. Persist it even when it's not the match
             // winner, otherwise picking a 3rd team without advancing it is lost
             // on reload.
             if (phase === 'r32' && j === 1 && R32_MAP[i].t2g === WILDCARD && _thirdSlots[i] != null) {
-              picks[phase][slot] = _thirdSlots[i];
+              val = _thirdSlots[i];
             } else {
-              picks[phase][slot] = exp[j] ? pt[i][j] : null;
+              val = exp[j] ? pt[i][j] : null;
+            }
+            if ((val ?? null) !== (_savedBaseline[`${phase}:${slot}`] ?? null)) {
+              phasePicks[slot] = val;
+              changes++;
             }
           }
         }
+        if (Object.keys(phasePicks).length > 0) picks[phase] = phasePicks;
       }
+      if (changes === 0) { saving = false; return; } // nothing new to persist
       const res = await fetch('/api/predictions/bracket', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prediction_id: data.selectedId, picks }),
       });
-      if (res.ok) { saveError = null; showToast('✓ Guardado'); }
+      if (res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const dropped = new Set(body.dropped || []);
+        // What the server accepted is the new baseline; dropped phases stay
+        // dirty (and get resynced below).
+        for (const [phase, slots] of Object.entries(picks)) {
+          if (dropped.has(phase)) continue;
+          for (const [slot, val] of Object.entries(slots)) {
+            if (val === null) delete _savedBaseline[`${phase}:${slot}`];
+            else _savedBaseline[`${phase}:${slot}`] = val;
+          }
+        }
+        saveError = null;
+        if (dropped.size > 0) {
+          showToast('⚠️ Una fase ya había comenzado — esos cambios no se guardaron');
+          await resyncBracket();
+        } else {
+          showToast('✓ Guardado');
+        }
+      }
       else {
         const body = await res.json().catch(() => ({}));
         saveError = body.error || 'Error al guardar';

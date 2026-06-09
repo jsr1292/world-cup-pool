@@ -366,9 +366,17 @@
         body: JSON.stringify({ prediction_id: data.selectedId, scores }),
       });
       if (res.ok) {
-        matchSaved = true;
+        const body = await res.json().catch(() => ({}));
         _activeMatchEdits.clear();
-        setTimeout(() => matchSaved = false, 2000);
+        if (body.dropped?.length) {
+          // The server refused edits to matches that kicked off after this page
+          // loaded. Without this the player sees "✓" while those picks were
+          // silently thrown away.
+          showToast(`⚠️ ${body.dropped.length} partido(s) ya habían comenzado — esos pronósticos no se guardaron`);
+        } else {
+          matchSaved = true;
+          setTimeout(() => matchSaved = false, 2000);
+        }
       } else {
         // §4.3 — Surface the save failure to the user instead of swallowing it.
         const body = await res.json().catch(() => ({}));

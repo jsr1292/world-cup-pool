@@ -76,6 +76,15 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   const deadline = pool.deadline_knockout ? new Date(pool.deadline_knockout as string) : null;
   const isLocked = deadline ? new Date() >= deadline : false;
 
+  // Per-phase kickoff locks (mirrors the save endpoint's rule) so the client can
+  // refuse edits to a started phase up front instead of having them dropped.
+  const { rows: lockedRows } = await query(
+    `SELECT DISTINCT phase FROM matches
+     WHERE phase IN ('r32','r16','qf','sf','final','3rd')
+       AND (status = 'finished' OR (kickoff_time IS NOT NULL AND kickoff_time <= NOW()))`
+  );
+  const lockedPhases = lockedRows.map((r: any) => r.phase as string);
+
   // Build entry list
   const entries = predictions.map(p => ({
     id: Number(p.id),
@@ -89,6 +98,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     selectedId: predictionId,
     selectedLabel: selectedPrediction?.label || '',
     isLocked,
+    lockedPhases,
     groupPredictions,
     existingBracket,
     teamsByGroup,

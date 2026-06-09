@@ -139,6 +139,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       [phases]
     );
     const startedPhaseSet = new Set(startedRows.map((r: any) => r.phase));
+    // A dropped phase invalidates every LATER phase in the same request: the
+    // client cascades downstream edits from upstream picks, so if the upstream
+    // change is rejected, applying the downstream deletions would wipe the
+    // player's R16+/QF+ picks while keeping the old upstream winner — a
+    // destructive partial save. Drop the dependent phases too; the client is
+    // told via `dropped` and resyncs.
+    if (startedPhaseSet.size > 0) {
+      const PHASE_SEQ = ['r32', 'r16', 'qf', 'sf', 'final', '3rd'];
+      let minIdx = Infinity;
+      for (const p of startedPhaseSet) {
+        const i = PHASE_SEQ.indexOf(p as string);
+        if (i !== -1 && i < minIdx) minIdx = i;
+      }
+      for (const p of phases) {
+        if (PHASE_SEQ.indexOf(p) >= minIdx) startedPhaseSet.add(p);
+      }
+    }
     for (const p of startedPhaseSet) {
       delete (picks as Record<string, unknown>)[p];
       droppedPhases.push(p);
