@@ -389,7 +389,11 @@
   }
 
   function animatePick(phase, matchIdx, teamIdx) {
-    const btn = document.getElementById(`btn-${phase}-${matchIdx}-${teamIdx}`);
+    // The desktop and mobile layouts both render this id, so getElementById
+    // always returned the (CSS-hidden) desktop node on phones and the tap
+    // animation was invisible there. Animate the instance actually shown.
+    const all = document.querySelectorAll(`[id="btn-${phase}-${matchIdx}-${teamIdx}"]`);
+    const btn = Array.from(all).find((b) => b.offsetParent !== null) || all[0];
     if (!btn) return;
     // §4.2 — Cancel any prior animation for this button so rapid taps don't
     // overwrite origBg and leave the inline override stuck.
@@ -480,6 +484,10 @@
     // and left a stale value in the DB.
     if ((h !== null && (isNaN(h) || h === null)) ||
         (a !== null && (isNaN(a) || a === null))) return;
+    // Half-typed (one goal set, the other not): the server rejects mixed-null
+    // outright, so posting is a guaranteed 400 that burns rate-limit budget.
+    // Wait for the other goal — the next keystroke re-debounces the save.
+    if ((h === null) !== (a === null)) return;
     tieSaving = true; tieSaved = false;
     try {
       const r = await fetch('/api/predictions/tiebreaker', {
@@ -491,6 +499,11 @@
         const body = await r.json().catch(() => ({}));
         if (body.action === 'deleted') showToast('✓ Borrado');
         else { showToast('✓ Guardado'); tieSaved = true; setTimeout(() => tieSaved = false, 2000); }
+      } else {
+        // Surface the failure — silently ignoring it left players believing a
+        // value still visible in the inputs had been saved.
+        const body = await r.json().catch(() => ({}));
+        showToast('⚠️ ' + (body.error || 'No se pudo guardar el desempate'));
       }
     } catch {}
     tieSaving = false;
@@ -600,7 +613,20 @@
     bump();
   }
 
-  async function saveBracket() {
+  // Saves must not overlap: a save computes its DELTA against _savedBaseline,
+  // which is only updated when the previous save's response lands. Two in-flight
+  // saves (click, then another click <800ms after the first save started) made
+  // the second omit a clear the first hadn't merged yet — the server then saw a
+  // duplicate team and rejected the save ("Equipo repetido"), leaving the UI
+  // and DB out of sync until the next successful save. Chain them instead.
+  let _savePrev = Promise.resolve();
+  function saveBracket() {
+    const run = _savePrev.catch(() => {}).then(() => saveBracketNow());
+    _savePrev = run.catch(() => {});
+    return run;
+  }
+
+  async function saveBracketNow() {
     if (!data.selectedId) return;
     saving = true; saved = false;
     try {
