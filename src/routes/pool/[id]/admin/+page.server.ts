@@ -72,11 +72,22 @@ export const load: PageServerLoad = async ({ params, locals }) => {
        WHERE mp.prediction_id = ANY($1::int[]) GROUP BY mp.prediction_id`, [entryIds]);
     const groupCount: Record<number, number> = {};
     gmc.forEach((r: any) => { groupCount[r.prediction_id] = Number(r.c); });
+    // The champion implies every prior round on the MAIN chain, but the
+    // 3rd-place match sits OFF that chain (teams derive from the SF losers,
+    // the winner is an independent pick) — check it explicitly.
     const { rows: fin } = await query(
-      `SELECT prediction_id, COUNT(*)::int AS c FROM bracket_predictions
-       WHERE prediction_id = ANY($1::int[]) AND phase = 'final' GROUP BY prediction_id`, [entryIds]);
+      `SELECT prediction_id,
+         COUNT(*) FILTER (WHERE phase = 'final')::int AS final_c,
+         COUNT(*) FILTER (WHERE phase = '3rd')::int AS third_match_c
+       FROM bracket_predictions
+       WHERE prediction_id = ANY($1::int[]) AND phase IN ('final','3rd') AND team_id IS NOT NULL
+       GROUP BY prediction_id`, [entryIds]);
     const finalCount: Record<number, number> = {};
-    fin.forEach((r: any) => { finalCount[r.prediction_id] = Number(r.c); });
+    const thirdMatchCount: Record<number, number> = {};
+    fin.forEach((r: any) => {
+      finalCount[r.prediction_id] = Number(r.final_c);
+      thirdMatchCount[r.prediction_id] = Number(r.third_match_c);
+    });
     const { rows: thirds } = await query(
       `SELECT prediction_id, COUNT(*)::int AS c FROM bracket_predictions
        WHERE prediction_id = ANY($1::int[]) AND phase = 'r32' AND slot = ANY($2::int[]) AND team_id IS NOT NULL
@@ -88,8 +99,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     const tbSet = new Set(tb.map((r: any) => r.prediction_id));
     for (const id of entryIds) {
       const groups = groupCount[id] ?? 0;
-      // Champion picked AND all R32 wildcard 3rd-place slots chosen.
-      const bracketDone = (finalCount[id] ?? 0) >= 1 && (thirdCount[id] ?? 0) >= EXPECTED_THIRDS;
+      // Champion picked, 3rd-place match winner picked, AND all R32 wildcard
+      // 3rd-place slots chosen.
+      const bracketDone =
+        (finalCount[id] ?? 0) >= 1 &&
+        (thirdMatchCount[id] ?? 0) >= 1 &&
+        (thirdCount[id] ?? 0) >= EXPECTED_THIRDS;
       const tiebreakerDone = tbSet.has(id);
       completion[id] = { groups, groupsTotal: 72, bracketDone, tiebreakerDone, complete: groups >= 72 && bracketDone && tiebreakerDone };
     }

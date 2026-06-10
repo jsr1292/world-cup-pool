@@ -274,11 +274,23 @@ export const load: PageServerLoad = async ({ params, locals }) => {
        WHERE mp.prediction_id = ANY($1::int[]) GROUP BY mp.prediction_id`, [entryIds]);
     const groupCount: Record<number, number> = {};
     gmc.forEach((r: any) => { groupCount[r.prediction_id] = Number(r.c); });
+    // The champion implies every prior round on the MAIN chain (r32→…→final),
+    // but the 3rd-place match sits OFF that chain: its teams derive from the SF
+    // losers automatically while its winner is an independent pick — so it must
+    // be checked explicitly or a bracket missing the bronze pick reads complete.
     const { rows: fin } = await query(
-      `SELECT prediction_id, COUNT(*)::int AS c FROM bracket_predictions
-       WHERE prediction_id = ANY($1::int[]) AND phase = 'final' GROUP BY prediction_id`, [entryIds]);
+      `SELECT prediction_id,
+         COUNT(*) FILTER (WHERE phase = 'final')::int AS final_c,
+         COUNT(*) FILTER (WHERE phase = '3rd')::int AS third_match_c
+       FROM bracket_predictions
+       WHERE prediction_id = ANY($1::int[]) AND phase IN ('final','3rd') AND team_id IS NOT NULL
+       GROUP BY prediction_id`, [entryIds]);
     const finalCount: Record<number, number> = {};
-    fin.forEach((r: any) => { finalCount[r.prediction_id] = Number(r.c); });
+    const thirdMatchCount: Record<number, number> = {};
+    fin.forEach((r: any) => {
+      finalCount[r.prediction_id] = Number(r.final_c);
+      thirdMatchCount[r.prediction_id] = Number(r.third_match_c);
+    });
     // How many of the R32 wildcard 3rd-place slots are filled (must be all).
     const { rows: thirds } = await query(
       `SELECT prediction_id, COUNT(*)::int AS c FROM bracket_predictions
@@ -293,7 +305,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       completion[e.id] = {
         groups: groupCount[e.id] ?? 0,
         groupsTotal: 72,
-        bracketDone: (finalCount[e.id] ?? 0) >= 1 && (thirdCount[e.id] ?? 0) >= EXPECTED_THIRDS,
+        bracketDone:
+          (finalCount[e.id] ?? 0) >= 1 &&
+          (thirdMatchCount[e.id] ?? 0) >= 1 &&
+          (thirdCount[e.id] ?? 0) >= EXPECTED_THIRDS,
         tiebreakerDone: tbSet.has(e.id),
       };
     }

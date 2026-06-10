@@ -31,8 +31,17 @@
     { label: '2.º', pct: 0.25 },
     { label: '3.º', pct: 0.15 },
   ];
-  // Completeness of the user's primary entry (for the "finish your picks" banner).
-  const myCompletion = $derived(data.predictions.length > 0 ? data.completion?.[data.predictions[0].id] : null);
+  // Completeness for the "finish your picks" banner. With multiple entries the
+  // banner reflects the FIRST INCOMPLETE one (showing only entry #1 told
+  // multi-entry players "all complete" while another bet was unfinished);
+  // only when every entry is complete does it go green.
+  const isEntryComplete = (c) => !!c && c.groups >= c.groupsTotal && c.bracketDone && c.tiebreakerDone;
+  const myCompletion = $derived.by(() => {
+    if (data.predictions.length === 0) return null;
+    const firstIncomplete = data.predictions.find((p) => !isEntryComplete(data.completion?.[p.id]));
+    const target = firstIncomplete ?? data.predictions[0];
+    return data.completion?.[target.id] ?? null;
+  });
   const groupsDone = $derived(!!myCompletion && myCompletion.groups >= myCompletion.groupsTotal);
   const predComplete = $derived(!!myCompletion && groupsDone && myCompletion.bracketDone && myCompletion.tiebreakerDone);
 
