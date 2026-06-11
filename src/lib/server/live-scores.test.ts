@@ -29,15 +29,23 @@ function apiFixture(round: string, opts?: { home?: number; away?: number }) {
 	};
 }
 
-// Helper: build a minimal FIFA API match result
-function fifaMatch(stageId: string, opts?: { home?: number; away?: number; status?: string }) {
+// Helper: build a minimal FIFA API match result (real calendar/matches shape,
+// verified against the live WC2026 feed: MatchStatus 0=finished, names in
+// TeamName[0].Description, penalties/Winner at the top level).
+function fifaMatch(stageId: string, opts?: {
+	home?: number; away?: number; status?: number;
+	homePens?: number; awayPens?: number; winner?: string | null;
+}) {
 	return {
-		idMatch: 2001,
-		idStage: stageId,
-		home: { teamName: 'Team X', score: opts?.home ?? 1 },
-		away: { teamName: 'Team Y', score: opts?.away ?? 0 },
-		matchStatus: opts?.status ?? 'Completed',
-		date: '2026-07-05T20:00:00Z'
+		IdMatch: '400021443',
+		IdStage: stageId,
+		Home: { TeamName: [{ Locale: 'en-GB', Description: 'Team X' }], Score: opts?.home ?? 1, IdTeam: '43911' },
+		Away: { TeamName: [{ Locale: 'en-GB', Description: 'Team Y' }], Score: opts?.away ?? 0, IdTeam: '43922' },
+		HomeTeamPenaltyScore: opts?.homePens ?? 0,
+		AwayTeamPenaltyScore: opts?.awayPens ?? 0,
+		Winner: opts?.winner ?? null,
+		MatchStatus: opts?.status ?? 0,
+		Date: '2026-07-05T20:00:00Z'
 	};
 }
 
@@ -172,19 +180,19 @@ describe('mapFifaStageToPhase (via fetchFromFifaApi)', () => {
 	beforeEach(() => {
 		// Make sure API_FOOTBALL_KEY is NOT set so syncScores falls through to FIFA
 		delete process.env.API_FOOTBALL_KEY;
-		// Enable FIFA fallback so fetchFromFifaApi actually makes the fetch call
-		process.env.ENABLE_FIFA_FALLBACK = '1';
+		// The FIFA source is the default fallback; make sure it isn't disabled.
+		delete process.env.DISABLE_FIFA_FALLBACK;
 		vi.restoreAllMocks();
 	});
 
 	afterEach(() => {
-		delete process.env.ENABLE_FIFA_FALLBACK;
+		delete process.env.DISABLE_FIFA_FALLBACK;
 	});
 
-	it('maps stage 285063 to "group"', async () => {
+	it('maps stage 289273 to "group"', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ results: [fifaMatch('285063')] })
+			json: () => Promise.resolve({ Results: [fifaMatch('289273')] })
 		}));
 
 		const matches = await fetchFromFifaApi();
@@ -192,10 +200,10 @@ describe('mapFifaStageToPhase (via fetchFromFifaApi)', () => {
 		expect(matches[0].phase).toBe('group');
 	});
 
-	it('maps stage 285064 to "r32"', async () => {
+	it('maps stage 289287 to "r32"', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ results: [fifaMatch('285064')] })
+			json: () => Promise.resolve({ Results: [fifaMatch('289287')] })
 		}));
 
 		const matches = await fetchFromFifaApi();
@@ -203,10 +211,10 @@ describe('mapFifaStageToPhase (via fetchFromFifaApi)', () => {
 		expect(matches[0].phase).toBe('r32');
 	});
 
-	it('maps stage 285065 to "r16"', async () => {
+	it('maps stage 289288 to "r16"', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ results: [fifaMatch('285065')] })
+			json: () => Promise.resolve({ Results: [fifaMatch('289288')] })
 		}));
 
 		const matches = await fetchFromFifaApi();
@@ -214,10 +222,10 @@ describe('mapFifaStageToPhase (via fetchFromFifaApi)', () => {
 		expect(matches[0].phase).toBe('r16');
 	});
 
-	it('maps stage 285066 to "qf"', async () => {
+	it('maps stage 289289 to "qf"', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ results: [fifaMatch('285066')] })
+			json: () => Promise.resolve({ Results: [fifaMatch('289289')] })
 		}));
 
 		const matches = await fetchFromFifaApi();
@@ -225,10 +233,10 @@ describe('mapFifaStageToPhase (via fetchFromFifaApi)', () => {
 		expect(matches[0].phase).toBe('qf');
 	});
 
-	it('maps stage 285067 to "sf"', async () => {
+	it('maps stage 289290 to "sf"', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ results: [fifaMatch('285067')] })
+			json: () => Promise.resolve({ Results: [fifaMatch('289290')] })
 		}));
 
 		const matches = await fetchFromFifaApi();
@@ -236,10 +244,10 @@ describe('mapFifaStageToPhase (via fetchFromFifaApi)', () => {
 		expect(matches[0].phase).toBe('sf');
 	});
 
-	it('maps stage 285068 to "3rd"', async () => {
+	it('maps stage 289291 to "3rd"', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ results: [fifaMatch('285068')] })
+			json: () => Promise.resolve({ Results: [fifaMatch('289291')] })
 		}));
 
 		const matches = await fetchFromFifaApi();
@@ -247,10 +255,10 @@ describe('mapFifaStageToPhase (via fetchFromFifaApi)', () => {
 		expect(matches[0].phase).toBe('3rd');
 	});
 
-	it('maps stage 285069 to "final"', async () => {
+	it('maps stage 289292 to "final"', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ results: [fifaMatch('285069')] })
+			json: () => Promise.resolve({ Results: [fifaMatch('289292')] })
 		}));
 
 		const matches = await fetchFromFifaApi();
@@ -262,7 +270,7 @@ describe('mapFifaStageToPhase (via fetchFromFifaApi)', () => {
 		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ results: [fifaMatch('999999')] })
+			json: () => Promise.resolve({ Results: [fifaMatch('999999')] })
 		}));
 
 		const matches = await fetchFromFifaApi();
@@ -309,7 +317,7 @@ describe('syncScores', () => {
 		// Mock both API sources to return no matches
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ results: [] })
+			json: () => Promise.resolve({ Results: [] })
 		}));
 
 		const result = await syncScores();
@@ -428,13 +436,31 @@ describe('syncScores write path', () => {
 
 	it('skips live matches without writing', async () => {
 		delete process.env.API_FOOTBALL_KEY;
-		process.env.ENABLE_FIFA_FALLBACK = '1';
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ results: [fifaMatch('285063', { home: 1, away: 1, status: 'Live' })] }) }));
+		delete process.env.DISABLE_FIFA_FALLBACK;
+		// MatchStatus 3 = live (in play) on the real FIFA feed.
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ Results: [fifaMatch('289273', { home: 1, away: 1, status: 3 })] }) }));
 		routeDb({});
 
 		const result = await syncScores();
 		expect(result).toEqual({ updated: 0, skipped: 1, errors: 0, unmatched: [] });
 		expect(updateParams()).toHaveLength(0);
-		delete process.env.ENABLE_FIFA_FALLBACK;
+	});
+
+	it('FIFA: penalty shootout winner derived from penalty scores', async () => {
+		delete process.env.API_FOOTBALL_KEY;
+		delete process.env.DISABLE_FIFA_FALLBACK;
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ Results: [fifaMatch('289292', { home: 1, away: 1, homePens: 3, awayPens: 4 })] }) }));
+		const [m] = await fetchFromFifaApi();
+		expect(m.winner_side).toBe('away');
+		expect(m.phase).toBe('final');
+		expect(m.status).toBe('finished');
+	});
+
+	it('FIFA: drawn-but-decided falls back to the Winner team id', async () => {
+		delete process.env.API_FOOTBALL_KEY;
+		delete process.env.DISABLE_FIFA_FALLBACK;
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ Results: [fifaMatch('289290', { home: 2, away: 2, winner: '43911' })] }) }));
+		const [m] = await fetchFromFifaApi();
+		expect(m.winner_side).toBe('home'); // 43911 = Home.IdTeam in the fixture helper
 	});
 });

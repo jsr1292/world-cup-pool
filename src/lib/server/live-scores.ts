@@ -23,9 +23,9 @@ import { normalizeTeamName } from './team-normalize.js';
 
 const _provider = process.env.API_FOOTBALL_KEY
 	? 'api-football'
-	: process.env.ENABLE_FIFA_FALLBACK
-		? 'fifa-stub'
-		: 'none';
+	: process.env.DISABLE_FIFA_FALLBACK
+		? 'none'
+		: 'fifa';
 console.log(`[live-scores] provider: ${_provider}`);
 
 const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
@@ -105,16 +105,27 @@ export async function fetchFromApiFootball(
   }
 }
 
-/** Fetch from FIFA's public API (no key, but stub stage IDs — verify first). */
+/**
+ * Fetch from FIFA's public API (keyless). Enabled by default as the fallback
+ * when no API_FOOTBALL_KEY is set; opt out with DISABLE_FIFA_FALLBACK=1.
+ *
+ * Endpoint + field shape verified live against the real WC2026 calendar
+ * (idCompetition=17, idSeason=285023) on 2026-06-11 and against finished
+ * WC2022 data for the status semantics:
+ *   - MatchStatus: 0 = finished, 1 = scheduled, 3 = live
+ *   - names in Home/Away.TeamName[0].Description (en-GB)
+ *   - scores in Home/Away.Score (also top-level HomeTeamScore/AwayTeamScore)
+ *   - shootouts: top-level Home/AwayTeamPenaltyScore; Winner = IdTeam string
+ */
 export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
-	if (!process.env.ENABLE_FIFA_FALLBACK) {
-		console.warn('[live-scores] FIFA fallback disabled. Set ENABLE_FIFA_FALLBACK=1 to enable.');
+	if (process.env.DISABLE_FIFA_FALLBACK) {
 		return [];
 	}
+	const competition = process.env.FIFA_COMPETITION_ID || '17';     // FIFA World Cup (men)
+	const season = process.env.FIFA_SEASON_ID || '285023';           // World Cup 2026
 	try {
-		// FIFA World Cup 2026 competition ID — verify before the tournament.
 		const res = await fetch(
-			`${FIFA_BASE}/matches/competitions/254648?status=completed`,
+			`${FIFA_BASE}/calendar/matches?idCompetition=${competition}&idSeason=${season}&count=500&language=en`,
 			{ headers: { 'Accept': 'application/json' } }
 		);
 
@@ -125,40 +136,45 @@ export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
 		}
 
 		const data = await res.json();
-		if (!data.results || !Array.isArray(data.results)) {
+		if (!data.Results || !Array.isArray(data.Results)) {
 			console.warn('[live-scores] FIFA API unexpected response shape:', JSON.stringify(data).slice(0, 200));
 			return [];
 		}
 
 		const matches: LiveMatch[] = [];
 
-		for (const m of data.results) {
-      const homeScore = m.home?.score;
-      const awayScore = m.away?.score;
-      if (homeScore == null || awayScore == null) continue;
-      const hp = m.home?.penalties, ap = m.away?.penalties;
-      let winner_side: 'home' | 'away' | null = null;
-      if (homeScore === awayScore && hp != null && ap != null && hp !== ap) {
-        winner_side = hp > ap ? 'home' : 'away';
-      }
-      matches.push({
-        fifa_id: String(m.idMatch),
-        home_team: m.home?.teamName ?? '',
-        away_team: m.away?.teamName ?? '',
-        home_score: homeScore,
-        away_score: awayScore,
-        status: m.matchStatus === 'Completed' ? 'finished' : 'live',
-        phase: mapFifaStageToPhase(m.idStage),
-        kickoff_time: m.date ? new Date(m.date) : null,
-        winner_side,
-      });
-    }
+		for (const m of data.Results) {
+			const homeScore = m.Home?.Score ?? m.HomeTeamScore;
+			const awayScore = m.Away?.Score ?? m.AwayTeamScore;
+			if (homeScore == null || awayScore == null) continue;
+			let winner_side: 'home' | 'away' | null = null;
+			if (homeScore === awayScore) {
+				const hp = m.HomeTeamPenaltyScore, ap = m.AwayTeamPenaltyScore;
+				if (hp != null && ap != null && hp !== ap) {
+					winner_side = hp > ap ? 'home' : 'away';
+				} else if (m.Winner && m.Home?.IdTeam) {
+					// Drawn but decided (penalties): Winner carries the IdTeam.
+					winner_side = String(m.Winner) === String(m.Home.IdTeam) ? 'home' : 'away';
+				}
+			}
+			matches.push({
+				fifa_id: String(m.IdMatch),
+				home_team: m.Home?.TeamName?.[0]?.Description ?? m.Home?.ShortClubName ?? '',
+				away_team: m.Away?.TeamName?.[0]?.Description ?? m.Away?.ShortClubName ?? '',
+				home_score: homeScore,
+				away_score: awayScore,
+				status: m.MatchStatus === 0 ? 'finished' : 'live',
+				phase: mapFifaStageToPhase(String(m.IdStage)),
+				kickoff_time: m.Date ? new Date(m.Date) : null,
+				winner_side,
+			});
+		}
 
-    return matches;
-  } catch (e) {
-    console.error('[live-scores] FIFA API fetch error:', e);
-    return [];
-  }
+		return matches;
+	} catch (e) {
+		console.error('[live-scores] FIFA API fetch error:', e);
+		return [];
+	}
 }
 
 /** Build a normalized-name → team_id resolver from teams + team_aliases. */
@@ -305,10 +321,12 @@ export function mapRoundToPhase(round: string): string {
   return 'group';
 }
 
-// §4.7 — FIFA World Cup 2026 numeric stage IDs (STUBS — verify before kickoff).
+// §4.7 — FIFA World Cup 2026 stage IDs, read live from the real calendar
+// (idSeason=285023) on 2026-06-11: First Stage / Round of 32 / Round of 16 /
+// Quarter-final / Semi-final / Play-off for third place / Final.
 const FIFA_STAGE_MAP: Record<string, string> = {
-	'285063': 'group', '285064': 'r32', '285065': 'r16', '285066': 'qf',
-	'285067': 'sf', '285068': '3rd', '285069': 'final',
+	'289273': 'group', '289287': 'r32', '289288': 'r16', '289289': 'qf',
+	'289290': 'sf', '289291': '3rd', '289292': 'final',
 };
 
 function mapFifaStageToPhase(stageId: string): string {

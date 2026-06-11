@@ -45,7 +45,9 @@ export function startSyncScheduler(): void {
   if (timer) return;
   const minutes = Number(process.env.AUTO_SYNC_MINUTES) || 0;
   if (minutes <= 0) return;
-  if (!process.env.API_FOOTBALL_KEY && !process.env.ENABLE_FIFA_FALLBACK) {
+  // The keyless FIFA source is the default fallback, so a provider is always
+  // available unless it was explicitly disabled without an API key.
+  if (!process.env.API_FOOTBALL_KEY && process.env.DISABLE_FIFA_FALLBACK) {
     console.warn('[scheduler] AUTO_SYNC_MINUTES set but no provider — auto-sync disabled.');
     return;
   }
