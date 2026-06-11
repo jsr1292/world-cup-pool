@@ -75,6 +75,14 @@ export async function fetchFromApiFootball(
     }
 
     const data = await res.json();
+
+    // API-Football reports problems INSIDE an HTTP 200 (e.g. the free plan
+    // refuses season 2026: "Free plans do not have access to this season").
+    // Surface them — silently returning [] made a useless key look configured.
+    if (data.errors && Object.keys(data.errors).length > 0) {
+      console.warn('[live-scores] API-Football returned errors:', JSON.stringify(data.errors), '— falling back to the FIFA source.');
+    }
+
     const matches: LiveMatch[] = [];
 
     for (const fixture of (data.response || [])) {
