@@ -3,3 +3,4 @@ data/
 .svelte-kit/
 build/
 .env
+backups/

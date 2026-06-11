@@ -16,7 +16,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     const parsed = await parseJsonBody(request);
     if (!parsed.ok) return parsed.response;
     const { label = 'manual' } = parsed.body as { label?: string };
-    const backup = createBackup(label);
+    const backup = await createBackup(label);
     return json({ ok: true, ...backup });
   } catch (e) {
     const code = errCode();
