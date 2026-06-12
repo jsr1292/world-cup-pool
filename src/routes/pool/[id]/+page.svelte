@@ -77,6 +77,30 @@
   const curSymbol = ({ EUR: '€', USD: '$', GBP: '£' } as Record<string, string>)[pool.currency] ?? '';
   const fmtMoney = (n: number) => curSymbol ? `${n.toFixed(2)}${curSymbol}` : `${n.toFixed(2)} ${pool.currency || ''}`.trim();
 
+  // Prize per leaderboard entry — "combined positions" rule: entries level on
+  // points share the SUMMED prizes for every finishing position they occupy,
+  // split equally. So 5 tied for 1st occupy places 1–5 and share the 1st+2nd+3rd
+  // prizes between them (no separate 2nd/3rd); 2 tied for 1st share 1st+2nd, then
+  // a sole 3rd still gets the 3rd prize. Leaderboard arrives sorted by score DESC.
+  const leaderboardPrizes = $derived.by(() => {
+    const lb = (data.leaderboard ?? []) as any[];
+    const out: number[] = new Array(lb.length).fill(0);
+    if (pot <= 0) return out;
+    const pcts = PRIZE_SPLITS.map((s) => s.pct); // 0-based finishing position → share
+    let i = 0;
+    while (i < lb.length) {
+      let j = i;
+      while (j < lb.length && lb[j].total_score === lb[i].total_score) j++;
+      let sumPct = 0;
+      for (let p = i; p < j; p++) sumPct += pcts[p] ?? 0; // positions beyond 3rd add 0
+      const share = (pot * sumPct) / (j - i);
+      for (let p = i; p < j; p++) out[p] = share;
+      i = j;
+    }
+    return out;
+  });
+  const anyPrize = $derived(leaderboardPrizes.some((p) => p > 0));
+
   $effect(() => {
     headerTitle.set({ text: pool.name, emoji: pool.emoji || '🏆', showBack: false, poolName: pool.name, poolEmoji: pool.emoji || '🏆' });
     return () => { headerTitle.set({ text: 'Mundial 2026', emoji: '🏆', showBack: false, poolName: null, poolEmoji: null }); };
@@ -386,6 +410,19 @@
       {@const prevEntry = myIndex > 0 ? data.leaderboard[myIndex - 1] : null}
       {@const nextEntry = myIndex < data.leaderboard.length - 1 ? data.leaderboard[myIndex + 1] : null}
 
+      <!-- Prize pot banner -->
+      {#if anyPrize}
+        <div style="margin-bottom: 12px; padding: 10px 14px; background: rgba(0,229,160,0.06); border: 1px solid rgba(0,229,160,0.25); border-radius: 10px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <span style="font-size: 11px; color: var(--text-muted);">🏆 Bote</span>
+            <strong style="font-size: 14px; color: var(--green);">{fmtMoney(pot)}</strong>
+          </div>
+          <p style="font-size: 9px; color: var(--text-dim); margin: 4px 0 0; line-height: 1.4;">
+            Repartido {PRIZE_SPLITS.map((s) => `${(s.pct * 100).toFixed(0)}%`).join(' / ')} entre los 3 primeros. Los empates se reparten a partes iguales el premio de los puestos que ocupan. {paidCount}/{memberCount} han pagado.
+          </p>
+        </div>
+      {/if}
+
       <!-- Your position card -->
       {#if myEntry && data.leaderboard.length > 5}
         <div style="background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.25); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; cursor: pointer;" onclick={() => document.getElementById('my-row')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>
@@ -441,6 +478,7 @@
             <div style="text-align: right;">
               <div style="font-size: 18px; font-weight: 700; color: var(--gold);">{entry.total_score}</div>
               <div style="font-size: 9px; color: var(--text-muted);">pts</div>
+              {#if leaderboardPrizes[i] > 0}<div style="font-size: 10px; font-weight: 700; color: var(--green); margin-top: 3px;">💰 {fmtMoney(leaderboardPrizes[i])}</div>{/if}
             </div>
             {#if betsLocked}<span style="font-size: 14px; color: var(--text-dim); margin-left: 2px;">›</span>{/if}
           </svelte:element>
