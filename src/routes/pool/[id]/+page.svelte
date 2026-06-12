@@ -471,13 +471,14 @@
         </div>
       {/if}
 
-      <!-- Stats + share buttons -->
-      <div style="display: flex; justify-content: {betsLocked ? 'space-between' : 'flex-end'}; align-items: center; margin-bottom: 4px;">
+      <!-- Stats / compare / share buttons -->
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; margin-bottom: 4px;">
         {#if betsLocked}
-          <a href="/pool/{pool.id}/stats" style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: var(--text-muted); cursor: pointer; text-decoration: none;">📊 Estadísticas del grupo</a>
+          <a href="/pool/{pool.id}/stats" style="border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: var(--text-muted); text-decoration: none; margin-right: auto;">📊 Estadísticas</a>
+          <a href="/pool/{pool.id}/h2h" style="border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: var(--text-muted); text-decoration: none;">⚔️ Comparar</a>
         {/if}
         <button onclick={() => { shareScoreboard(); haptic(10); }} style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: {shared ? 'var(--green)' : 'var(--text-muted)'}; cursor: pointer;">
-          {shared ? '✓ Enlace copiado' : '🔗 Compartir clasificación'}
+          {shared ? '✓ Enlace copiado' : '🔗 Compartir'}
         </button>
       </div>
 

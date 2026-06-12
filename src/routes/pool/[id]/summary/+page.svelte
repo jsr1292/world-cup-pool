@@ -71,6 +71,7 @@
       <div style="flex: 1; min-width: 0;">
         <div style="font-size: 12px; font-weight: 600; color: var(--gold);">Apuestas de {data.viewing.owner}{#if data.viewing.label} · {data.viewing.label}{/if}</div>
         <a href="/pool/{data.pool.id}" style="font-size: 9px; color: var(--text-muted);">← Volver a la clasificación</a>
+        · <a href="/pool/{data.pool.id}/h2h?b={selectedEntry}" style="font-size: 9px; color: var(--gold);">⚔️ Comparar con las mías</a>
       </div>
       {#if data.entries[0]}<span style="font-size: 14px; font-weight: 600; color: var(--gold);">{data.entries[0].total_score} pts</span>{/if}
     </div>
