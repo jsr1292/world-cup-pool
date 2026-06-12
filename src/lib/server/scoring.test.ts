@@ -456,7 +456,9 @@ describe('calculateAllScores', () => {
 		clientQuery
 			.mockResolvedValueOnce({ rows: [] }) // BEGIN
 			.mockResolvedValueOnce({ rows: [{ pg_advisory_xact_lock: '' }] }) // #5 blocking lock
-			.mockResolvedValueOnce({ rowCount: 0 }) // daily-standings snapshot (#5)
+			.mockResolvedValueOnce({ rows: [] }) // SAVEPOINT snap
+			.mockResolvedValueOnce({ rowCount: 0 }) // daily-standings INSERT (#5)
+			.mockResolvedValueOnce({ rows: [] }) // RELEASE SAVEPOINT snap
 			.mockResolvedValueOnce({ rowCount: 0 }) // group reset
 			.mockResolvedValueOnce({ rows: [] })    // group matches (empty)
 			.mockResolvedValueOnce({ rowCount: 0 }) // bracket reset
@@ -486,7 +488,9 @@ describe('calculateAllScores', () => {
 		clientQuery
 			.mockResolvedValueOnce({ rows: [] }) // BEGIN
 			.mockResolvedValueOnce({ rows: [{ pg_advisory_xact_lock: '' }] }) // lock
-			.mockResolvedValueOnce({ rowCount: 0 }) // daily-standings snapshot (#5)
+			.mockResolvedValueOnce({ rows: [] }) // SAVEPOINT snap
+			.mockResolvedValueOnce({ rowCount: 0 }) // daily-standings INSERT (#5)
+			.mockResolvedValueOnce({ rows: [] }) // RELEASE SAVEPOINT snap
 			.mockRejectedValueOnce(new Error('DB connection lost')); // group reset → throws
 
 		await expect(calculateAllScores(1)).rejects.toThrow('DB connection lost');
@@ -506,7 +510,9 @@ describe('calculateAllScores', () => {
 		clientQuery
 			.mockResolvedValueOnce({ rows: [] }) // BEGIN
 			.mockResolvedValueOnce({ rows: [{ pg_advisory_xact_lock: '' }] }) // lock
-			.mockResolvedValueOnce({ rowCount: 0 }) // daily-standings snapshot (#5)
+			.mockResolvedValueOnce({ rows: [] }) // SAVEPOINT snap
+			.mockResolvedValueOnce({ rowCount: 0 }) // daily-standings INSERT (#5)
+			.mockResolvedValueOnce({ rows: [] }) // RELEASE SAVEPOINT snap
 			.mockResolvedValueOnce({ rowCount: 0 }) // group reset
 			.mockResolvedValueOnce({ rows: [] })    // group matches (empty)
 			.mockResolvedValueOnce({ rowCount: 0 }) // bracket reset

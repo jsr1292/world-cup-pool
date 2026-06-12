@@ -383,13 +383,23 @@ export async function calculateAllScores(poolId: number): Promise<void> {
     // recompute applies any new results), once per calendar day. Comparing this
     // snapshot to the live standings later shows who climbed/fell that day. The
     // ON CONFLICT no-op means only the first rescore of the day writes it.
-    await client.query(`
-      INSERT INTO daily_standings (pool_id, prediction_id, snap_date, total_score, rank)
-      SELECT pool_id, id, CURRENT_DATE, total_score,
-        DENSE_RANK() OVER (ORDER BY total_score DESC)
-      FROM predictions WHERE pool_id = $1
-      ON CONFLICT (pool_id, prediction_id, snap_date) DO NOTHING
-    `, [poolId]);
+    //
+    // Guarded by a SAVEPOINT so that if the daily_standings table doesn't exist
+    // yet (new code deployed before its migration ran), the snapshot is skipped
+    // WITHOUT aborting the whole rescore — scoring must never depend on movers.
+    await client.query('SAVEPOINT snap');
+    try {
+      await client.query(`
+        INSERT INTO daily_standings (pool_id, prediction_id, snap_date, total_score, rank)
+        SELECT pool_id, id, CURRENT_DATE, total_score,
+          DENSE_RANK() OVER (ORDER BY total_score DESC)
+        FROM predictions WHERE pool_id = $1
+        ON CONFLICT (pool_id, prediction_id, snap_date) DO NOTHING
+      `, [poolId]);
+      await client.query('RELEASE SAVEPOINT snap');
+    } catch {
+      await client.query('ROLLBACK TO SAVEPOINT snap');
+    }
 
     await calculateGroupScores(poolId, rules, client);
     await calculateBracketScores(poolId, rules, client);

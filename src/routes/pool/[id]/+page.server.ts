@@ -34,14 +34,17 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
   // Matchday movers: the most-recent daily snapshot's rank per entry, so the
   // leaderboard can show ▲/▼ change since the last scored day. Empty until the
-  // first result of a day is scored.
-  const { rows: snapRows } = await query(
-    `SELECT prediction_id, rank FROM daily_standings
-     WHERE pool_id = $1 AND snap_date = (SELECT MAX(snap_date) FROM daily_standings WHERE pool_id = $1)`,
-    [poolId]
-  );
+  // first result of a day is scored. Tolerant of the table not existing yet
+  // (new code deployed before its migration ran) — just no movers in that case.
   const prevRank: Record<number, number> = {};
-  for (const r of snapRows) prevRank[Number(r.prediction_id)] = Number(r.rank);
+  try {
+    const { rows: snapRows } = await query(
+      `SELECT prediction_id, rank FROM daily_standings
+       WHERE pool_id = $1 AND snap_date = (SELECT MAX(snap_date) FROM daily_standings WHERE pool_id = $1)`,
+      [poolId]
+    );
+    for (const r of snapRows) prevRank[Number(r.prediction_id)] = Number(r.rank);
+  } catch { /* daily_standings not migrated yet — show no movers */ }
   // Merge defaults so the "Puntuación" tab always shows every rule with its
   // effective value (incl. newer ones like goal_difference) even on pools whose
   // saved config predates them.
