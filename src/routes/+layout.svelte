@@ -6,6 +6,7 @@
   import { toast } from '$lib/toast.js';
   import { logout } from '$lib/logout.js';
   import { WORLD_CUP_KICKOFF_MS, WORLD_CUP_DURATION_MS } from '$lib/constants.js';
+  import LiveTicker from '$lib/LiveTicker.svelte';
 
   let { children, data } = $props();
 
@@ -270,6 +271,7 @@
 
   <!-- Main Content -->
   <main class="main-content" class:full-bleed={!data?.user}>
+    {#if data?.user}<LiveTicker />{/if}
     {@render children()}
   </main>
 

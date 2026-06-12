@@ -22,6 +22,59 @@
 import { query } from './db.js';
 import { normalizeTeamName } from './team-normalize.js';
 import { KNOCKOUT_OFFICIAL } from './seed-matches.js';
+import { getTeamsMapCached } from './cache.js';
+
+export interface TickerMatch {
+  home: string; home_flag: string; home_score: number;
+  away: string; away_flag: string; away_score: number;
+  minute: string;
+}
+
+/**
+ * Lightweight fetch of just the IN-PLAY matches (with current score + minute),
+ * for the live ticker. One FIFA request returns every live game; the /api/live
+ * route caches the result so the upstream API is hit at most once per cache
+ * window regardless of how many people are watching.
+ */
+export async function fetchLiveTicker(): Promise<TickerMatch[]> {
+  if (process.env.DISABLE_FIFA_FALLBACK) return [];
+  const competition = process.env.FIFA_COMPETITION_ID || '17';
+  const season = process.env.FIFA_SEASON_ID || '285023';
+  try {
+    const res = await fetch(
+      `${FIFA_BASE}/calendar/matches?idCompetition=${competition}&idSeason=${season}&count=500&language=en`,
+      { headers: { Accept: 'application/json' } }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    const live = (data?.Results ?? []).filter((m: any) => m.MatchStatus === 3);
+    if (live.length === 0) return [];
+
+    const { rows } = await query(
+      `SELECT id, name AS canon FROM teams UNION ALL SELECT team_id AS id, alias_normalized AS canon FROM team_aliases`
+    );
+    const resolver = new Map<string, number>();
+    for (const r of rows) resolver.set(normalizeTeamName(r.canon), r.id);
+    const teams = await getTeamsMapCached();
+    const side = (t: any): { name: string; flag: string } => {
+      const fifaName = t?.TeamName?.[0]?.Description ?? t?.ShortClubName ?? '';
+      const id = resolver.get(normalizeTeamName(fifaName));
+      const ours = id != null ? (teams as Record<number, any>)[id] : null;
+      return { name: ours?.name ?? fifaName, flag: ours?.flag_code ?? '' };
+    };
+    return live.map((m: any): TickerMatch => {
+      const h = side(m.Home), a = side(m.Away);
+      return {
+        home: h.name, home_flag: h.flag, home_score: m.Home?.Score ?? m.HomeTeamScore ?? 0,
+        away: a.name, away_flag: a.flag, away_score: m.Away?.Score ?? m.AwayTeamScore ?? 0,
+        minute: typeof m.MatchTime === 'string' ? m.MatchTime : '',
+      };
+    });
+  } catch (e) {
+    console.error('[live-scores] live-ticker fetch error:', e);
+    return [];
+  }
+}
 
 // official FIFA match number → which of our knockout placeholder slots it is
 // (phase + 0-based index in sort_order order). Lets the sync drop a real knockout
