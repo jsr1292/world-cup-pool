@@ -5,14 +5,15 @@
  * our `matches` table, including:
  *   - group results (preserving our home/away orientation so users' match-score
  *     predictions still resolve correctly),
- *   - knockout matchups (auto-assigning the two teams to a free placeholder
- *     slot of the right phase, since knockout teams aren't known until the
- *     bracket fills),
+ *   - knockout matchups (placing each match into the slot of its official FIFA
+ *     match number — both upcoming matchups once the draw is set, and results
+ *     once played — so the schedule shows who plays whom on the right day),
  *   - penalty-shootout winners for knockout matches level after extra time.
  *
  * Providers:
  *   1. API-Football (api-sports.io) — set API_FOOTBALL_KEY. Free tier 100 req/day.
- *   2. FIFA public API — set ENABLE_FIFA_FALLBACK=1 (stub stage IDs, verify first).
+ *   2. FIFA public API (keyless) — the default fallback; opt out with
+ *      DISABLE_FIFA_FALLBACK=1.
  *
  * Idempotent: a match is "owned" by the sync once its fifa_id is stored; re-syncs
  * update by fifa_id and no-op when nothing changed, so polling is cheap.
@@ -20,6 +21,44 @@
 
 import { query } from './db.js';
 import { normalizeTeamName } from './team-normalize.js';
+import { KNOCKOUT_OFFICIAL } from './seed-matches.js';
+
+// official FIFA match number → which of our knockout placeholder slots it is
+// (phase + 0-based index in sort_order order). Lets the sync drop a real knockout
+// match into the date-correct slot instead of the first free one.
+const OFFICIAL_TO_SLOT = new Map<number, { phase: string; index: number }>();
+for (const { phase, officials } of KNOCKOUT_OFFICIAL) {
+  officials.forEach((n, i) => OFFICIAL_TO_SLOT.set(n, { phase, index: i }));
+}
+async function knockoutSlotByOfficial(official: number | null): Promise<any | null> {
+  if (official == null) return null;
+  const loc = OFFICIAL_TO_SLOT.get(official);
+  if (!loc) return null;
+  const { rows } = await query(
+    `SELECT * FROM matches WHERE phase = $1 ORDER BY sort_order OFFSET $2 LIMIT 1`,
+    [loc.phase, loc.index]
+  );
+  return rows[0] ?? null;
+}
+
+// Set an upcoming/live knockout MATCHUP (teams + kickoff) onto its official slot
+// without a result, so the Calendario/Resultados show who's playing before it's
+// decided. Returns 'unmatched' while the teams are still placeholders (pre-draw).
+async function assignKnockoutMatchup(m: LiveMatch, resolver: Map<string, number>): Promise<IngestOutcome> {
+  const homeId = resolver.get(normalizeTeamName(m.home_team));
+  const awayId = resolver.get(normalizeTeamName(m.away_team));
+  if (!homeId || !awayId || homeId === awayId) return 'unmatched';
+  const dbm = await knockoutSlotByOfficial(m.official);
+  if (!dbm || dbm.status === 'finished') return 'unchanged';
+  if (dbm.home_team_id === homeId && dbm.away_team_id === awayId && dbm.fifa_id === m.fifa_id) return 'unchanged';
+  await query(
+    `UPDATE matches SET home_team_id = $1, away_team_id = $2,
+       kickoff_time = COALESCE($3, kickoff_time), fifa_id = $4
+     WHERE id = $5 AND status <> 'finished'`,
+    [homeId, awayId, m.kickoff_time, m.fifa_id, dbm.id]
+  );
+  return 'updated';
+}
 
 const _provider = process.env.API_FOOTBALL_KEY
 	? 'api-football'
@@ -42,6 +81,9 @@ export interface LiveMatch {
   kickoff_time: Date | null;
   /** For knockouts level after ET: which side won (penalties). null otherwise. */
   winner_side: 'home' | 'away' | null;
+  /** Official FIFA match number (1–104). Used to place a knockout match into the
+   *  correct placeholder slot. null for providers that don't expose it. */
+  official: number | null;
 }
 
 export interface SyncResult {
@@ -103,6 +145,7 @@ export async function fetchFromApiFootball(
         phase: mapRoundToPhase(fixture.fixture.round),
         kickoff_time: fixture.fixture.date ? new Date(fixture.fixture.date) : null,
         winner_side: hw ? 'home' : aw ? 'away' : null,
+        official: null,
       });
     }
 
@@ -152,11 +195,17 @@ export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
 		const matches: LiveMatch[] = [];
 
 		for (const m of data.Results) {
+			// MatchStatus: 0 = finished, 3 = live/in-play, anything else = scheduled.
+			const status: 'finished' | 'live' | 'scheduled' =
+				m.MatchStatus === 0 ? 'finished' : m.MatchStatus === 3 ? 'live' : 'scheduled';
 			const homeScore = m.Home?.Score ?? m.HomeTeamScore;
 			const awayScore = m.Away?.Score ?? m.AwayTeamScore;
-			if (homeScore == null || awayScore == null) continue;
+			// Finished/live matches must carry scores (skip lagged/abandoned data);
+			// scheduled matches legitimately have none — we still want them so an
+			// upcoming knockout MATCHUP (teams known, not yet played) can be shown.
+			if (status !== 'scheduled' && (homeScore == null || awayScore == null)) continue;
 			let winner_side: 'home' | 'away' | null = null;
-			if (homeScore === awayScore) {
+			if (homeScore != null && homeScore === awayScore) {
 				const hp = m.HomeTeamPenaltyScore, ap = m.AwayTeamPenaltyScore;
 				if (hp != null && ap != null && hp !== ap) {
 					winner_side = hp > ap ? 'home' : 'away';
@@ -169,12 +218,13 @@ export async function fetchFromFifaApi(): Promise<LiveMatch[]> {
 				fifa_id: String(m.IdMatch),
 				home_team: m.Home?.TeamName?.[0]?.Description ?? m.Home?.ShortClubName ?? '',
 				away_team: m.Away?.TeamName?.[0]?.Description ?? m.Away?.ShortClubName ?? '',
-				home_score: homeScore,
-				away_score: awayScore,
-				status: m.MatchStatus === 0 ? 'finished' : 'live',
+				home_score: homeScore ?? 0,
+				away_score: awayScore ?? 0,
+				status,
 				phase: mapFifaStageToPhase(String(m.IdStage)),
 				kickoff_time: m.Date ? new Date(m.Date) : null,
 				winner_side,
+				official: m.MatchNumber != null ? Number(m.MatchNumber) : null,
 			});
 		}
 
@@ -219,15 +269,21 @@ async function ingestMatch(m: LiveMatch, resolver: Map<string, number>): Promise
         [homeId, awayId]
       )).rows[0] ?? null;
     } else {
-      // Knockout: maybe a prior run already placed this exact pairing…
-      dbm = (await query(
-        `SELECT * FROM matches WHERE phase = $1
-           AND ((home_team_id = $2 AND away_team_id = $3) OR (home_team_id = $3 AND away_team_id = $2))
-         LIMIT 1`,
-        [m.phase, homeId, awayId]
-      )).rows[0] ?? null;
-      // …otherwise claim a free placeholder slot of this phase. (Slot identity
-      // doesn't affect scoring, which keys on per-phase team membership.)
+      // Knockout: prefer the slot matching the official FIFA match number, so the
+      // match lands in its date-correct slot (the Calendario shows it on the right
+      // day). Scoring keys on per-phase team membership, so slot identity never
+      // affects points either way.
+      if (m.official != null) dbm = await knockoutSlotByOfficial(m.official);
+      // …else maybe a prior run already placed this exact pairing…
+      if (!dbm) {
+        dbm = (await query(
+          `SELECT * FROM matches WHERE phase = $1
+             AND ((home_team_id = $2 AND away_team_id = $3) OR (home_team_id = $3 AND away_team_id = $2))
+           LIMIT 1`,
+          [m.phase, homeId, awayId]
+        )).rows[0] ?? null;
+      }
+      // …otherwise claim a free placeholder slot of this phase.
       if (!dbm) {
         dbm = (await query(
           `SELECT * FROM matches WHERE phase = $1
@@ -293,19 +349,29 @@ export async function syncScores(): Promise<SyncResult> {
   const resolver = await buildTeamResolver();
 
   for (const m of matches) {
-    if (m.status !== 'finished') { result.skipped++; continue; }
     // §2.5 — Refuse imports with an unmapped phase; an 'unknown' phase would
     // slip past phase-filtered scoring queries.
     if (m.phase === 'unknown') { result.skipped++; continue; }
     try {
-      const outcome = await ingestMatch(m, resolver);
-      if (outcome === 'updated') result.updated++;
-      else if (outcome === 'unmatched') {
-        result.skipped++;
-        result.unmatched.push(`${m.home_team} vs ${m.away_team}`);
-        console.warn(`[live-scores] Unresolved fixture: "${m.home_team}" vs "${m.away_team}" (${m.phase}) — add a team alias.`);
+      if (m.status === 'finished') {
+        const outcome = await ingestMatch(m, resolver);
+        if (outcome === 'updated') result.updated++;
+        else if (outcome === 'unmatched') {
+          result.skipped++;
+          result.unmatched.push(`${m.home_team} vs ${m.away_team}`);
+          console.warn(`[live-scores] Unresolved fixture: "${m.home_team}" vs "${m.away_team}" (${m.phase}) — add a team alias.`);
+        } else {
+          result.skipped++; // unchanged
+        }
+      } else if (m.phase !== 'group' && m.official != null) {
+        // Upcoming/live knockout: set the matchup so the schedule shows who's
+        // playing. 'unmatched' just means the teams aren't drawn yet (pre-draw),
+        // which is expected — don't add it to the warned list.
+        const outcome = await assignKnockoutMatchup(m, resolver);
+        if (outcome === 'updated') result.updated++;
+        else result.skipped++;
       } else {
-        result.skipped++; // unchanged
+        result.skipped++; // scheduled group match (already seeded) or live group
       }
     } catch (e) {
       console.error(`[live-scores] Error ingesting fixture ${m.fifa_id}:`, e);
