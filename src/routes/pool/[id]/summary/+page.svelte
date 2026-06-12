@@ -63,13 +63,24 @@
 <div style="max-width: 500px; margin: 0 auto;">
   <a href="/pool/{data.pool.id}" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 16px; position: sticky; top: 0; background: var(--bg-base); padding: 8px 0; z-index: 5;">← {data.pool.name}</a>
 
-  <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold); margin-bottom: 4px;">📋 Resumen de Predicciones</h1>
+  <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold); margin-bottom: 4px;">📋 {data.viewing ? 'Predicciones' : 'Resumen de Predicciones'}</h1>
+
+  {#if data.viewing}
+    <div style="display: flex; gap: 10px; align-items: center; margin: 12px 0 16px; padding: 10px 12px; background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.3); border-radius: 8px;">
+      <span style="font-size: 16px;">👁️</span>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 12px; font-weight: 600; color: var(--gold);">Apuestas de {data.viewing.owner}{#if data.viewing.label} · {data.viewing.label}{/if}</div>
+        <a href="/pool/{data.pool.id}" style="font-size: 9px; color: var(--text-muted);">← Volver a la clasificación</a>
+      </div>
+      {#if data.entries[0]}<span style="font-size: 14px; font-weight: 600; color: var(--gold);">{data.entries[0].total_score} pts</span>{/if}
+    </div>
+  {/if}
 
   {#if data.entries.length === 0}
     <p style="font-size: 11px; color: var(--text-muted); margin-top: 16px;">No tienes predicciones aún. <a href="/pool/{data.pool.id}/predict" style="color: var(--gold);">Predecir ahora</a></p>
   {:else}
-    <!-- Entry selector -->
-    {#if data.entries.length > 1}
+    <!-- Entry selector (own entries only) -->
+    {#if !data.viewing && data.entries.length > 1}
       <div style="margin: 12px 0 20px;">
         <select bind:value={selectedEntry} style="font-size: 11px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; color: var(--text);">
           {#each data.entries as pred}
@@ -80,13 +91,13 @@
     {/if}
 
     {@const entry = getEntry()}
-    {#if entry}
+    {#if entry && !data.viewing}
       <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">
         {entryLabel(entry)} · {data.pool.name}
       </div>
     {/if}
 
-    {#if data.emailEnabled}
+    {#if data.emailEnabled && !data.viewing}
       <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
         <button onclick={emailMyPicks} disabled={emailing} class="btn-ghost" style="font-size: 10px; padding: 6px 12px;">
           {emailing ? 'Enviando…' : '📧 Recibir por email'}

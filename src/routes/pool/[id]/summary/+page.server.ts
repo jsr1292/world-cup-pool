@@ -5,7 +5,7 @@ import { isEmailConfigured } from '$lib/server/email.js';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, url }) => {
   if (!locals.user) throw error(401, 'Inicia sesión');
 
   const poolId = Number(params.id);
@@ -39,7 +39,33 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     deadline_knockout: pool.deadline_knockout,
   };
 
-  const entries = await getUserPredictions(poolId, locals.user.id) as any[];
+  // §6 — View another member's bets once the pool is FULLY locked (both
+  // deadlines passed). Until then bets stay private. Gated to entries in THIS
+  // pool (no cross-pool IDOR).
+  const dg = pool.deadline_group ? new Date(pool.deadline_group) : null;
+  const dk = pool.deadline_knockout ? new Date(pool.deadline_knockout) : null;
+  const betsLocked = !!dg && dg <= new Date() && !!dk && dk <= new Date();
+  const viewRaw = url.searchParams.get('view');
+  const viewId = viewRaw && /^\d+$/.test(viewRaw) ? Number(viewRaw) : null;
+
+  let viewing: { owner: string; label: string | null } | null = null;
+  let entries: any[];
+  if (betsLocked && viewId) {
+    const { rows: vrows } = await query(
+      `SELECT p.id, p.label, p.total_score, u.display_name
+       FROM predictions p JOIN users u ON u.id = p.user_id
+       WHERE p.id = $1 AND p.pool_id = $2`,
+      [viewId, poolId]
+    );
+    if (vrows.length > 0) {
+      entries = [{ id: Number(vrows[0].id), label: vrows[0].label, total_score: vrows[0].total_score }];
+      viewing = { owner: vrows[0].display_name, label: vrows[0].label || null };
+    } else {
+      entries = await getUserPredictions(poolId, locals.user.id) as any[];
+    }
+  } else {
+    entries = await getUserPredictions(poolId, locals.user.id) as any[];
+  }
 
   // H-04: Bulk-fetch teams and predictions (no N+1 loop)
   const teams = await getTeamsMapCached();
@@ -80,5 +106,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   return {
     pool: safePool, entries, groupPreds, bracketPreds, teams,
     emailEnabled: isEmailConfigured() && !!locals.user.email,
+    viewing,
   };
 };
