@@ -259,11 +259,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     `, [predictions[0].id]);
     userBracketPredsFull = ubpRows;
 
-    // Group-stage match-outcome points (1/X/2). The Resultados tab's total was
-    // missing these — they're the bulk of early-tournament points — so it read
-    // 0 while the Clasificación (total_score) correctly included them.
+    // Group-stage match predictions (the picked 1/X/2 scoreline + points). The
+    // Resultados tab's total was missing these points; the Calendario tab also
+    // uses the picked scoreline to show each fixture's predicted outcome.
     const { rows: umpRows } = await query(`
-      SELECT match_id, points_earned
+      SELECT match_id, home_score as pred_home, away_score as pred_away, points_earned
       FROM match_predictions WHERE prediction_id = $1
     `, [predictions[0].id]);
     userMatchPredsFull = umpRows;

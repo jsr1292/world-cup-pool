@@ -4,7 +4,7 @@
   import { flagEmoji, shortName } from '$lib/teams.js';
   let { data } = $props();
   let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
-  const tabIndexOrder = ['predictions', 'leaderboard', 'members', 'summary', 'results', 'scoring'];
+  const tabIndexOrder = ['predictions', 'leaderboard', 'calendar', 'members', 'summary', 'results', 'scoring'];
   let slideDir = $state<'left' | 'right' | ''>('');
   function switchTab(newTab: string) {
     if (newTab === tab) return; // already here — don't replay the slide (the "wiggle")
@@ -133,9 +133,62 @@
     return (data.resultsPhases[phase] || []).length;
   }
 
+  // ── Calendario: every fixture in kickoff order, with the user's pick + result ──
+  const userMatchByMatch = $derived.by(() => {
+    const m: Record<number, any> = {};
+    for (const mp of (data.userMatchPredsFull || [])) m[mp.match_id] = mp;
+    return m;
+  });
+  const userBracketByPhase = $derived.by(() => {
+    const m: Record<string, Set<number>> = {};
+    for (const bp of (data.userBracketPredsFull || [])) {
+      if (bp.team_id == null) continue;
+      (m[bp.phase] ??= new Set()).add(bp.team_id);
+    }
+    return m;
+  });
+  const outcomeOf = (h: number, a: number) => (h > a ? '1' : h < a ? '2' : 'X');
+  // Returns { picked, correct } — correct is null when undecided or no pick.
+  function matchVerdict(mt: any): { picked: string | null; correct: boolean | null } {
+    const finished = mt.status === 'finished' && mt.home_score != null && mt.away_score != null;
+    if (mt.phase === 'group') {
+      const mp = userMatchByMatch[mt.id];
+      const picked = (mp && mp.pred_home != null && mp.pred_away != null) ? outcomeOf(mp.pred_home, mp.pred_away) : null;
+      if (!finished || picked == null) return { picked, correct: null };
+      return { picked, correct: picked === outcomeOf(mt.home_score, mt.away_score) };
+    }
+    // Knockout: did the user advance the actual winner in this phase?
+    if (!finished) return { picked: null, correct: null };
+    const winner = mt.home_score > mt.away_score ? mt.home_team_id
+      : mt.away_score > mt.home_score ? mt.away_team_id
+      : (mt.penalty_winner_id ?? null);
+    if (winner == null) return { picked: null, correct: null };
+    return { picked: null, correct: !!userBracketByPhase[mt.phase]?.has(winner) };
+  }
+  const fmtDay = (iso: string) => { try { return new Date(iso).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }); } catch { return ''; } };
+  const fmtTime = (iso: string) => { try { return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
+  const calendarByDay = $derived.by(() => {
+    const all: any[] = [];
+    for (const phase of Object.keys(data.resultsPhases || {})) for (const mt of data.resultsPhases[phase]) all.push(mt);
+    all.sort((a, b) => {
+      const ta = a.kickoff_time ? new Date(a.kickoff_time).getTime() : Infinity;
+      const tb = b.kickoff_time ? new Date(b.kickoff_time).getTime() : Infinity;
+      return ta - tb || (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    });
+    const groups: { day: string; label: string; matches: any[] }[] = [];
+    let cur: any = null;
+    for (const mt of all) {
+      const key = mt.kickoff_time ? new Date(mt.kickoff_time).toISOString().slice(0, 10) : 'tbd';
+      if (!cur || cur.day !== key) { cur = { day: key, label: mt.kickoff_time ? fmtDay(mt.kickoff_time) : 'Por confirmar', matches: [] }; groups.push(cur); }
+      cur.matches.push(mt);
+    }
+    return groups;
+  });
+
   const tabs = [
     { id: 'predictions', label: 'Pronósticos' },
     { id: 'leaderboard', label: 'Clasificación' },
+    { id: 'calendar', label: '📅 Calendario' },
     { id: 'members', label: 'Miembros' },
     { id: 'summary', label: '📋 Resumen' },
     { id: 'results', label: '🏆 Resultados' },
@@ -394,6 +447,71 @@
         {/each}
       </div>
     {/if}
+  {/if}
+
+  <!-- Calendario Tab -->
+  {#if tab === 'calendar'}
+    <div style="max-width: 600px; margin: 0 auto;">
+      <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5;">
+        Todos los partidos en orden. ✓ = acertaste el ganador (o el 1/X/2 en grupos), ✗ = fallaste.
+        {#if data.predictions.length === 0}<br><span style="color: var(--text-dim);">Haz tus pronósticos para ver tus aciertos.</span>{/if}
+      </p>
+      {#each calendarByDay as group}
+        <div style="margin-bottom: 18px;">
+          <div style="font-size: 10px; font-weight: 600; color: var(--gold); text-transform: capitalize; letter-spacing: 0.04em; margin-bottom: 8px; position: sticky; top: 40px; background: var(--bg-base); padding: 2px 0;">{group.label}</div>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            {#each group.matches as mt}
+              {@const finished = mt.status === 'finished' && mt.home_score != null}
+              {@const live = !finished && mt.status === 'live'}
+              {@const v = matchVerdict(mt)}
+              {@const homeWin = finished && mt.home_score > mt.away_score}
+              {@const awayWin = finished && mt.away_score > mt.home_score}
+              <div style="display: flex; align-items: center; gap: 8px; background: var(--bg-card); border: 1px solid {v.correct === true ? 'rgba(0,229,160,0.3)' : v.correct === false ? 'rgba(255,77,106,0.25)' : 'var(--border)'}; border-radius: 7px; padding: 8px 10px;">
+                <!-- phase / time -->
+                <div style="width: 42px; flex-shrink: 0; text-align: center;">
+                  {#if mt.phase !== 'group'}
+                    <div style="font-size: 8px; color: var(--gold); text-transform: uppercase; line-height: 1.2;">{resultsPhaseLabels[mt.phase]?.slice(0, 8) || mt.phase}</div>
+                  {/if}
+                  <div style="font-size: 9px; color: var(--text-muted);">{mt.kickoff_time ? fmtTime(mt.kickoff_time) : '—'}</div>
+                </div>
+                <!-- teams -->
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+                  <div style="display: flex; align-items: center; gap: 5px; font-size: 12px; {homeWin ? 'font-weight: 700;' : finished ? 'color: var(--text-muted);' : ''}">
+                    <span>{@html mt.home_flag ? flagEmoji(mt.home_flag) : ''}</span>
+                    <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{mt.home_name ? shortName(mt.home_name) : 'Por definir'}</span>
+                    {#if finished}<span style="font-weight: 700; color: {homeWin ? 'var(--text)' : 'var(--text-muted)'};">{mt.home_score}</span>{/if}
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 5px; font-size: 12px; {awayWin ? 'font-weight: 700;' : finished ? 'color: var(--text-muted);' : ''}">
+                    <span>{@html mt.away_flag ? flagEmoji(mt.away_flag) : ''}</span>
+                    <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{mt.away_name ? shortName(mt.away_name) : 'Por definir'}</span>
+                    {#if finished}<span style="font-weight: 700; color: {awayWin ? 'var(--text)' : 'var(--text-muted)'};">{mt.away_score}</span>{/if}
+                  </div>
+                </div>
+                <!-- verdict / status -->
+                <div style="flex-shrink: 0; text-align: right; min-width: 46px;">
+                  {#if v.correct === true}
+                    <span style="font-size: 14px; color: var(--green);">✓</span>
+                  {:else if v.correct === false}
+                    <span style="font-size: 14px; color: var(--red);">✗</span>
+                  {:else if finished}
+                    <span style="font-size: 9px; color: var(--text-dim);">{mt.phase === 'group' && v.picked == null ? 'sin pronóstico' : 'final'}</span>
+                  {:else if live}
+                    <span style="font-size: 9px; color: var(--red); font-weight: 700;">● EN JUEGO</span>
+                  {:else if mt.phase === 'group' && v.picked}
+                    <span style="font-size: 9px; color: var(--text-muted);">Tu: <strong style="color: var(--gold);">{v.picked}</strong></span>
+                  {:else}
+                    <span style="font-size: 9px; color: var(--text-dim);">próximo</span>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/each}
+      {#if calendarByDay.length === 0}
+        <p style="font-size: 11px; color: var(--text-muted); padding: 12px; text-align: center;">El calendario aún no está disponible.</p>
+      {/if}
+    </div>
   {/if}
 
   <!-- Pronósticos Tab -->
