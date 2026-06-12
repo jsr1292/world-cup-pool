@@ -379,6 +379,18 @@ export async function calculateAllScores(poolId: number): Promise<void> {
     // Different pools use different keys and never block each other.
     await client.query('SELECT pg_advisory_xact_lock($1)', [poolId]);
 
+    // Matchday movers: snapshot the standings as they are NOW (i.e. before this
+    // recompute applies any new results), once per calendar day. Comparing this
+    // snapshot to the live standings later shows who climbed/fell that day. The
+    // ON CONFLICT no-op means only the first rescore of the day writes it.
+    await client.query(`
+      INSERT INTO daily_standings (pool_id, prediction_id, snap_date, total_score, rank)
+      SELECT pool_id, id, CURRENT_DATE, total_score,
+        DENSE_RANK() OVER (ORDER BY total_score DESC)
+      FROM predictions WHERE pool_id = $1
+      ON CONFLICT (pool_id, prediction_id, snap_date) DO NOTHING
+    `, [poolId]);
+
     await calculateGroupScores(poolId, rules, client);
     await calculateBracketScores(poolId, rules, client);
     await calculateMatchScores(poolId, rules, client);

@@ -61,6 +61,24 @@
     return ranks;
   });
 
+  // Matchday movers: change in rank since the last scored day's snapshot.
+  // Positive = climbed (rank number dropped); negative = fell. 0 if no snapshot.
+  const moverDeltas = $derived.by(() => {
+    const lb = (data.leaderboard ?? []) as any[];
+    const pr = (data.prevRank ?? {}) as Record<number, number>;
+    return lb.map((e, i) => { const p = pr[e.id]; return p == null ? 0 : p - leaderboardRanks[i]; });
+  });
+  const topClimber = $derived.by(() => {
+    let best = 0, bi = -1;
+    moverDeltas.forEach((d, i) => { if (d > best) { best = d; bi = i; } });
+    return bi >= 0 ? { entry: (data.leaderboard as any[])[bi], delta: best } : null;
+  });
+  const topFaller = $derived.by(() => {
+    let worst = 0, wi = -1;
+    moverDeltas.forEach((d, i) => { if (d < worst) { worst = d; wi = i; } });
+    return wi >= 0 ? { entry: (data.leaderboard as any[])[wi], delta: -worst } : null;
+  });
+
   // Fully locked = both deadlines passed → others' bets become viewable. Mirrors
   // the gate in results/+page.server.ts so a row only links when the target page
   // will actually honour the ?view=.
@@ -410,6 +428,26 @@
       {@const prevEntry = myIndex > 0 ? data.leaderboard[myIndex - 1] : null}
       {@const nextEntry = myIndex < data.leaderboard.length - 1 ? data.leaderboard[myIndex + 1] : null}
 
+      <!-- Matchday movers -->
+      {#if topClimber || topFaller}
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          {#if topClimber}
+            <div style="flex: 1; min-width: 0; background: rgba(0,229,160,0.06); border: 1px solid rgba(0,229,160,0.22); border-radius: 8px; padding: 8px 10px;">
+              <div style="font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em;">📈 Sube</div>
+              <div style="font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{topClimber.entry.display_name}</div>
+              <div style="font-size: 10px; color: var(--green); font-weight: 700;">▲ {topClimber.delta} {topClimber.delta === 1 ? 'puesto' : 'puestos'}</div>
+            </div>
+          {/if}
+          {#if topFaller}
+            <div style="flex: 1; min-width: 0; background: rgba(255,77,106,0.05); border: 1px solid rgba(255,77,106,0.2); border-radius: 8px; padding: 8px 10px;">
+              <div style="font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em;">📉 Baja</div>
+              <div style="font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{topFaller.entry.display_name}</div>
+              <div style="font-size: 10px; color: var(--red); font-weight: 700;">▼ {topFaller.delta} {topFaller.delta === 1 ? 'puesto' : 'puestos'}</div>
+            </div>
+          {/if}
+        </div>
+      {/if}
+
       <!-- Prize pot banner -->
       {#if anyPrize}
         <div style="margin-bottom: 12px; padding: 10px 14px; background: rgba(0,229,160,0.06); border: 1px solid rgba(0,229,160,0.25); border-radius: 10px;">
@@ -492,7 +530,7 @@
               {entry.display_name?.[0]?.toUpperCase() || '?'}
             </div>
             <div style="flex: 1; min-width: 0;">
-              <div style="font-size: 13px; font-weight: 600; {entry.user_id === data.userId ? 'color: var(--gold);' : ''}">{leaderboardRanks[i]}. {entry.display_name}{#if pool.allow_multiple_predictions}<span style="color: var(--text-muted); font-weight: 400;"> · {entry.label || 'Principal'}</span>{:else if entry.label}<span style="color: var(--text-muted); font-weight: 400;"> ({entry.label})</span>{/if}</div>
+              <div style="font-size: 13px; font-weight: 600; {entry.user_id === data.userId ? 'color: var(--gold);' : ''}">{leaderboardRanks[i]}.{#if moverDeltas[i] !== 0}<span style="font-size: 9px; font-weight: 700; color: {moverDeltas[i] > 0 ? 'var(--green)' : 'var(--red)'}; margin: 0 2px 0 3px;">{moverDeltas[i] > 0 ? '▲' : '▼'}{Math.abs(moverDeltas[i])}</span>{/if} {entry.display_name}{#if pool.allow_multiple_predictions}<span style="color: var(--text-muted); font-weight: 400;"> · {entry.label || 'Principal'}</span>{:else if entry.label}<span style="color: var(--text-muted); font-weight: 400;"> ({entry.label})</span>{/if}</div>
               <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">
                 {#if entry.group_correct > 0}
                   <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">Grupos: {entry.group_correct}</span>
