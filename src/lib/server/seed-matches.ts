@@ -185,6 +185,53 @@ export async function setGroupKickoffs(client: pg.PoolClient | pg.Client): Promi
 	return n;
 }
 
+// Each knockout placeholder slot, in sort_order order within its phase, mapped to
+// its official FIFA 2026 match number. (Mirrors R32_OFFICIAL_MATCH / the M-numbers
+// in bracket-2026.ts.) Used to stamp the real kickoff onto each slot — and, in the
+// live-score sync, to drop each real knockout match into the slot of its number.
+export const KNOCKOUT_OFFICIAL: { phase: string; officials: number[] }[] = [
+	{ phase: 'r32', officials: [74, 77, 73, 75, 83, 84, 81, 82, 76, 78, 79, 80, 86, 88, 85, 87] },
+	{ phase: 'r16', officials: [89, 90, 93, 94, 91, 92, 95, 96] },
+	{ phase: 'qf', officials: [97, 98, 99, 100] },
+	{ phase: 'sf', officials: [101, 102] },
+	{ phase: '3rd', officials: [103] },
+	{ phase: 'final', officials: [104] },
+];
+
+// Official knockout kick-off times (UTC), keyed by FIFA match number. Read from
+// the official calendar (idCompetition=17, idSeason=285023) on 2026-06-12.
+export const KNOCKOUT_KICKOFFS: Record<number, string> = {
+	73: '2026-06-28T19:00:00Z', 74: '2026-06-29T20:30:00Z', 75: '2026-06-30T01:00:00Z', 76: '2026-06-29T17:00:00Z',
+	77: '2026-06-30T21:00:00Z', 78: '2026-06-30T17:00:00Z', 79: '2026-07-01T01:00:00Z', 80: '2026-07-01T16:00:00Z',
+	81: '2026-07-02T00:00:00Z', 82: '2026-07-01T20:00:00Z', 83: '2026-07-02T23:00:00Z', 84: '2026-07-02T19:00:00Z',
+	85: '2026-07-03T03:00:00Z', 86: '2026-07-03T22:00:00Z', 87: '2026-07-04T01:30:00Z', 88: '2026-07-03T18:00:00Z',
+	89: '2026-07-04T21:00:00Z', 90: '2026-07-04T17:00:00Z', 91: '2026-07-05T20:00:00Z', 92: '2026-07-06T00:00:00Z',
+	93: '2026-07-06T19:00:00Z', 94: '2026-07-07T00:00:00Z', 95: '2026-07-07T16:00:00Z', 96: '2026-07-07T20:00:00Z',
+	97: '2026-07-09T20:00:00Z', 98: '2026-07-10T19:00:00Z', 99: '2026-07-11T21:00:00Z', 100: '2026-07-12T01:00:00Z',
+	101: '2026-07-14T19:00:00Z', 102: '2026-07-15T19:00:00Z', 103: '2026-07-18T21:00:00Z', 104: '2026-07-19T19:00:00Z',
+};
+
+// Stamp each knockout slot's kickoff_time from the official calendar. Only touches
+// scheduled rows (never overwrites a finished match the sync has filled in).
+export async function setKnockoutKickoffs(client: pg.PoolClient | pg.Client): Promise<number> {
+	let n = 0;
+	for (const { phase, officials } of KNOCKOUT_OFFICIAL) {
+		const { rows } = await client.query(
+			`SELECT id FROM matches WHERE phase = $1 ORDER BY sort_order`, [phase]
+		);
+		for (let i = 0; i < rows.length && i < officials.length; i++) {
+			const utc = KNOCKOUT_KICKOFFS[officials[i]];
+			if (!utc) continue;
+			const r = await client.query(
+				`UPDATE matches SET kickoff_time = $1::timestamptz WHERE id = $2 AND status = 'scheduled'`,
+				[utc, rows[i].id]
+			);
+			n += r.rowCount ?? 0;
+		}
+	}
+	return n;
+}
+
 export interface SeedMatchesResult {
 	skipped: boolean;
 	groupMatches: number;
@@ -207,6 +254,7 @@ export async function seedMatchesWithClient(
 		// Matches already exist — still (re)apply the official kick-off schedule so
 		// upgrading deployments pick up the times without a destructive reseed.
 		await setGroupKickoffs(client);
+		await setKnockoutKickoffs(client);
 		return { skipped: true, groupMatches: 0, knockoutMatches: 0, total: existing };
 	}
 	if (opts.force) {
@@ -264,8 +312,9 @@ export async function seedMatchesWithClient(
 		}
 	}
 
-	// Stamp the official 2026 kick-off times onto the freshly-created group rows.
+	// Stamp the official 2026 kick-off times onto the freshly-created rows.
 	await setGroupKickoffs(client);
+	await setKnockoutKickoffs(client);
 
 	return {
 		skipped: false,
