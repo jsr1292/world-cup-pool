@@ -245,6 +245,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   // User full predictions
   let userGroupPredsFull: any[] = [];
   let userBracketPredsFull: any[] = [];
+  let userMatchPredsFull: any[] = [];
   if (predictions.length > 0) {
     const { rows: ugpRows } = await query(`
       SELECT group_name, position_1, position_2, position_3, position_4, points_earned
@@ -257,6 +258,15 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       FROM bracket_predictions WHERE prediction_id = $1
     `, [predictions[0].id]);
     userBracketPredsFull = ubpRows;
+
+    // Group-stage match-outcome points (1/X/2). The Resultados tab's total was
+    // missing these — they're the bulk of early-tournament points — so it read
+    // 0 while the Clasificación (total_score) correctly included them.
+    const { rows: umpRows } = await query(`
+      SELECT match_id, points_earned
+      FROM match_predictions WHERE prediction_id = $1
+    `, [predictions[0].id]);
+    userMatchPredsFull = umpRows;
   }
 
   // Completion status per entry — for the "finish your predictions" banner.
@@ -328,5 +338,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     resultsGroupStandings,
     userGroupPredsFull,
     userBracketPredsFull,
+    userMatchPredsFull,
   };
 };

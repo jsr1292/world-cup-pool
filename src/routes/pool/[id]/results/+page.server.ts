@@ -39,19 +39,50 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     phases[phase].push(m);
   }
 
+  // §6 — Public bets once LOCKED. A pool is fully locked only when BOTH the group
+  // and knockout deadlines have passed; until then bets stay private so nobody
+  // can copy. Once locked, any member may view any other entry read-only via
+  // ?view=<predictionId>.
+  const dg = (pool as any).deadline_group ? new Date((pool as any).deadline_group) : null;
+  const dk = (pool as any).deadline_knockout ? new Date((pool as any).deadline_knockout) : null;
+  const now = new Date();
+  const betsLocked = !!dg && dg <= now && !!dk && dk <= now;
+
   // Get user's predictions if logged in
   let userPredictions: any[] = [];
   let userGroupPreds: any[] = [];
   let userBracketPreds: any[] = [];
   let userMatchPreds: any[] = [];
   let selectedEntryId: number | null = null;
+  let viewing: { owner: string; label: string | null } | null = null;
 
   if (locals.user) {
     userPredictions = await getUserPredictions(poolId, locals.user.id) as any[];
-    if (userPredictions.length > 0) {
+
+    // Resolve a "view someone else's entry" request — only when the pool is
+    // fully locked and the target entry belongs to THIS pool (no cross-pool IDOR).
+    const viewRaw = url.searchParams.get('view');
+    const viewId = viewRaw && /^\d+$/.test(viewRaw) ? Number(viewRaw) : null;
+    if (betsLocked && viewId) {
+      const { rows: vrows } = await query(
+        `SELECT p.id, p.label, u.display_name
+         FROM predictions p JOIN users u ON u.id = p.user_id
+         WHERE p.id = $1 AND p.pool_id = $2`,
+        [viewId, poolId]
+      );
+      if (vrows.length > 0) {
+        selectedEntryId = Number(vrows[0].id);
+        viewing = { owner: vrows[0].display_name, label: vrows[0].label || null };
+      }
+    }
+
+    if (!selectedEntryId && userPredictions.length > 0) {
       // Honour the ?entry= selector (id-preferred) instead of always entry #1.
       const sel = resolveSelectedPrediction(userPredictions, url.searchParams.get('entry'));
       selectedEntryId = sel ? Number(sel.id) : Number(userPredictions[0].id);
+    }
+
+    if (selectedEntryId) {
 
       // Group predictions
       const { rows: gpRows } = await query(`
@@ -124,5 +155,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     userBracketPreds,
     userMatchPreds,
     teamCache,
+    betsLocked,
+    viewing,
   };
 };

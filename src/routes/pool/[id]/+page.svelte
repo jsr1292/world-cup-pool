@@ -45,6 +45,32 @@
   const groupsDone = $derived(!!myCompletion && myCompletion.groups >= myCompletion.groupsTotal);
   const predComplete = $derived(!!myCompletion && groupsDone && myCompletion.bracketDone && myCompletion.tiebreakerDone);
 
+  // Dense ranking ("1-2-2-3"): everyone level on points shares one position, and
+  // the next distinct score is the next position — so with scores 2/1/0 you get a
+  // bunch of 1st places, a bunch of 2nd, a bunch of 3rd (not "1st…then 6th").
+  // A tie means that position's prize is shared. Leaderboard arrives sorted DESC.
+  const leaderboardRanks = $derived.by(() => {
+    const lb = (data.leaderboard ?? []) as any[];
+    const ranks: number[] = [];
+    let rank = 0;
+    let prevScore: number | null = null;
+    for (let i = 0; i < lb.length; i++) {
+      if (lb[i].total_score !== prevScore) { rank += 1; prevScore = lb[i].total_score; }
+      ranks[i] = rank;
+    }
+    return ranks;
+  });
+
+  // Fully locked = both deadlines passed → others' bets become viewable. Mirrors
+  // the gate in results/+page.server.ts so a row only links when the target page
+  // will actually honour the ?view=.
+  const betsLocked = $derived.by(() => {
+    const dg = pool.deadline_group ? new Date(pool.deadline_group) : null;
+    const dk = pool.deadline_knockout ? new Date(pool.deadline_knockout) : null;
+    const now = new Date();
+    return !!dg && dg <= now && !!dk && dk <= now;
+  });
+
   const paidCount = $derived(data.members.filter((m: any) => m.has_paid).length);
   const memberCount = $derived(data.members.length);
   const pot = $derived((Number(pool.buy_in) || 0) * paidCount);
@@ -312,7 +338,7 @@
         <div style="background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.25); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; cursor: pointer;" onclick={() => document.getElementById('my-row')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>
           <div style="display: flex; align-items: center; justify-content: space-between;">
             <div style="display: flex; align-items: center; gap: 10px;">
-              <div style="font-size: 22px; font-weight: 800; color: var(--gold);">{myIndex + 1}º</div>
+              <div style="font-size: 22px; font-weight: 800; color: var(--gold);">{leaderboardRanks[myIndex]}º</div>
               <div>
                 <div style="font-size: 12px; font-weight: 600; color: var(--gold);">Tu posición</div>
                 <div style="font-size: 10px; color: var(--text-muted);">{myEntry.total_score} pts</div>
@@ -321,7 +347,7 @@
             <div style="text-align: right;">
               {#if prevEntry}
                 <div style="font-size: 9px; color: var(--text-muted);">
-                  {prevEntry.total_score - myEntry.total_score > 0 ? `${prevEntry.total_score - myEntry.total_score} pts para ${myIndex}º` : `¡empatado con ${myIndex}º!`}
+                  {prevEntry.total_score - myEntry.total_score > 0 ? `${prevEntry.total_score - myEntry.total_score} pts para ${leaderboardRanks[myIndex - 1]}º` : `¡empatado con ${leaderboardRanks[myIndex - 1]}º!`}
                 </div>
               {/if}
               {#if data.leaderboard.length > 3}
@@ -339,14 +365,17 @@
         </button>
       </div>
 
+      {#if betsLocked}
+        <p style="font-size: 9px; color: var(--text-dim); margin: 0 0 6px 2px;">🔓 Las apuestas están bloqueadas — toca a cualquiera para ver sus pronósticos.</p>
+      {/if}
       <div style="display: flex; flex-direction: column; gap: 8px;">
         {#each data.leaderboard as entry, i}
-          <div id={entry.user_id === data.userId ? 'my-row' : ''} class="leaderboard-row" style="display: flex; align-items: center; gap: 12px; background: {entry.user_id === data.userId ? 'rgba(201,168,76,0.08)' : 'var(--bg-card)'}; border: 1px solid {entry.user_id === data.userId ? 'var(--gold)' : i === 0 ? 'rgba(201,168,76,0.2)' : 'var(--border)'}; border-radius: 8px; padding: 12px 16px; {entry.user_id === data.userId ? 'box-shadow: 0 0 12px rgba(201,168,76,0.15);' : i === 0 ? 'box-shadow: 0 0 16px rgba(201,168,76,0.1);' : ''}">
+          <svelte:element this={betsLocked ? 'a' : 'div'} href={betsLocked ? `/pool/${pool.id}/results?view=${entry.id}` : undefined} id={entry.user_id === data.userId ? 'my-row' : ''} class="leaderboard-row" style="display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; {betsLocked ? 'cursor: pointer;' : ''} background: {entry.user_id === data.userId ? 'rgba(201,168,76,0.08)' : 'var(--bg-card)'}; border: 1px solid {entry.user_id === data.userId ? 'var(--gold)' : i === 0 ? 'rgba(201,168,76,0.2)' : 'var(--border)'}; border-radius: 8px; padding: 12px 16px; {entry.user_id === data.userId ? 'box-shadow: 0 0 12px rgba(201,168,76,0.15);' : i === 0 ? 'box-shadow: 0 0 16px rgba(201,168,76,0.1);' : ''}">
             <div style="width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; {i === 0 ? 'background: linear-gradient(135deg, #c9a84c, #e8c96a); color: #1a1a2e;' : i === 1 ? 'background: linear-gradient(135deg, #a0a0a0, #c0c0c0); color: #1a1a2e;' : i === 2 ? 'background: linear-gradient(135deg, #b87333, #cd7f32); color: #1a1a2e;' : 'background: rgba(255,255,255,0.06); color: var(--text-dim);'} flex-shrink: 0;">
               {entry.display_name?.[0]?.toUpperCase() || '?'}
             </div>
             <div style="flex: 1; min-width: 0;">
-              <div style="font-size: 13px; font-weight: 600; {entry.user_id === data.userId ? 'color: var(--gold);' : ''}">{i + 1}. {entry.display_name}{#if pool.allow_multiple_predictions}<span style="color: var(--text-muted); font-weight: 400;"> · {entry.label || 'Principal'}</span>{:else if entry.label}<span style="color: var(--text-muted); font-weight: 400;"> ({entry.label})</span>{/if}</div>
+              <div style="font-size: 13px; font-weight: 600; {entry.user_id === data.userId ? 'color: var(--gold);' : ''}">{leaderboardRanks[i]}. {entry.display_name}{#if pool.allow_multiple_predictions}<span style="color: var(--text-muted); font-weight: 400;"> · {entry.label || 'Principal'}</span>{:else if entry.label}<span style="color: var(--text-muted); font-weight: 400;"> ({entry.label})</span>{/if}</div>
               <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">
                 {#if entry.group_correct > 0}
                   <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">Grupos: {entry.group_correct}</span>
@@ -360,7 +389,8 @@
               <div style="font-size: 18px; font-weight: 700; color: var(--gold);">{entry.total_score}</div>
               <div style="font-size: 9px; color: var(--text-muted);">pts</div>
             </div>
-          </div>
+            {#if betsLocked}<span style="font-size: 14px; color: var(--text-dim); margin-left: 2px;">›</span>{/if}
+          </svelte:element>
         {/each}
       </div>
     {/if}
@@ -587,7 +617,7 @@
    {#if tab === 'results'}
     <div style="max-width: 600px; margin: 0 auto;">
       {#if data.predictions.length > 0}
-        {@const totalUserPoints = data.userGroupPredsFull.reduce((sum: number, g: any) => sum + (g.points_earned || 0), 0) + data.userBracketPredsFull.reduce((sum: number, b: any) => sum + (b.points_earned || 0), 0)}
+        {@const totalUserPoints = data.userGroupPredsFull.reduce((sum: number, g: any) => sum + (g.points_earned || 0), 0) + data.userBracketPredsFull.reduce((sum: number, b: any) => sum + (b.points_earned || 0), 0) + (data.userMatchPredsFull || []).reduce((sum: number, m: any) => sum + (m.points_earned || 0), 0)}
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
           <span style="font-size: 11px; color: var(--text-muted);">Tu puntuación</span>
           <span style="font-size: 16px; font-weight: 700; color: var(--gold);">{totalUserPoints} pts</span>

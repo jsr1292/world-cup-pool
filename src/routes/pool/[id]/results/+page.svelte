@@ -102,7 +102,16 @@
 
   <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold); margin-bottom: 4px;">Resultados</h1>
 
-  {#if data.userPredictions.length > 0}
+  {#if data.viewing}
+    <div style="display: flex; gap: 10px; align-items: center; margin: 12px 0 20px; padding: 10px 12px; background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.3); border-radius: 8px;">
+      <span style="font-size: 16px;">👁️</span>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 12px; font-weight: 600; color: var(--gold);">Apuestas de {data.viewing.owner}{#if data.viewing.label} · {data.viewing.label}{/if}</div>
+        <a href="/pool/{data.pool.id}" style="font-size: 9px; color: var(--text-muted);">← Volver a la clasificación</a>
+      </div>
+      <span style="font-size: 14px; font-weight: 600; color: var(--gold);">{totalUserPoints} pts</span>
+    </div>
+  {:else if data.userPredictions.length > 0}
     <div style="display: flex; gap: 12px; align-items: center; margin: 12px 0 20px;">
       <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;">Tu entrada:</span>
       <select value={data.selectedEntryId} onchange={(e) => goto(`?entry=${(e.target as HTMLSelectElement).value}`, { invalidateAll: true })} style="font-size: 11px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; color: var(--text);">
