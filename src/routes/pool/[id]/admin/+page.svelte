@@ -2,6 +2,22 @@
   import { R32_LABELS, R16_LABELS, QF_LABELS, SF_LABELS, FINAL_LABEL, THIRD_LABEL } from '$lib/bracket-2026.js';
   let { data } = $props();
   let version = $state(0);
+
+  // Sync-health summary (catches a silently-stopped results sync).
+  const syncHealth = $derived.by(() => {
+    const ls = data.lastSync;
+    const cfg = data.syncConfig ?? { autoSyncMinutes: 0, provider: 'none' };
+    const interval = cfg.autoSyncMinutes;
+    const ageMin = ls ? Math.max(0, Math.round((Date.now() - new Date(ls.at).getTime()) / 60000)) : null;
+    const off = interval <= 0;
+    const stale = ageMin != null && interval > 0 && ageMin > interval * 3 + 5;
+    const errored = !!ls && (ls.errors ?? 0) > 0;
+    const good = !off && !!ls && !stale && !errored;
+    const tone = good ? 'var(--green)' : (off || !ls || errored ? 'var(--gold)' : 'var(--red)');
+    const border = good ? 'rgba(0,229,160,0.25)' : (off || !ls || errored ? 'rgba(201,168,76,0.3)' : 'rgba(255,77,106,0.3)');
+    const provider = cfg.provider === 'fifa' ? 'FIFA (gratis)' : cfg.provider === 'api-football' ? 'API-Football' : 'ninguno';
+    return { ls, interval, ageMin, off, stale, errored, good, tone, border, provider };
+  });
   let _scoring = { ...data.scoring };
   let scoring = $derived.by(() => { void version; return { ..._scoring }; });
   let localMatches = $state(data.matches.map(m => ({ ...m })));
@@ -665,6 +681,32 @@
         } catch { alert('Error de conexión'); }
       }} style="font-size: 9px; padding: 8px 16px;">🔄 Sincronizar ahora</button>
       <span style="font-size: 9px; color: var(--text-dim);">Importa los resultados publicados (si hay proveedor configurado) y recalcula</span>
+    </div>
+
+    <!-- Sync health: catches a silently-stopped results sync -->
+    <div style="margin-bottom: 14px; padding: 10px 12px; background: var(--bg-card); border: 1px solid {syncHealth.border}; border-radius: 8px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+        <span style="font-size: 11px; font-weight: 600; color: {syncHealth.tone};">
+          {#if syncHealth.off}⚠️ Sincronización automática desactivada
+          {:else if !syncHealth.ls}⏳ Sin sincronizaciones todavía
+          {:else if syncHealth.stale}🔴 Sin sincronizar desde hace {syncHealth.ageMin} min
+          {:else if syncHealth.errored}⚠️ Última sincronización con errores
+          {:else}✓ Sincronización activa{/if}
+        </span>
+        <span style="font-size: 9px; color: var(--text-dim);">Proveedor: {syncHealth.provider}</span>
+      </div>
+      <p style="font-size: 9px; color: var(--text-muted); margin: 5px 0 0; line-height: 1.5;">
+        {#if syncHealth.off}
+          Los resultados no se importan solos. Pon <strong>auto_sync_minutes</strong> &gt; 0 en la configuración del add-on (sugerido 15), o usa «Sincronizar ahora» tras cada partido.
+        {:else if !syncHealth.ls}
+          Auto-sync cada {syncHealth.interval} min. Aún no se ha registrado ninguna ejecución (se registrará en la primera).
+        {:else}
+          Auto-sync cada {syncHealth.interval} min · última hace <strong>{syncHealth.ageMin === 0 ? 'menos de 1' : syncHealth.ageMin} min</strong> · {syncHealth.ls.updated} partido(s) actualizado(s) esa vez.
+          {#if syncHealth.stale}<br><strong style="color: var(--red);">Debería ejecutarse cada {syncHealth.interval} min — revisa el add-on (¿reiniciado? ¿proveedor caído?).</strong>{/if}
+          {#if syncHealth.errored}<br><strong style="color: var(--gold);">{syncHealth.ls.errors} error(es) en la última ejecución — mira los logs del add-on.</strong>{/if}
+          {#if syncHealth.ls.unmatched > 0}<br>{syncHealth.ls.unmatched} equipo(s) sin resolver (añade un alias).{/if}
+        {/if}
+      </p>
     </div>
     <div style="margin-bottom: 14px; display: flex; gap: 8px; align-items: center;">
       <button class="btn-ghost" onclick={async () => {

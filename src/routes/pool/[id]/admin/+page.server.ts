@@ -116,5 +116,17 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   // pool creator would otherwise see controls that 403 on save).
   const isSiteAdmin = !!locals.user.is_admin;
 
-  return { pool, members, entries, scoring, matches, teams, stats, isSiteAdmin, completion };
+  // Sync-health: the last auto/manual sync run + how it's configured, so a
+  // silently-stopped results sync is visible instead of going unnoticed.
+  let lastSync: { at: string; updated: number; pools: number; unmatched: number; errors: number } | null = null;
+  try {
+    const { rows } = await query("SELECT value FROM site_settings WHERE key = 'last_sync'");
+    if (rows[0]?.value) lastSync = JSON.parse(rows[0].value);
+  } catch { /* none yet */ }
+  const syncConfig = {
+    autoSyncMinutes: Number(process.env.AUTO_SYNC_MINUTES) || 0,
+    provider: process.env.API_FOOTBALL_KEY ? 'api-football' : (process.env.DISABLE_FIFA_FALLBACK ? 'none' : 'fifa'),
+  };
+
+  return { pool, members, entries, scoring, matches, teams, stats, isSiteAdmin, completion, lastSync, syncConfig };
 };

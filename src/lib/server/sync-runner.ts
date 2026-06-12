@@ -29,6 +29,22 @@ export async function syncAndRescore(): Promise<SyncResult & { pools: number }> 
     }
     invalidateGlobalLeaderboard();
   }
+  // Record this run for the admin sync-health indicator (best-effort).
+  try {
+    await query(
+      `INSERT INTO site_settings (key, value) VALUES ('last_sync', $1)
+       ON CONFLICT (key) DO UPDATE SET value = $1`,
+      [JSON.stringify({
+        at: new Date().toISOString(),
+        updated: result.updated,
+        pools,
+        unmatched: result.unmatched.length,
+        errors: result.errors,
+      })]
+    );
+  } catch (e) {
+    console.error('[sync-runner] could not record last_sync:', e);
+  }
   return { ...result, pools };
 }
 
