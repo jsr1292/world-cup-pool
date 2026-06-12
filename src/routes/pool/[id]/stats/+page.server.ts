@@ -29,14 +29,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   const betsLocked = !!dg && dg <= now && !!dk && dk <= now;
 
   const safePool = { id: pool.id, name: pool.name };
-
-  if (!betsLocked) {
-    return { pool: safePool, betsLocked: false, totalEntries: 0, teams: {}, champions: [], finalists: [], groupWinners: {} };
-  }
+  const empty = {
+    pool: safePool, betsLocked: false, totalEntries: 0, teams: {},
+    champions: [], finalists: [], groupWinners: {}, divisive: [], mainstream: [], contrarian: [],
+  };
+  if (!betsLocked) return empty;
 
   const teams = await getTeamsMapCached();
 
-  // Denominator: how many entries exist in this pool.
   const totalEntries = Number((await query(
     'SELECT COUNT(*)::int AS c FROM predictions WHERE pool_id = $1', [poolId]
   )).rows[0].c);
@@ -55,7 +55,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     WHERE p.pool_id = $1 AND bp.phase = 'sf' AND bp.team_id IS NOT NULL
     GROUP BY bp.team_id ORDER BY c DESC, bp.team_id`, [poolId]);
 
-  // Predicted winner of each group (position_1), grouped by group.
+  // Predicted winner of each group (position_1).
   const { rows: gwRows } = await query(`
     SELECT gp.group_name, gp.position_1 AS team_id, COUNT(*)::int AS c
     FROM group_predictions gp JOIN predictions p ON p.id = gp.prediction_id
@@ -63,17 +63,64 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     GROUP BY gp.group_name, gp.position_1
     ORDER BY gp.group_name, c DESC, gp.position_1`, [poolId]);
   const groupWinners: Record<string, { team_id: number; c: number }[]> = {};
-  for (const r of gwRows) {
-    (groupWinners[r.group_name] ??= []).push({ team_id: r.team_id, c: r.c });
+  for (const r of gwRows) (groupWinners[r.group_name] ??= []).push({ team_id: r.team_id, c: r.c });
+
+  // Per-group-match 1/X/2 vote split → "most divisive", and the modal pick per
+  // match (used below to score how "with the crowd" each entry is).
+  const { rows: mv } = await query(`
+    SELECT m.id, m.home_team_id, m.away_team_id, m.status, m.home_score, m.away_score,
+      COUNT(*) FILTER (WHERE mp.home_score > mp.away_score)::int AS p1,
+      COUNT(*) FILTER (WHERE mp.home_score = mp.away_score)::int AS px,
+      COUNT(*) FILTER (WHERE mp.home_score < mp.away_score)::int AS p2
+    FROM match_predictions mp
+    JOIN predictions p ON p.id = mp.prediction_id
+    JOIN matches m ON m.id = mp.match_id
+    WHERE p.pool_id = $1 AND m.phase = 'group' AND mp.home_score IS NOT NULL AND mp.away_score IS NOT NULL
+    GROUP BY m.id`, [poolId]);
+
+  const modal: Record<number, '1' | 'X' | '2'> = {};
+  const divisiveAll = mv.map((r: any) => {
+    const total = r.p1 + r.px + r.p2;
+    const m: '1' | 'X' | '2' = r.p1 >= r.px && r.p1 >= r.p2 ? '1' : r.p2 >= r.px ? '2' : 'X';
+    modal[r.id] = m;
+    const top = Math.max(r.p1, r.px, r.p2);
+    const split = total > 0 ? 1 - top / total : 0; // higher = more divided
+    const actual = r.status === 'finished' && r.home_score != null
+      ? (r.home_score > r.away_score ? '1' : r.home_score < r.away_score ? '2' : 'X') : null;
+    return {
+      id: r.id, home: r.home_team_id, away: r.away_team_id, p1: r.p1, px: r.px, p2: r.p2, total,
+      split, finished: actual != null, actual,
+    };
+  }).filter((d) => d.total >= 2);
+  const divisive = divisiveAll.sort((a, b) => b.split - a.split || b.total - a.total).slice(0, 5);
+
+  // "With the crowd" — for each entry, the share of its group picks that matched
+  // the pool's most-popular pick. Top = most mainstream, bottom = most contrarian.
+  const { rows: picks } = await query(`
+    SELECT mp.prediction_id AS pid, mp.match_id AS mid,
+      CASE WHEN mp.home_score > mp.away_score THEN '1' WHEN mp.home_score < mp.away_score THEN '2' ELSE 'X' END AS o
+    FROM match_predictions mp JOIN predictions p ON p.id = mp.prediction_id JOIN matches m ON m.id = mp.match_id
+    WHERE p.pool_id = $1 AND m.phase = 'group' AND mp.home_score IS NOT NULL AND mp.away_score IS NOT NULL`, [poolId]);
+  const { rows: entryRows } = await query(
+    `SELECT p.id, u.display_name, p.label FROM predictions p JOIN users u ON u.id = p.user_id WHERE p.pool_id = $1`, [poolId]
+  );
+  const agg: Record<number, { aligned: number; total: number }> = {};
+  for (const pk of picks) {
+    const a = (agg[pk.pid] ??= { aligned: 0, total: 0 });
+    a.total++;
+    if (modal[pk.mid] === pk.o) a.aligned++;
   }
+  const aligned = entryRows
+    .map((e: any) => {
+      const a = agg[e.id] ?? { aligned: 0, total: 0 };
+      return { name: e.display_name, label: e.label || null, total: a.total, pct: a.total > 0 ? a.aligned / a.total : 0 };
+    })
+    .filter((e) => e.total >= 10); // need a meaningful sample
+  const mainstream = aligned.slice().sort((a, b) => b.pct - a.pct || b.total - a.total).slice(0, 3);
+  const contrarian = aligned.slice().sort((a, b) => a.pct - b.pct || b.total - a.total).slice(0, 3);
 
   return {
-    pool: safePool,
-    betsLocked: true,
-    totalEntries,
-    teams,
-    champions: champions as { team_id: number; c: number }[],
-    finalists: finalists as { team_id: number; c: number }[],
-    groupWinners,
+    pool: safePool, betsLocked: true, totalEntries, teams,
+    champions, finalists, groupWinners, divisive, mainstream, contrarian,
   };
 };

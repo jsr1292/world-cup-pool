@@ -445,6 +445,29 @@
               {/if}
             </div>
           </div>
+          <!-- Mis rivales: who you're chasing and who's chasing you -->
+          {#if prevEntry || nextEntry}
+            <div style="display: flex; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(201,168,76,0.18);">
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px;">A quien persigues</div>
+                {#if prevEntry}
+                  <div style="font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">⬆️ {prevEntry.display_name}{#if pool.allow_multiple_predictions && prevEntry.label} · {prevEntry.label}{/if}</div>
+                  <div style="font-size: 9px; color: var(--gold);">{prevEntry.total_score - myEntry.total_score === 0 ? 'empatados' : `te saca ${prevEntry.total_score - myEntry.total_score} pts`}</div>
+                {:else}
+                  <div style="font-size: 11px; font-weight: 600; color: var(--gold);">👑 ¡Lideras!</div>
+                {/if}
+              </div>
+              <div style="flex: 1; min-width: 0; text-align: right;">
+                <div style="font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px;">Quien te persigue</div>
+                {#if nextEntry}
+                  <div style="font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{nextEntry.display_name}{#if pool.allow_multiple_predictions && nextEntry.label} · {nextEntry.label}{/if} ⬇️</div>
+                  <div style="font-size: 9px; color: var(--text-muted);">{myEntry.total_score - nextEntry.total_score === 0 ? 'empatados' : `a ${myEntry.total_score - nextEntry.total_score} pts`}</div>
+                {:else}
+                  <div style="font-size: 11px; font-weight: 600; color: var(--text-muted);">eres el farolillo 🏮</div>
+                {/if}
+              </div>
+            </div>
+          {/if}
         </div>
       {/if}
 
