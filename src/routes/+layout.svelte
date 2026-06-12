@@ -9,9 +9,36 @@
   import LiveTicker from '$lib/LiveTicker.svelte';
 
   let { children, data } = $props();
+  import { onMount, onDestroy } from 'svelte';
 
   // PWA service worker disabled during development — re-enable for production builds
   // if (browser && 'serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(() => {}); }
+
+  // ── Live-score ticker (single poller, shared by the top-bar + sidebar) ──────
+  /** @type {any[]} */
+  let liveMatches = $state([]);
+  /** @type {ReturnType<typeof setInterval> | null} */
+  let liveTimer = null;
+  const inTournamentWindow = () => {
+    const now = Date.now();
+    return now >= WORLD_CUP_KICKOFF_MS && now <= WORLD_CUP_KICKOFF_MS + WORLD_CUP_DURATION_MS;
+  };
+  async function pollLive() {
+    if (!inTournamentWindow()) { liveMatches = []; return; }
+    try {
+      const r = await fetch('/api/live');
+      if (r.ok) { const d = await r.json(); liveMatches = Array.isArray(d.matches) ? d.matches : []; }
+    } catch { /* keep last */ }
+  }
+  onMount(() => {
+    if (!browser || !data?.user || !inTournamentWindow()) return;
+    pollLive();
+    liveTimer = setInterval(pollLive, 30_000);
+    const onVis = () => { if (document.visibilityState === 'visible') pollLive(); };
+    document.addEventListener('visibilitychange', onVis);
+    onDestroy(() => document.removeEventListener('visibilitychange', onVis));
+  });
+  onDestroy(() => { if (liveTimer) clearInterval(liveTimer); });
 
   const currentPath = $derived($page.url.pathname);
 
@@ -175,17 +202,23 @@
       <div class="top-bar-inner">
         <div class="top-bar-brand">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="url(#gold-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e8c96a"/><stop offset="50%" stop-color="#c9a84c"/><stop offset="100%" stop-color="#f0d98c"/></linearGradient></defs><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
-          <span>Mundial 2026</span>
+          <!-- Hide the wordmark while live scores are showing, to free up width -->
+          {#if liveMatches.length === 0}<span>Mundial 2026</span>{/if}
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          {#if countdownText}
-            <div class="countdown" title="11 de junio de 2026">
-              {countdownText}
-            </div>
-          {:else if browser}
-            {@const diff = WORLD_CUP_KICKOFF_MS - Date.now()}
-            {#if diff > -WORLD_CUP_DURATION_MS}
-              <div class="countdown live">⚽ En juego</div>
+        {#if liveMatches.length > 0}
+          <div class="top-bar-live"><LiveTicker matches={liveMatches} /></div>
+        {/if}
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+          {#if liveMatches.length === 0}
+            {#if countdownText}
+              <div class="countdown" title="11 de junio de 2026">
+                {countdownText}
+              </div>
+            {:else if browser}
+              {@const diff = WORLD_CUP_KICKOFF_MS - Date.now()}
+              {#if diff > -WORLD_CUP_DURATION_MS}
+                <div class="countdown live">⚽ En juego</div>
+              {/if}
             {/if}
           {/if}
           <button onclick={toggleTheme} class="theme-toggle" title="Cambiar tema">
@@ -212,7 +245,9 @@
       </div>
     </div>
 
-    {#if countdownText}
+    {#if liveMatches.length > 0}
+      <div class="sidebar-countdown" style="overflow: hidden;"><LiveTicker matches={liveMatches} /></div>
+    {:else if countdownText}
       <div class="sidebar-countdown" title="Primer partido · 11 de junio de 2026">
         <span class="sidebar-countdown-label">El Mundial arranca en</span>
         <span class="sidebar-countdown-value">{countdownText}</span>
@@ -271,7 +306,6 @@
 
   <!-- Main Content -->
   <main class="main-content" class:full-bleed={!data?.user}>
-    {#if data?.user}<LiveTicker />{/if}
     {@render children()}
   </main>
 
@@ -387,6 +421,15 @@
     font-weight: 600;
     letter-spacing: 0.01em;
     color: var(--text);
+    flex-shrink: 0;
+  }
+
+  /* When live scores are showing, the ticker takes the flexible middle space. */
+  .top-bar-live {
+    flex: 1;
+    min-width: 0;
+    margin: 0 10px;
+    overflow: hidden;
   }
 
   .countdown {
