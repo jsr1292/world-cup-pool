@@ -1,4 +1,5 @@
-import { getPoolById, getUserPredictions, resolveSelectedPrediction } from '$lib/server/queries.js';
+import { getPoolById, getUserPredictions, resolveSelectedPrediction, getScoringConfig } from '$lib/server/queries.js';
+import { DEFAULT_SCORING_RULES } from '$lib/server/scoring.js';
 import { query } from '$lib/server/db.js';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
@@ -145,6 +146,20 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     groupStandings[group] = sorted;
   }
 
+  // Group-order ("posición") points are only awarded once a group's 6 matches
+  // are all finished (see calculateGroupScores). Expose the pool's group_position
+  // value and each group's finished-match count so the UI can flag incomplete
+  // groups as "pending" — otherwise a correct-looking order showing 0 pts reads
+  // as a bug to the user. Off (group_position = 0) pools show nothing.
+  const scoring = { ...DEFAULT_SCORING_RULES, ...(await getScoringConfig(poolId)) };
+  const groupPosPts = Number(scoring.group_position) || 0;
+  const groupFinished: Record<string, number> = {};
+  for (const m of groupMatches) {
+    if (!m.group_name) continue;
+    if (!(m.group_name in groupFinished)) groupFinished[m.group_name] = 0;
+    if (m.status === 'finished' && m.home_score != null) groupFinished[m.group_name]++;
+  }
+
   return {
     pool,
     phases,
@@ -157,5 +172,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     teamCache,
     betsLocked,
     viewing,
+    groupPosPts,
+    groupFinished,
   };
 };

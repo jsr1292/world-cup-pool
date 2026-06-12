@@ -27,8 +27,12 @@
 
   // Build user group prediction lookup: group_name -> [pos1, pos2, pos3, pos4]
   const groupPredLookup: Record<string, number[]> = {};
+  // group_name -> points_earned for the order, so completed groups can show the
+  // tally and reinforce that posición points landed once the group finished.
+  const groupPtsLookup: Record<string, number> = {};
   for (const gp of data.userGroupPreds) {
     groupPredLookup[gp.group_name] = [gp.position_1, gp.position_2, gp.position_3, gp.position_4];
+    groupPtsLookup[gp.group_name] = gp.points_earned || 0;
   }
 
   function getTeamName(id) {
@@ -181,6 +185,14 @@
                 {/each}
                 </tbody>
               </table>
+              {#if predicted && data.groupPosPts > 0}
+                {@const fin = data.groupFinished?.[group] ?? 0}
+                {#if fin < 6}
+                  <div style="margin-top: 8px; font-size: 9px; color: var(--text-muted); background: rgba(201,168,76,0.07); border: 1px solid rgba(201,168,76,0.2); border-radius: 6px; padding: 6px 8px; line-height: 1.45;">⏳ Puntos de posición <strong>pendientes</strong> — se otorgan al jugarse los 6 partidos del grupo ({fin}/6).</div>
+                {:else}
+                  <div style="margin-top: 8px; font-size: 9px; color: var(--green); background: rgba(0,229,160,0.07); border: 1px solid rgba(0,229,160,0.2); border-radius: 6px; padding: 6px 8px; line-height: 1.45;">✓ Grupo completo · posición: <strong>+{groupPtsLookup[group] ?? 0} pts</strong></div>
+                {/if}
+              {/if}
             </div>
           {/each}
 

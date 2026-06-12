@@ -705,9 +705,10 @@
           <div style="display: flex; justify-content: space-between;"><span>Cada resultado acertado (1 / X / 2)</span><strong style="color: var(--gold);">+{n('match_outcome')}</strong></div>
           {#if n('group_position') > 0}
             <div style="display: flex; justify-content: space-between; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px;"><span>Cada puesto acertado de la tabla final</span><strong style="color: var(--gold);">+{n('group_position')}</strong></div>
+            <p style="font-size: 10px; color: var(--text-muted); margin-top: 7px; line-height: 1.5; background: rgba(201,168,76,0.07); border: 1px solid rgba(201,168,76,0.2); border-radius: 6px; padding: 7px 9px;">⏳ Los <strong>puntos por la tabla final</strong> se suman <strong>cuando termina el grupo</strong> (sus 6 partidos). Durante la fase de grupos solo cuentan los resultados 1/X/2 — por eso tus aciertos de posición aún figuran en 0.</p>
           {/if}
         </div>
-        <p style="font-size: 9px; color: var(--text-dim); margin-top: 8px; line-height: 1.5;">Hasta <strong>{6 * n('match_outcome')} pts</strong> por grupo (6 partidos) · <strong>{72 * n('match_outcome')}</strong> en total.</p>
+        <p style="font-size: 9px; color: var(--text-dim); margin-top: 8px; line-height: 1.5;">Hasta <strong>{6 * n('match_outcome') + 4 * n('group_position')} pts</strong> por grupo {#if n('group_position') > 0}(6 resultados + 4 posiciones){:else}(6 partidos){/if} · <strong>{72 * n('match_outcome') + 48 * n('group_position')}</strong> en total.</p>
       </div>
 
       <!-- Bracket -->
