@@ -72,6 +72,9 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 
   const groupPreds: Record<number, any[]> = {};
   const bracketPreds: Record<number, any[]> = {};
+  // Per-match 1/X/2 picks for the group games, so a member's Resumen shows who
+  // they backed (win/draw/loss) on each match — not just their final-table order.
+  const matchPreds: Record<number, any[]> = {};
 
   if (entries.length > 0) {
     const predIds = entries.map((e: any) => e.id);
@@ -96,15 +99,33 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
       bracketPreds[bp.prediction_id].push(bp);
     }
 
+    // Per-match group picks joined to the match (teams + result + status), so
+    // the view can show each 1/X/2 bet and mark it ✓/✗ once the game is played.
+    const { rows: allMP } = await query(`
+      SELECT mp.prediction_id, mp.match_id,
+             mp.home_score AS pred_home, mp.away_score AS pred_away, mp.points_earned,
+             m.group_name, m.home_team_id, m.away_team_id,
+             m.home_score AS actual_home, m.away_score AS actual_away, m.status
+      FROM match_predictions mp
+      JOIN matches m ON m.id = mp.match_id AND m.phase = 'group'
+      WHERE mp.prediction_id = ANY($1::int[])
+      ORDER BY m.group_name, m.sort_order, m.kickoff_time
+    `, [predIds]);
+    for (const mp of allMP) {
+      if (!matchPreds[mp.prediction_id]) matchPreds[mp.prediction_id] = [];
+      matchPreds[mp.prediction_id].push(mp);
+    }
+
     // Fill empty arrays for entries with no predictions
     for (const entry of entries) {
       if (!groupPreds[entry.id]) groupPreds[entry.id] = [];
       if (!bracketPreds[entry.id]) bracketPreds[entry.id] = [];
+      if (!matchPreds[entry.id]) matchPreds[entry.id] = [];
     }
   }
 
   return {
-    pool: safePool, entries, groupPreds, bracketPreds, teams,
+    pool: safePool, entries, groupPreds, bracketPreds, matchPreds, teams,
     emailEnabled: isEmailConfigured() && !!locals.user.email,
     viewing,
   };
