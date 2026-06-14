@@ -7,12 +7,25 @@
   import { logout } from '$lib/logout.js';
   import { WORLD_CUP_KICKOFF_MS, WORLD_CUP_DURATION_MS } from '$lib/constants.js';
   import LiveTicker from '$lib/LiveTicker.svelte';
+  import InstallPrompt from '$lib/InstallPrompt.svelte';
 
   let { children, data } = $props();
   import { onMount, onDestroy } from 'svelte';
 
-  // PWA service worker disabled during development — re-enable for production builds
-  // if (browser && 'serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(() => {}); }
+  // PWA service worker. Navigations are network-first (see static/sw.js) so
+  // content stays fresh; when an UPDATED worker takes control we reload once so
+  // nobody is stuck on a stale shell. No reload on the very first install
+  // (there was no prior controller), to avoid a jarring reload on first visit.
+  if (browser && 'serviceWorker' in navigator) {
+    const hadController = !!navigator.serviceWorker.controller;
+    let swReloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (swReloaded || !hadController) return;
+      swReloaded = true;
+      location.reload();
+    });
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
 
   // ── Live-score ticker (single poller, shared by the top-bar + sidebar) ──────
   /** @type {any[]} */
@@ -194,6 +207,8 @@
     { path: '/profile', label: 'Perfil', icon: 'user' },
   ];
 </script>
+
+<InstallPrompt />
 
 <div class="app-layout" style="height: 100vh; padding-bottom: 0;">
   <!-- Top Bar (mobile only) -->

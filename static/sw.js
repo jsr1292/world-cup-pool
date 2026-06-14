@@ -1,7 +1,10 @@
-const CACHE_NAME = 'mundial2026-v1';
+const CACHE_NAME = 'mundial2026-v2';
 const SHELL_URLS = [
   '/',
   '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-512.png',
   '/icon-512.svg',
   '/icon.svg',
 ];
