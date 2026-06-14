@@ -41,7 +41,15 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   const a = aId ? await sideFor(aId, entries) : null;
   const b = bId ? await sideFor(bId, entries) : null;
 
-  return { pool: safePool, betsLocked: true, entries, a, b, teams };
+  // Shared list of group fixtures (chronological) so the view can compare both
+  // sides' 1/X/2 pick per match under date headers.
+  const { rows: groupMatches } = await query(`
+    SELECT id, group_name, home_team_id, away_team_id, kickoff_time, status, home_score, away_score
+    FROM matches WHERE phase = 'group'
+    ORDER BY kickoff_time NULLS LAST, sort_order
+  `);
+
+  return { pool: safePool, betsLocked: true, entries, a, b, teams, groupMatches };
 };
 
 function pickId(raw: string | null, ids: Set<number>): number | null {
@@ -62,11 +70,21 @@ async function sideFor(pid: number, entries: any[]) {
     `SELECT group_name, position_1 FROM group_predictions WHERE prediction_id = $1 AND position_1 IS NOT NULL`, [pid]
   )).rows) gw[r.group_name] = r.position_1;
   const tb = (await query('SELECT home_score, away_score FROM tiebreaker WHERE prediction_id = $1', [pid])).rows[0] ?? null;
+  // Per-match group picks as 1/X/2 (derived from the stored canonical scoreline),
+  // keyed by match id for side-by-side comparison.
+  const groupPicks: Record<number, '1' | 'X' | '2'> = {};
+  for (const r of (await query(
+    `SELECT mp.match_id, mp.home_score AS ph, mp.away_score AS pa
+     FROM match_predictions mp JOIN matches m ON m.id = mp.match_id AND m.phase = 'group'
+     WHERE mp.prediction_id = $1`, [pid]
+  )).rows) {
+    groupPicks[r.match_id] = r.ph > r.pa ? '1' : r.ph < r.pa ? '2' : 'X';
+  }
   return {
     id: pid,
     owner: meta?.display_name ?? '?',
     label: meta?.label || null,
-    champion, finalists, groupWinners: gw,
+    champion, finalists, groupWinners: gw, groupPicks,
     tiebreaker: tb ? { home: tb.home_score, away: tb.away_score } : null,
   };
 }

@@ -26,6 +26,32 @@
     const bs = new Set(data.b.finalists);
     return data.a.finalists.filter((t: number) => bs.has(t)).length;
   });
+
+  function fmtMatchDate(ts: string | null): string {
+    if (!ts) return 'Fecha por confirmar';
+    return new Date(ts).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+  // Group fixtures (already chronological from the server) bucketed by date.
+  const matchesByDate = $derived.by((): [string, any[]][] => {
+    const out: [string, any[]][] = [];
+    let cur: [string, any[]] | null = null;
+    for (const m of (data.groupMatches || [])) {
+      const label = fmtMatchDate(m.kickoff_time);
+      if (!cur || cur[0] !== label) { cur = [label, []]; out.push(cur); }
+      cur[1].push(m);
+    }
+    return out;
+  });
+  // How often the two agree on the group-match 1/X/2 (only matches both picked).
+  const groupAgreement = $derived.by(() => {
+    if (!data.a || !data.b) return null;
+    let same = 0, total = 0;
+    for (const m of (data.groupMatches || [])) {
+      const ac = data.a.groupPicks?.[m.id], bc = data.b.groupPicks?.[m.id];
+      if (ac && bc) { total++; if (ac === bc) same++; }
+    }
+    return { same, total };
+  });
 </script>
 
 <svelte:head><title>Comparar · {data.pool.name}</title></svelte:head>
@@ -60,6 +86,9 @@
         <div style="text-align: center; margin-bottom: 16px; padding: 10px; background: rgba(201,168,76,0.07); border: 1px solid rgba(201,168,76,0.22); border-radius: 10px;">
           <div style="font-size: 20px; font-weight: 800; color: var(--gold);">{agreement.same}/{agreement.total}</div>
           <div style="font-size: 10px; color: var(--text-muted);">coincidencias (campeón + ganadores de grupo) · {sharedFinalists}/2 finalistas en común</div>
+          {#if groupAgreement && groupAgreement.total > 0}
+            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">⚽ coinciden en <strong style="color: var(--gold);">{groupAgreement.same}/{groupAgreement.total}</strong> partidos de grupo</div>
+          {/if}
         </div>
       {/if}
 
@@ -69,6 +98,26 @@
           <span style="flex: 1; min-width: 0; font-size: 11px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; {same ? 'font-weight: 600;' : ''}">{tName(av)} {@html tFlag(av)}</span>
           <span style="font-size: 8px; color: var(--text-dim); width: 46px; text-align: center; flex-shrink: 0; text-transform: uppercase;">{label}</span>
           <span style="flex: 1; min-width: 0; font-size: 11px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; {same ? 'font-weight: 600;' : ''}">{@html tFlag(bv)} {tName(bv)}</span>
+          <span style="width: 12px; flex-shrink: 0; text-align: center; font-size: 11px; color: {same ? 'var(--green)' : 'var(--text-dim)'};">{same ? '=' : '≠'}</span>
+        </div>
+      {/snippet}
+
+      {#snippet codePill(code: string | null)}
+        {#if code}
+          <span style="display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: {code === 'X' ? 'rgba(255,255,255,0.08)' : 'rgba(201,168,76,0.16)'}; color: {code === 'X' ? 'var(--text-muted)' : 'var(--gold)'};">{code}</span>
+        {:else}
+          <span style="font-size: 10px; color: var(--text-dim);">–</span>
+        {/if}
+      {/snippet}
+
+      {#snippet matchRow(m: any)}
+        {@const ac = data.a?.groupPicks?.[m.id] ?? null}
+        {@const bc = data.b?.groupPicks?.[m.id] ?? null}
+        {@const same = ac != null && bc != null && ac === bc}
+        <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: {same ? 'rgba(0,229,160,0.05)' : 'var(--bg-card)'}; border: 1px solid {same ? 'rgba(0,229,160,0.2)' : 'var(--border)'}; border-radius: 6px;">
+          <span style="width: 26px; flex-shrink: 0; text-align: center;">{@render codePill(ac)}</span>
+          <span style="flex: 1; min-width: 0; text-align: center; font-size: 10px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span style="font-size: 8px; color: var(--text-dim);">{m.group_name}</span> {@html tFlag(m.home_team_id)} {tName(m.home_team_id)}–{tName(m.away_team_id)} {@html tFlag(m.away_team_id)}</span>
+          <span style="width: 26px; flex-shrink: 0; text-align: center;">{@render codePill(bc)}</span>
           <span style="width: 12px; flex-shrink: 0; text-align: center; font-size: 11px; color: {same ? 'var(--green)' : 'var(--text-dim)'};">{same ? '=' : '≠'}</span>
         </div>
       {/snippet}
@@ -87,6 +136,19 @@
           {@render row(`1.º ${g}`, data.a.groupWinners[g] ?? null, data.b.groupWinners[g] ?? null)}
         {/each}
       </div>
+
+      <!-- Group-game 1/X/2 comparison, chronological -->
+      {#if (data.groupMatches || []).length > 0}
+        <div style="margin-top: 16px;">
+          <div style="font-size: 11px; font-weight: 700; color: var(--gold); margin-bottom: 6px;">⚽ Partidos de grupos · 1 / X / 2</div>
+          {#each matchesByDate as [dateLabel, ms]}
+            <div style="font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin: 10px 0 4px;">{dateLabel}</div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              {#each ms as m}{@render matchRow(m)}{/each}
+            </div>
+          {/each}
+        </div>
+      {/if}
 
       <!-- Finalists + tiebreaker -->
       <div style="margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
