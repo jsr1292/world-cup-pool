@@ -19,6 +19,22 @@
     // Only interesting if it's genuinely a minority pick.
     return min.c <= Math.max(1, Math.floor(data.totalEntries * 0.1)) ? min : null;
   });
+
+  function fmtMatchDate(ts: string | null): string {
+    if (!ts) return 'Fecha por confirmar';
+    return new Date(ts).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+  // Full per-match breakdown (server-sorted by kickoff) bucketed by date.
+  const breakdownByDate = $derived.by((): [string, any[]][] => {
+    const out: [string, any[]][] = [];
+    let cur: [string, any[]] | null = null;
+    for (const m of ((data.matchBreakdown as any[]) || [])) {
+      const label = fmtMatchDate(m.kickoff);
+      if (!cur || cur[0] !== label) { cur = [label, []]; out.push(cur); }
+      cur[1].push(m);
+    }
+    return out;
+  });
 </script>
 
 <svelte:head><title>Estadísticas · {data.pool.name}</title></svelte:head>
@@ -135,6 +151,40 @@
           </div>
         </div>
         <p style="font-size: 9px; color: var(--text-dim); margin-top: 8px;">% de partidos de grupo en los que coincidiste con la opción más votada del grupo.</p>
+      </section>
+    {/if}
+
+    <!-- Full per-match breakdown, chronological -->
+    {#if data.matchBreakdown && data.matchBreakdown.length > 0}
+      <section style="margin-bottom: 26px;">
+        <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px;">📅 Desglose por partido</h2>
+        <p style="font-size: 9px; color: var(--text-dim); margin-bottom: 10px;">Cómo votó el grupo en cada partido, en orden cronológico (1 = gana local · X = empate · 2 = gana visitante). ✓ marca el resultado real.</p>
+        {#each breakdownByDate as [dateLabel, ms]}
+          <div style="font-size: 9px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 5px;">{dateLabel}</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            {#each ms as d}
+              {@const tot = d.total || 1}
+              <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px;">
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 7px;">
+                  <span style="font-size: 8px; color: var(--text-dim); flex-shrink: 0;">{d.group_name}</span>
+                  <span>{@html teamFlag(d.home)}</span><span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{teamName(d.home)}</span>
+                  <span style="color: var(--text-dim);">vs</span>
+                  <span>{@html teamFlag(d.away)}</span><span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{teamName(d.away)}</span>
+                  {#if d.finished}<span style="margin-left: auto; flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--gold);">{d.home_score}-{d.away_score}</span>{/if}
+                </div>
+                <div style="display: flex; gap: 4px; font-size: 9px;">
+                  {#each [['1', d.p1], ['X', d.px], ['2', d.p2]] as [k, n]}
+                    {@const share = Math.round((Number(n) / tot) * 100)}
+                    <div style="flex: 1; text-align: center;">
+                      <div style="height: 5px; border-radius: 3px; background: {d.finished && d.actual === k ? 'var(--green)' : 'var(--gold)'}; opacity: {d.finished && d.actual === k ? 0.9 : 0.5}; width: {Math.max(share, 3)}%; margin: 0 auto 3px; min-width: 4px;"></div>
+                      <span style="color: {d.finished && d.actual === k ? 'var(--green)' : 'var(--text-muted)'}; font-weight: {d.finished && d.actual === k ? '700' : '400'};">{k} {share}%{#if d.finished && d.actual === k} ✓{/if}</span>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/each}
       </section>
     {/if}
 

@@ -31,7 +31,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   const safePool = { id: pool.id, name: pool.name };
   const empty = {
     pool: safePool, betsLocked: false, totalEntries: 0, teams: {},
-    champions: [], finalists: [], groupWinners: {}, divisive: [], mainstream: [], contrarian: [],
+    champions: [], finalists: [], groupWinners: {}, divisive: [], mainstream: [], contrarian: [], matchBreakdown: [],
   };
   if (!betsLocked) return empty;
 
@@ -68,7 +68,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   // Per-group-match 1/X/2 vote split → "most divisive", and the modal pick per
   // match (used below to score how "with the crowd" each entry is).
   const { rows: mv } = await query(`
-    SELECT m.id, m.home_team_id, m.away_team_id, m.status, m.home_score, m.away_score,
+    SELECT m.id, m.group_name, m.kickoff_time, m.sort_order,
+      m.home_team_id, m.away_team_id, m.status, m.home_score, m.away_score,
       COUNT(*) FILTER (WHERE mp.home_score > mp.away_score)::int AS p1,
       COUNT(*) FILTER (WHERE mp.home_score = mp.away_score)::int AS px,
       COUNT(*) FILTER (WHERE mp.home_score < mp.away_score)::int AS p2
@@ -93,6 +94,26 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     };
   }).filter((d) => d.total >= 2);
   const divisive = divisiveAll.sort((a, b) => b.split - a.split || b.total - a.total).slice(0, 5);
+
+  // Full chronological breakdown: every group match with its 1/X/2 vote split
+  // and (once played) the actual result, ordered by kickoff.
+  const matchBreakdown = mv
+    .map((r: any) => {
+      const total = r.p1 + r.px + r.p2;
+      const actual = r.status === 'finished' && r.home_score != null
+        ? (r.home_score > r.away_score ? '1' : r.home_score < r.away_score ? '2' : 'X') : null;
+      return {
+        id: r.id, group_name: r.group_name, kickoff: r.kickoff_time,
+        home: r.home_team_id, away: r.away_team_id,
+        p1: r.p1, px: r.px, p2: r.p2, total,
+        finished: actual != null, actual, home_score: r.home_score, away_score: r.away_score,
+      };
+    })
+    .sort((a, b) => {
+      const ak = a.kickoff ? new Date(a.kickoff).getTime() : Infinity;
+      const bk = b.kickoff ? new Date(b.kickoff).getTime() : Infinity;
+      return ak - bk;
+    });
 
   // "With the crowd" — for each entry, the share of its group picks that matched
   // the pool's most-popular pick. Top = most mainstream, bottom = most contrarian.
@@ -121,6 +142,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
   return {
     pool: safePool, betsLocked: true, totalEntries, teams,
-    champions, finalists, groupWinners, divisive, mainstream, contrarian,
+    champions, finalists, groupWinners, divisive, mainstream, contrarian, matchBreakdown,
   };
 };
