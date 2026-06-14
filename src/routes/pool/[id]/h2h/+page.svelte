@@ -52,6 +52,24 @@
     }
     return { same, total };
   });
+  // Actual 1/X/2 outcome of a finished match (null while unplayed).
+  function actualCode(m: any): '1' | 'X' | '2' | null {
+    if (m.status !== 'finished' || m.home_score == null) return null;
+    return m.home_score > m.away_score ? '1' : m.home_score < m.away_score ? '2' : 'X';
+  }
+  // Who got more right: each side's correct group picks over the played matches.
+  const groupCorrect = $derived.by(() => {
+    if (!data.a || !data.b) return null;
+    let aOk = 0, bOk = 0, played = 0;
+    for (const m of (data.groupMatches || [])) {
+      const act = actualCode(m);
+      if (!act) continue;
+      played++;
+      if (data.a.groupPicks?.[m.id] === act) aOk++;
+      if (data.b.groupPicks?.[m.id] === act) bOk++;
+    }
+    return { aOk, bOk, played };
+  });
 </script>
 
 <svelte:head><title>Comparar · {data.pool.name}</title></svelte:head>
@@ -89,6 +107,9 @@
           {#if groupAgreement && groupAgreement.total > 0}
             <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">⚽ coinciden en <strong style="color: var(--gold);">{groupAgreement.same}/{groupAgreement.total}</strong> partidos de grupo</div>
           {/if}
+          {#if groupCorrect && groupCorrect.played > 0}
+            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">✓ aciertos: <strong style="color: var(--green);">{data.a.owner.split(' ')[0]} {groupCorrect.aOk}</strong> · <strong style="color: var(--green);">{data.b.owner.split(' ')[0]} {groupCorrect.bOk}</strong> <span style="color: var(--text-dim);">(de {groupCorrect.played} jugados)</span></div>
+          {/if}
         </div>
       {/if}
 
@@ -102,9 +123,11 @@
         </div>
       {/snippet}
 
-      {#snippet codePill(code: string | null)}
+      {#snippet codePill(code: string | null, state: 'correct' | 'wrong' | null)}
         {#if code}
-          <span style="display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: {code === 'X' ? 'rgba(255,255,255,0.08)' : 'rgba(201,168,76,0.16)'}; color: {code === 'X' ? 'var(--text-muted)' : 'var(--gold)'};">{code}</span>
+          {@const bg = state === 'correct' ? 'rgba(0,229,160,0.18)' : state === 'wrong' ? 'rgba(255,77,106,0.16)' : (code === 'X' ? 'rgba(255,255,255,0.08)' : 'rgba(201,168,76,0.16)')}
+          {@const col = state === 'correct' ? 'var(--green)' : state === 'wrong' ? 'var(--red)' : (code === 'X' ? 'var(--text-muted)' : 'var(--gold)')}
+          <span style="display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: {bg}; color: {col};">{code}{#if state === 'correct'} ✓{:else if state === 'wrong'} ✗{/if}</span>
         {:else}
           <span style="font-size: 10px; color: var(--text-dim);">–</span>
         {/if}
@@ -114,10 +137,16 @@
         {@const ac = data.a?.groupPicks?.[m.id] ?? null}
         {@const bc = data.b?.groupPicks?.[m.id] ?? null}
         {@const same = ac != null && bc != null && ac === bc}
-        <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: {same ? 'rgba(0,229,160,0.05)' : 'var(--bg-card)'}; border: 1px solid {same ? 'rgba(0,229,160,0.2)' : 'var(--border)'}; border-radius: 6px;">
-          <span style="width: 26px; flex-shrink: 0; text-align: center;">{@render codePill(ac)}</span>
-          <span style="flex: 1; min-width: 0; text-align: center; font-size: 10px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span style="font-size: 8px; color: var(--text-dim);">{m.group_name}</span> {@html tFlag(m.home_team_id)} {tName(m.home_team_id)}–{tName(m.away_team_id)} {@html tFlag(m.away_team_id)}</span>
-          <span style="width: 26px; flex-shrink: 0; text-align: center;">{@render codePill(bc)}</span>
+        {@const actual = actualCode(m)}
+        {@const aState = actual ? (ac === actual ? 'correct' : 'wrong') : null}
+        {@const bState = actual ? (bc === actual ? 'correct' : 'wrong') : null}
+        <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;">
+          <span style="width: 34px; flex-shrink: 0; text-align: center;">{@render codePill(ac, aState)}</span>
+          <span style="flex: 1; min-width: 0; text-align: center; overflow: hidden;">
+            <span style="display: block; font-size: 10px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span style="font-size: 8px; color: var(--text-dim);">{m.group_name}</span> {@html tFlag(m.home_team_id)} {tName(m.home_team_id)}–{tName(m.away_team_id)} {@html tFlag(m.away_team_id)}</span>
+            {#if actual}<span style="font-size: 9px; font-weight: 700; color: var(--gold);">{m.home_score}-{m.away_score}</span>{/if}
+          </span>
+          <span style="width: 34px; flex-shrink: 0; text-align: center;">{@render codePill(bc, bState)}</span>
           <span style="width: 12px; flex-shrink: 0; text-align: center; font-size: 11px; color: {same ? 'var(--green)' : 'var(--text-dim)'};">{same ? '=' : '≠'}</span>
         </div>
       {/snippet}
@@ -130,17 +159,11 @@
         <span style="width: 12px;"></span>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 4px;">
-        {@render row('Campeón', data.a.champion, data.b.champion)}
-        {#each groups as g}
-          {@render row(`1.º ${g}`, data.a.groupWinners[g] ?? null, data.b.groupWinners[g] ?? null)}
-        {/each}
-      </div>
-
-      <!-- Group-game 1/X/2 comparison, chronological -->
+      <!-- Group-game 1/X/2 comparison, chronological — surfaced first -->
       {#if (data.groupMatches || []).length > 0}
-        <div style="margin-top: 16px;">
-          <div style="font-size: 11px; font-weight: 700; color: var(--gold); margin-bottom: 6px;">⚽ Partidos de grupos · 1 / X / 2</div>
+        <div style="margin-bottom: 18px;">
+          <div style="font-size: 11px; font-weight: 700; color: var(--gold); margin-bottom: 2px;">⚽ Partidos de grupos · 1 / X / 2</div>
+          <p style="font-size: 8px; color: var(--text-dim); margin: 0 0 6px;">columna izq. = {data.a.owner.split(' ')[0]} · der. = {data.b.owner.split(' ')[0]} · <span style="color: var(--green);">✓</span> acertó · = mismo pronóstico</p>
           {#each matchesByDate as [dateLabel, ms]}
             <div style="font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin: 10px 0 4px;">{dateLabel}</div>
             <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -149,6 +172,13 @@
           {/each}
         </div>
       {/if}
+
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        {@render row('Campeón', data.a.champion, data.b.champion)}
+        {#each groups as g}
+          {@render row(`1.º ${g}`, data.a.groupWinners[g] ?? null, data.b.groupWinners[g] ?? null)}
+        {/each}
+      </div>
 
       <!-- Finalists + tiebreaker -->
       <div style="margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
