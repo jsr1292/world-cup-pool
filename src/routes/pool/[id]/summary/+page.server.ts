@@ -104,12 +104,12 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     const { rows: allMP } = await query(`
       SELECT mp.prediction_id, mp.match_id,
              mp.home_score AS pred_home, mp.away_score AS pred_away, mp.points_earned,
-             m.group_name, m.home_team_id, m.away_team_id,
+             m.group_name, m.home_team_id, m.away_team_id, m.kickoff_time,
              m.home_score AS actual_home, m.away_score AS actual_away, m.status
       FROM match_predictions mp
       JOIN matches m ON m.id = mp.match_id AND m.phase = 'group'
       WHERE mp.prediction_id = ANY($1::int[])
-      ORDER BY m.group_name, m.sort_order, m.kickoff_time
+      ORDER BY m.kickoff_time NULLS LAST, m.sort_order
     `, [predIds]);
     for (const mp of allMP) {
       if (!matchPreds[mp.prediction_id]) matchPreds[mp.prediction_id] = [];

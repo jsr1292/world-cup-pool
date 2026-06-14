@@ -43,14 +43,23 @@
     return data.groupPreds[selectedEntry] || [];
   }
 
-  // Per-match 1/X/2 picks for the selected entry, grouped by group and sorted.
-  function getMatchPredsByGroup(): [string, any[]][] {
+  function fmtMatchDate(ts: string | null): string {
+    if (!ts) return 'Fecha por confirmar';
+    return new Date(ts).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  // Per-match 1/X/2 picks for the selected entry, chronological (server orders
+  // them by kickoff), bucketed into consecutive date groups for date headers.
+  function getMatchPredsByDate(): [string, any[]][] {
     if (!selectedEntry) return [];
-    const out: Record<string, any[]> = {};
+    const out: [string, any[]][] = [];
+    let cur: [string, any[]] | null = null;
     for (const mp of (data.matchPreds?.[selectedEntry] || [])) {
-      (out[mp.group_name] ??= []).push(mp);
+      const label = fmtMatchDate(mp.kickoff_time);
+      if (!cur || cur[0] !== label) { cur = [label, []]; out.push(cur); }
+      cur[1].push(mp);
     }
-    return Object.entries(out).sort(([a], [b]) => a.localeCompare(b));
+    return out;
   }
 
   // Derive the 1/X/2 code from the stored canonical scoreline (1-0 / 0-0 / 0-1).
@@ -126,7 +135,38 @@
       </div>
     {/if}
 
-    <!-- Group predictions -->
+    <!-- Group match picks (1/X/2 per game) — chronological, surfaced first -->
+    <div style="margin-bottom: 24px;">
+      <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px;">⚽ Partidos de grupos · 1 / X / 2</h2>
+      <p style="font-size: 9px; color: var(--text-dim); margin-bottom: 6px;">1 = gana el local · X = empate · 2 = gana el visitante</p>
+      {#each getMatchPredsByDate() as [dateLabel, mps]}
+        <div style="font-size: 9px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 4px;">{dateLabel}</div>
+        <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 2px 12px;">
+          {#each mps as mp, mi}
+            {@const code = pickCode(mp)}
+            {@const played = mp.status === 'finished' && mp.actual_home != null}
+            {@const correct = played && mp.points_earned > 0}
+            <div style="display: flex; align-items: center; gap: 7px; padding: 7px 0; {mi > 0 ? 'border-top: 1px solid var(--border);' : ''}">
+              <span style="flex-shrink: 0; width: 14px; font-size: 8px; color: var(--text-dim);">{mp.group_name}</span>
+              <span style="flex: 1; min-width: 0; text-align: right; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; {code === '1' ? 'font-weight: 700; color: var(--text);' : 'color: var(--text-muted);'}">{teamName(mp.home_team_id)} {@html teamFlag(mp.home_team_id)}</span>
+              <span style="flex-shrink: 0; min-width: 22px; text-align: center;">
+                <span style="display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: {code === 'X' ? 'rgba(255,255,255,0.08)' : 'rgba(201,168,76,0.16)'}; color: {code === 'X' ? 'var(--text-muted)' : 'var(--gold)'};">{code}</span>
+              </span>
+              <span style="flex: 1; min-width: 0; text-align: left; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; {code === '2' ? 'font-weight: 700; color: var(--text);' : 'color: var(--text-muted);'}">{@html teamFlag(mp.away_team_id)} {teamName(mp.away_team_id)}</span>
+              <span style="flex-shrink: 0; width: 46px; text-align: right; font-size: 9px; color: {played ? (correct ? 'var(--green)' : 'var(--red)') : 'var(--text-dim)'};">
+                {#if played}{mp.actual_home}-{mp.actual_away} {correct ? '✓' : '✗'}{/if}
+              </span>
+            </div>
+          {/each}
+        </div>
+      {/each}
+
+      {#if getMatchPredsByDate().length === 0}
+        <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No hay pronósticos de partidos.</p>
+      {/if}
+    </div>
+
+    <!-- Group predictions (final-table order) — secondary, below the games -->
     <div style="margin-bottom: 24px;">
       <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">🏆 Clasificación de grupos (orden final)</h2>
       {#each getGroupPreds() as gp}
@@ -150,36 +190,6 @@
 
       {#if getGroupPreds().length === 0}
         <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No has predicho grupos aún.</p>
-      {/if}
-    </div>
-
-    <!-- Group match picks (1/X/2 per game) -->
-    <div style="margin-bottom: 24px;">
-      <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px;">⚽ Partidos de grupos · 1 / X / 2</h2>
-      <p style="font-size: 9px; color: var(--text-dim); margin-bottom: 10px;">1 = gana el local · X = empate · 2 = gana el visitante</p>
-      {#each getMatchPredsByGroup() as [group, mps]}
-        <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px;">
-          <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 2px;">Grupo {group}</div>
-          {#each mps as mp}
-            {@const code = pickCode(mp)}
-            {@const played = mp.status === 'finished' && mp.actual_home != null}
-            {@const correct = played && mp.points_earned > 0}
-            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--border);">
-              <span style="flex: 1; min-width: 0; text-align: right; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; {code === '1' ? 'font-weight: 700; color: var(--text);' : 'color: var(--text-muted);'}">{teamName(mp.home_team_id)} {@html teamFlag(mp.home_team_id)}</span>
-              <span style="flex-shrink: 0; min-width: 22px; text-align: center;">
-                <span style="display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: {code === 'X' ? 'rgba(255,255,255,0.08)' : 'rgba(201,168,76,0.16)'}; color: {code === 'X' ? 'var(--text-muted)' : 'var(--gold)'};">{code}</span>
-              </span>
-              <span style="flex: 1; min-width: 0; text-align: left; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; {code === '2' ? 'font-weight: 700; color: var(--text);' : 'color: var(--text-muted);'}">{@html teamFlag(mp.away_team_id)} {teamName(mp.away_team_id)}</span>
-              <span style="flex-shrink: 0; width: 48px; text-align: right; font-size: 9px; color: {played ? (correct ? 'var(--green)' : 'var(--red)') : 'var(--text-dim)'};">
-                {#if played}{mp.actual_home}-{mp.actual_away} {correct ? '✓' : '✗'}{/if}
-              </span>
-            </div>
-          {/each}
-        </div>
-      {/each}
-
-      {#if getMatchPredsByGroup().length === 0}
-        <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No hay pronósticos de partidos.</p>
       {/if}
     </div>
 
