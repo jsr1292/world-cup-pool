@@ -8,6 +8,8 @@
   function teamFlag(id: number) { return flagEmoji(teams[id]?.flag_code || ''); }
   const pct = (c: number) => data.totalEntries > 0 ? Math.round((c / data.totalEntries) * 100) : 0;
 
+  let showCrowdHelp = $state(false);
+
   const groupOrder = $derived(Object.keys(groupWinners ?? {}).sort());
   // The single most-picked champion, for the headline fun-fact.
   const topChampion = $derived(data.champions?.[0] ?? null);
@@ -139,6 +141,17 @@
     <!-- With the crowd / contrarian -->
     {#if data.mainstream.length > 0}
       <section style="margin-bottom: 26px;">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+          <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin: 0;">🎲 Estilo de apuesta</h2>
+          <button onclick={() => showCrowdHelp = !showCrowdHelp} aria-label="¿Qué significa?" style="width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--border); background: none; color: var(--text-muted); font-size: 10px; font-weight: 700; line-height: 1; cursor: pointer; padding: 0; flex-shrink: 0;">?</button>
+        </div>
+        {#if showCrowdHelp}
+          <div style="font-size: 10px; color: var(--text-muted); line-height: 1.5; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; margin-bottom: 10px;">
+            Para cada partido de grupos miramos la opción <strong>más votada</strong> por el grupo (1/X/2). Tu % es las veces que coincidiste con esa mayoría.<br>
+            <strong style="color: var(--gold);">🐑 Con el grupo</strong>: quienes más apuestan como la mayoría · <strong>🦄 Más contrarios</strong>: quienes más se salen de lo común.<br>
+            Es una sola clasificación para toda la quiniela (igual para todos) y <strong>no mide aciertos</strong> — solo si vas con la corriente o a contracorriente.
+          </div>
+        {/if}
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
           <div>
             <h2 style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 8px;">🐑 Con el grupo</h2>
@@ -163,7 +176,6 @@
             </div>
           </div>
         </div>
-        <p style="font-size: 9px; color: var(--text-dim); margin-top: 8px;">% de partidos de grupo en los que coincidiste con la opción más votada del grupo.</p>
       </section>
     {/if}
 
