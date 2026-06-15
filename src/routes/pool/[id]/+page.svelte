@@ -227,6 +227,27 @@
     return groups;
   });
 
+  // ── Tap a calendar game → modal with everyone's bet on it (group games only,
+  //    once the pool is locked). Fetched on demand from /api/pools/[id]/match-bets ──
+  let matchBetsOpen = $state(false);
+  let matchBetsLoading = $state(false);
+  let matchBetsErr = $state('');
+  let matchBetsData = $state<any>(null);
+  async function openMatchBets(mt: any) {
+    if (!betsLocked || mt.phase !== 'group') return;
+    matchBetsOpen = true; matchBetsLoading = true; matchBetsErr = ''; matchBetsData = null;
+    try {
+      const r = await fetch(`/api/pools/${pool.id}/match-bets?match=${mt.id}`);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) matchBetsErr = d.error || 'No se pudieron cargar las apuestas';
+      else matchBetsData = d;
+    } catch {
+      matchBetsErr = 'Error de conexión';
+    }
+    matchBetsLoading = false;
+  }
+  function closeMatchBets() { matchBetsOpen = false; matchBetsData = null; }
+
   const tabs = [
     { id: 'predictions', label: 'Pronósticos' },
     { id: 'leaderboard', label: 'Clasificación' },
@@ -569,7 +590,8 @@
               {@const v = matchVerdict(mt)}
               {@const homeWin = finished && mt.home_score > mt.away_score}
               {@const awayWin = finished && mt.away_score > mt.home_score}
-              <div style="display: flex; align-items: center; gap: 8px; background: var(--bg-card); border: 1px solid {v.correct === true ? 'rgba(0,229,160,0.3)' : v.correct === false ? 'rgba(255,77,106,0.25)' : 'var(--border)'}; border-radius: 7px; padding: 8px 10px;">
+              {@const clickable = betsLocked && mt.phase === 'group'}
+              <svelte:element this={clickable ? 'button' : 'div'} type={clickable ? 'button' : undefined} onclick={clickable ? () => openMatchBets(mt) : undefined} style="display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--bg-card); border: 1px solid {v.correct === true ? 'rgba(0,229,160,0.3)' : v.correct === false ? 'rgba(255,77,106,0.25)' : 'var(--border)'}; border-radius: 7px; padding: 8px 10px; {clickable ? 'cursor: pointer;' : ''}">
                 <!-- phase / time -->
                 <div style="width: 42px; flex-shrink: 0; text-align: center;">
                   {#if mt.phase !== 'group'}
@@ -610,7 +632,8 @@
                     <span style="font-size: 9px; color: var(--text-dim);">próximo</span>
                   {/if}
                 </div>
-              </div>
+                {#if clickable}<span style="flex-shrink: 0; font-size: 13px; color: var(--text-dim); margin-left: -2px;">›</span>{/if}
+              </svelte:element>
             {/each}
           </div>
         </div>
@@ -618,7 +641,59 @@
       {#if calendarByDay.length === 0}
         <p style="font-size: 11px; color: var(--text-muted); padding: 12px; text-align: center;">El calendario aún no está disponible.</p>
       {/if}
+      {#if betsLocked}
+        <p style="font-size: 9px; color: var(--text-dim); margin-top: 6px; text-align: center;">Toca un partido de la fase de grupos para ver qué apostó cada uno.</p>
+      {/if}
     </div>
+
+    <!-- Per-match "what everyone bet" modal -->
+    {#if matchBetsOpen}
+      <div role="presentation" onclick={closeMatchBets} style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1300; display: flex; align-items: flex-end; justify-content: center;">
+        <div role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()} style="width: 100%; max-width: 520px; max-height: 85vh; overflow-y: auto; background: var(--bg-base); border: 1px solid var(--border); border-radius: 14px 14px 0 0; padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + 20px); box-shadow: 0 -8px 30px rgba(0,0,0,0.5);">
+          <div style="display: flex; justify-content: flex-end;">
+            <button onclick={closeMatchBets} aria-label="Cerrar" style="background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 2px 6px;">✕</button>
+          </div>
+          {#if matchBetsLoading}
+            <p style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 24px;">Cargando apuestas…</p>
+          {:else if matchBetsErr}
+            <p style="text-align: center; color: var(--red); font-size: 12px; padding: 24px;">{matchBetsErr}</p>
+          {:else if matchBetsData}
+            {@const mb = matchBetsData}
+            {@const total = mb.bets.length || 1}
+            <div style="text-align: center; margin-bottom: 14px;">
+              <div style="font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em;">Grupo {mb.match.group_name}</div>
+              <div style="font-size: 15px; font-weight: 700; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;">
+                <span>{@html mb.match.home_flag ? flagEmoji(mb.match.home_flag) : ''} {mb.match.home_name ? shortName(mb.match.home_name) : ''}</span>
+                {#if mb.match.finished}<span style="color: var(--gold);">{mb.match.home_score}-{mb.match.away_score}</span>{:else}<span style="color: var(--text-dim); font-size: 12px;">vs</span>{/if}
+                <span>{mb.match.away_name ? shortName(mb.match.away_name) : ''} {@html mb.match.away_flag ? flagEmoji(mb.match.away_flag) : ''}</span>
+              </div>
+            </div>
+            {#each [['1', `Gana ${shortName(mb.match.home_name || 'local')}`], ['X', 'Empate'], ['2', `Gana ${shortName(mb.match.away_name || 'visitante')}`]] as [code, label]}
+              {@const picks = mb.bets.filter((b: any) => b.pick === code)}
+              {@const n = mb.tally[code] || 0}
+              {@const isActual = mb.match.finished && mb.match.actual === code}
+              <div style="margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                  <span style="font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: {code === 'X' ? 'rgba(255,255,255,0.08)' : 'rgba(201,168,76,0.16)'}; color: {code === 'X' ? 'var(--text-muted)' : 'var(--gold)'};">{code}</span>
+                  <span style="font-size: 11px; color: var(--text); font-weight: 600;">{label}</span>
+                  <span style="font-size: 10px; color: var(--text-muted);">· {n} ({Math.round((n / total) * 100)}%)</span>
+                  {#if isActual}<span style="font-size: 10px; color: var(--green); font-weight: 700; margin-left: auto;">✓ resultado</span>{/if}
+                </div>
+                {#if picks.length > 0}
+                  <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                    {#each picks as b}
+                      <span style="font-size: 10px; padding: 3px 8px; border-radius: 12px; background: var(--bg-surface); border: 1px solid {b.correct === true ? 'rgba(0,229,160,0.4)' : b.correct === false ? 'rgba(255,77,106,0.3)' : 'var(--border)'}; color: {b.correct === true ? 'var(--green)' : b.correct === false ? 'var(--text-muted)' : 'var(--text)'};">{b.name}{#if b.label} · {b.label}{/if}</span>
+                    {/each}
+                  </div>
+                {:else}
+                  <div style="font-size: 10px; color: var(--text-dim);">Nadie</div>
+                {/if}
+              </div>
+            {/each}
+          {/if}
+        </div>
+      </div>
+    {/if}
   {/if}
 
   <!-- Pronósticos Tab -->
