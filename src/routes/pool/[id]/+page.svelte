@@ -591,8 +591,12 @@
                   </div>
                 </div>
                 <!-- verdict / status -->
-                <div style="flex-shrink: 0; text-align: right; min-width: 46px;">
-                  {#if v.correct === true}
+                <div style="flex-shrink: 0; text-align: right; min-width: 52px;">
+                  {#if finished && mt.phase === 'group' && v.picked != null}
+                    <!-- Finished group game: show the bet placed + whether it hit. -->
+                    <div style="font-size: 8px; color: var(--text-dim); line-height: 1;">tu apuesta</div>
+                    <div style="font-size: 12px; font-weight: 700; color: {v.correct ? 'var(--green)' : 'var(--red)'};">{v.picked} {v.correct ? '✓' : '✗'}</div>
+                  {:else if v.correct === true}
                     <span style="font-size: 14px; color: var(--green);">✓</span>
                   {:else if v.correct === false}
                     <span style="font-size: 14px; color: var(--red);">✗</span>
