@@ -7,6 +7,7 @@
   import { logout } from '$lib/logout.js';
   import { WORLD_CUP_KICKOFF_MS, WORLD_CUP_DURATION_MS } from '$lib/constants.js';
   import LiveTicker from '$lib/LiveTicker.svelte';
+  import NextMatch from '$lib/NextMatch.svelte';
   import InstallPrompt from '$lib/InstallPrompt.svelte';
 
   let { children, data } = $props();
@@ -30,6 +31,8 @@
   // ── Live-score ticker (single poller, shared by the top-bar + sidebar) ──────
   /** @type {any[]} */
   let liveMatches = $state([]);
+  /** @type {any} */
+  let nextMatch = $state(null);
   /** @type {ReturnType<typeof setInterval> | null} */
   let liveTimer = null;
   const inTournamentWindow = () => {
@@ -37,10 +40,14 @@
     return now >= WORLD_CUP_KICKOFF_MS && now <= WORLD_CUP_KICKOFF_MS + WORLD_CUP_DURATION_MS;
   };
   async function pollLive() {
-    if (!inTournamentWindow()) { liveMatches = []; return; }
+    if (!inTournamentWindow()) { liveMatches = []; nextMatch = null; return; }
     try {
       const r = await fetch('/api/live');
-      if (r.ok) { const d = await r.json(); liveMatches = Array.isArray(d.matches) ? d.matches : []; }
+      if (r.ok) {
+        const d = await r.json();
+        liveMatches = Array.isArray(d.matches) ? d.matches : [];
+        nextMatch = d.next ?? null;
+      }
     } catch { /* keep last */ }
   }
   onMount(() => {
@@ -217,24 +224,19 @@
       <div class="top-bar-inner">
         <div class="top-bar-brand">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="url(#gold-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e8c96a"/><stop offset="50%" stop-color="#c9a84c"/><stop offset="100%" stop-color="#f0d98c"/></linearGradient></defs><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
-          <!-- Hide the wordmark while live scores are showing, to free up width -->
-          {#if liveMatches.length === 0}<span>Mundial 2026</span>{/if}
+          <!-- Hide the wordmark while live scores / next match fill the bar -->
+          {#if liveMatches.length === 0 && !nextMatch}<span>Mundial 2026</span>{/if}
         </div>
         {#if liveMatches.length > 0}
           <div class="top-bar-live"><LiveTicker matches={liveMatches} /></div>
+        {:else if nextMatch}
+          <div class="top-bar-live"><NextMatch match={nextMatch} /></div>
         {/if}
         <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-          {#if liveMatches.length === 0}
-            {#if countdownText}
-              <div class="countdown" title="11 de junio de 2026">
-                {countdownText}
-              </div>
-            {:else if browser}
-              {@const diff = WORLD_CUP_KICKOFF_MS - Date.now()}
-              {#if diff > -WORLD_CUP_DURATION_MS}
-                <div class="countdown live">⚽ En juego</div>
-              {/if}
-            {/if}
+          {#if liveMatches.length === 0 && !nextMatch && countdownText}
+            <div class="countdown" title="11 de junio de 2026">
+              {countdownText}
+            </div>
           {/if}
           <button onclick={toggleTheme} class="theme-toggle" title="Cambiar tema">
             {isDark ? '☀️' : '🌙'}
@@ -267,11 +269,8 @@
         <span class="sidebar-countdown-label">El Mundial arranca en</span>
         <span class="sidebar-countdown-value">{countdownText}</span>
       </div>
-    {:else if browser}
-      {@const diff = WORLD_CUP_KICKOFF_MS - Date.now()}
-      {#if diff > -WORLD_CUP_DURATION_MS}
-        <div class="sidebar-countdown"><span class="sidebar-countdown-value live">⚽ En juego</span></div>
-      {/if}
+    {:else if nextMatch}
+      <div class="sidebar-countdown" style="overflow: hidden;"><NextMatch match={nextMatch} variant="sidebar" /></div>
     {/if}
 
     <div class="sidebar-nav">

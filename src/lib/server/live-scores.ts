@@ -79,6 +79,34 @@ export async function fetchLiveTicker(): Promise<TickerMatch[]> {
   }
 }
 
+export interface NextMatch {
+  home: string | null; home_flag: string | null;
+  away: string | null; away_flag: string | null;
+  kickoff_time: string; phase: string;
+}
+
+/** The soonest not-yet-played fixture (for the header when nothing is live). */
+export async function getNextMatch(): Promise<NextMatch | null> {
+  const { rows } = await query(
+    `SELECT m.phase, m.kickoff_time,
+            t1.name AS home, t1.flag_code AS home_flag,
+            t2.name AS away, t2.flag_code AS away_flag
+       FROM matches m
+       LEFT JOIN teams t1 ON t1.id = m.home_team_id
+       LEFT JOIN teams t2 ON t2.id = m.away_team_id
+      WHERE m.status <> 'finished' AND m.kickoff_time IS NOT NULL AND m.kickoff_time > NOW()
+      ORDER BY m.kickoff_time ASC
+      LIMIT 1`
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    home: r.home, home_flag: r.home_flag, away: r.away, away_flag: r.away_flag,
+    kickoff_time: r.kickoff_time instanceof Date ? r.kickoff_time.toISOString() : String(r.kickoff_time),
+    phase: r.phase,
+  };
+}
+
 // official FIFA match number → which of our knockout placeholder slots it is
 // (phase + 0-based index in sort_order order). Lets the sync drop a real knockout
 // match into the date-correct slot instead of the first free one.
