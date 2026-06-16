@@ -249,13 +249,13 @@
   function closeMatchBets() { matchBetsOpen = false; matchBetsData = null; }
 
   const tabs = [
-    { id: 'predictions', label: 'Pronósticos' },
-    { id: 'leaderboard', label: 'Clasificación' },
+    { id: 'predictions', label: '🔮 Pronósticos' },
+    { id: 'leaderboard', label: '🏅 Clasificación' },
     { id: 'calendar', label: '📅 Calendario' },
-    { id: 'members', label: 'Miembros' },
+    { id: 'members', label: '👥 Miembros' },
     { id: 'summary', label: '📋 Resumen' },
     { id: 'results', label: '🏆 Resultados' },
-    { id: 'scoring', label: 'Puntuación' },
+    { id: 'scoring', label: '🔢 Puntuación' },
   ];
 
   const phaseLabels: Record<string, string> = {
