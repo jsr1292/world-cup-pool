@@ -224,19 +224,19 @@
       <div class="top-bar-inner">
         <div class="top-bar-brand">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="url(#gold-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e8c96a"/><stop offset="50%" stop-color="#c9a84c"/><stop offset="100%" stop-color="#f0d98c"/></linearGradient></defs><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
-          <!-- Hide the wordmark while live scores / next match fill the bar -->
-          {#if liveMatches.length === 0 && !nextMatch}<span>Mundial 2026</span>{/if}
+          <!-- Hide the wordmark while live scores are showing, to free up width -->
+          {#if liveMatches.length === 0}<span>Mundial 2026</span>{/if}
         </div>
         {#if liveMatches.length > 0}
           <div class="top-bar-live"><LiveTicker matches={liveMatches} /></div>
-        {:else if nextMatch}
-          <div class="top-bar-live"><NextMatch match={nextMatch} /></div>
         {/if}
         <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-          {#if liveMatches.length === 0 && !nextMatch && countdownText}
-            <div class="countdown" title="11 de junio de 2026">
-              {countdownText}
-            </div>
+          {#if liveMatches.length === 0}
+            {#if countdownText}
+              <div class="countdown" title="11 de junio de 2026">{countdownText}</div>
+            {:else if nextMatch}
+              <NextMatch match={nextMatch} />
+            {/if}
           {/if}
           <button onclick={toggleTheme} class="theme-toggle" title="Cambiar tema">
             {isDark ? '☀️' : '🌙'}
