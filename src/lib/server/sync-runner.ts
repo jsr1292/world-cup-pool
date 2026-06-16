@@ -49,13 +49,40 @@ export async function syncAndRescore(): Promise<SyncResult & { pools: number }> 
 }
 
 // ── Background scheduler ─────────────────────────────────────────────────────
-let timer: ReturnType<typeof setInterval> | null = null;
+let timer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 
+/** True if any fixture is within its play window (kickoff−5min … kickoff+3h)
+ *  and not yet recorded finished — i.e. a result could land imminently. */
+async function anyMatchInPlayWindow(): Promise<boolean> {
+  try {
+    const { rows } = await query(
+      `SELECT 1 FROM matches
+         WHERE kickoff_time IS NOT NULL AND status <> 'finished'
+           AND NOW() BETWEEN kickoff_time - INTERVAL '5 minutes'
+                         AND kickoff_time + INTERVAL '180 minutes'
+         LIMIT 1`
+    );
+    return rows.length > 0;
+  } catch (e) {
+    console.error('[scheduler] live-window check failed:', e);
+    return false;
+  }
+}
+
 /**
- * Start periodic auto-sync. No-op unless AUTO_SYNC_MINUTES > 0 and a provider is
- * configured (API_FOOTBALL_KEY or ENABLE_FIFA_FALLBACK). Safe to call repeatedly
- * (starts at most once per process).
+ * Start adaptive auto-sync. No-op unless AUTO_SYNC_MINUTES > 0 and a provider is
+ * configured. Safe to call repeatedly (starts at most once per process).
+ *
+ * Cadence adapts to the schedule: while a match could be in play we poll every
+ * ~90s so a final score (and the rescored standings) lands within about a minute
+ * of full-time; between matches we fall back to the configured idle gap. Since
+ * syncScores only WRITES finished matches, the frequent in-window polls are
+ * cheap fetches that trigger a rescore only when a game actually ends.
+ *
+ * The fast cadence is gated to the keyless FIFA source — API-Football's free
+ * tier (100 req/day) can't sustain it, so with a key set it stays at the idle
+ * gap. Override the in-match cadence with AUTO_SYNC_LIVE_SECONDS (min 45s).
  */
 export function startSyncScheduler(): void {
   if (timer) return;
@@ -67,28 +94,39 @@ export function startSyncScheduler(): void {
     console.warn('[scheduler] AUTO_SYNC_MINUTES set but no provider — auto-sync disabled.');
     return;
   }
-  const intervalMs = Math.max(5, minutes) * 60_000; // floor 5 min to respect rate limits
+
+  const usingFifa = !process.env.API_FOOTBALL_KEY; // FIFA fallback: free, no quota
+  const idleMs = Math.max(5, minutes) * 60_000;    // floor 5 min between matches
+  const liveMs = usingFifa
+    ? Math.max(45, Number(process.env.AUTO_SYNC_LIVE_SECONDS) || 90) * 1000
+    : idleMs; // API-Football: no aggressive polling (protect the daily quota)
 
   const tick = async () => {
-    if (running) return; // never overlap runs
-    running = true;
-    try {
-      const r = await syncAndRescore();
-      if (r.updated > 0) {
-        console.log(`[scheduler] synced ${r.updated} match(es), rescored ${r.pools} pool(s).`);
+    if (!running) {
+      running = true;
+      try {
+        const r = await syncAndRescore();
+        if (r.updated > 0) {
+          console.log(`[scheduler] synced ${r.updated} match(es), rescored ${r.pools} pool(s).`);
+        }
+        if (r.unmatched.length > 0) {
+          console.warn(`[scheduler] ${r.unmatched.length} unresolved fixture(s): ${r.unmatched.join('; ')}`);
+        }
+      } catch (e) {
+        console.error('[scheduler] auto-sync failed:', e);
+      } finally {
+        running = false;
       }
-      if (r.unmatched.length > 0) {
-        console.warn(`[scheduler] ${r.unmatched.length} unresolved fixture(s): ${r.unmatched.join('; ')}`);
-      }
-    } catch (e) {
-      console.error('[scheduler] auto-sync failed:', e);
-    } finally {
-      running = false;
     }
+    // Re-arm AFTER the run completes (so ticks never overlap): fast while a
+    // match is in its play window, otherwise the idle gap.
+    const fast = liveMs < idleMs && (await anyMatchInPlayWindow());
+    timer = setTimeout(tick, fast ? liveMs : idleMs);
   };
 
-  // First run shortly after boot, then on the interval.
-  setTimeout(tick, 20_000);
-  timer = setInterval(tick, intervalMs);
-  console.log(`[scheduler] hands-off auto-sync enabled: every ${Math.max(5, minutes)} min.`);
+  // First run shortly after boot, then self-schedule adaptively.
+  timer = setTimeout(tick, 20_000);
+  console.log(
+    `[scheduler] adaptive auto-sync: ~${Math.round(liveMs / 1000)}s in-match · ${Math.max(5, minutes)} min idle${usingFifa ? '' : ' (API-Football: fixed)'}.`
+  );
 }

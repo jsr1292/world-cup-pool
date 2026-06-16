@@ -44,7 +44,7 @@ each start, `run.sh`:
 | `public_base_url` | string (optional) | — | Public HTTPS base URL for password-reset links, e.g. `https://you.duckdns.org`. |
 | `smtp_host` / `smtp_port` / `smtp_user` / `smtp_pass` / `smtp_from` | string / int / masked | — / `587` / — | SMTP settings for password-reset emails. Leave `smtp_host` blank to disable self-service reset (use admin reset instead). |
 | `api_football_key` | masked (optional) | — | API-Football (api-sports.io) key. With this set, the app can import results automatically. |
-| `auto_sync_minutes` | int | `0` | How often to auto-import results, in minutes. `0` = off. Floored to 5 min. Suggested `15`–`30` during the tournament. |
+| `auto_sync_minutes` | int | `0` | Idle gap between result imports, in minutes. `0` = off. Floored to 5 min. Suggested `15`–`30`. On the free FIFA source the schedule is **adaptive**: it polls every ~90s while a match is in play (so finals post within ~a minute) and only falls back to this gap between matches. |
 
 ### Hands-off results (automatic scoring)
 
