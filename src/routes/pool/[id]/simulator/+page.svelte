@@ -1,7 +1,10 @@
 <script lang="ts">
   import { rankGroup, type GsMatch } from '$lib/group-standings.js';
+  import { rankThirds, assignThirds, buildR32 } from '$lib/sim-bracket.js';
   import { flagEmoji, shortName } from '$lib/teams.js';
   let { data } = $props();
+
+  let view = $state<'standings' | 'bracket'>('standings');
 
   const teams = $derived(data.teams as Record<number, { name?: string; flag_code?: string }>);
   function tName(id: number) { const n = teams[id]?.name; return n ? shortName(n) : 'TBD'; }
@@ -97,6 +100,49 @@
     });
   });
 
+  // ── Phase 2: qualification + projected R32 bracket ──────────────────────────
+  const GROUPS = 'ABCDEFGHIJKL'.split('');
+  function groupGsMatches(g: string): GsMatch[] {
+    const out: GsMatch[] = [...(realByGroup[g] || [])];
+    for (const m of (unplayedByGroup[g] || [])) {
+      if (sim[m.id]) { const [hs, as] = canon(sim[m.id]); out.push({ homeTeamId: m.home_team_id, awayTeamId: m.away_team_id, homeScore: hs, awayScore: as }); }
+    }
+    return out;
+  }
+  function statsOf(gms: GsMatch[]): Record<number, { points: number; gf: number; ga: number }> {
+    const t: Record<number, { points: number; gf: number; ga: number }> = {};
+    const ens = (id: number) => (t[id] ??= { points: 0, gf: 0, ga: 0 });
+    for (const m of gms) {
+      const h = ens(m.homeTeamId), a = ens(m.awayTeamId);
+      h.gf += m.homeScore; h.ga += m.awayScore; a.gf += m.awayScore; a.ga += m.homeScore;
+      if (m.homeScore > m.awayScore) h.points += 3; else if (m.homeScore < m.awayScore) a.points += 3; else { h.points++; a.points++; }
+    }
+    return t;
+  }
+  const bracket = $derived.by(() => {
+    const winners: Record<string, number | undefined> = {}, runners: Record<string, number | undefined> = {}, thirdByGroup: Record<string, number | undefined> = {};
+    const perGroup: Record<string, { complete: boolean; order: number[] | null; played: number }> = {};
+    const thirds: { group: string; teamId: number; points: number; gd: number; gf: number }[] = [];
+    let completeCount = 0;
+    for (const g of GROUPS) {
+      const gms = groupGsMatches(g);
+      const complete = gms.length === 6;
+      perGroup[g] = { complete, order: complete ? rankGroup(gms) : null, played: (realByGroup[g] || []).length };
+      if (complete) {
+        completeCount++;
+        const order = perGroup[g].order as number[];
+        winners[g] = order[0]; runners[g] = order[1]; thirdByGroup[g] = order[2];
+        const s = statsOf(gms)[order[2]];
+        thirds.push({ group: g, teamId: order[2], points: s.points, gd: s.gf - s.ga, gf: s.gf });
+      }
+    }
+    const allComplete = completeCount === 12;
+    const thirdsRanked = rankThirds(thirds);
+    const assignment = allComplete ? assignThirds(thirdsRanked.qualifyingGroups) : null;
+    const r32 = buildR32({ winners, runners, thirdByGroup, thirdsAssignment: assignment });
+    return { perGroup, thirds, thirdsRanked, allComplete, completeCount, r32 };
+  });
+
   const myIds = $derived(new Set((data.entries as any[]).filter((e) => e.user_id === data.userId).map((e) => e.id)));
   // The viewer's own pick per match, as a reminder of what they bet.
   const myPrimaryId = $derived((data.entries as any[]).find((e) => e.user_id === data.userId)?.id ?? null);
@@ -122,6 +168,13 @@
       {#if data.groupPositionPts > 0}Si completas <strong>todos</strong> los partidos de un grupo, también se suman los puntos por la tabla final.{/if}
     </p>
 
+    <!-- View toggle -->
+    <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+      <button onclick={() => (view = 'standings')} style="flex: 1; font-size: 10px; font-weight: 600; padding: 7px; border-radius: 7px; cursor: pointer; border: 1px solid {view === 'standings' ? 'var(--gold)' : 'var(--border)'}; background: {view === 'standings' ? 'rgba(201,168,76,0.12)' : 'var(--bg-card)'}; color: {view === 'standings' ? 'var(--gold)' : 'var(--text-muted)'};">📊 Clasificación</button>
+      <button onclick={() => (view = 'bracket')} style="flex: 1; font-size: 10px; font-weight: 600; padding: 7px; border-radius: 7px; cursor: pointer; border: 1px solid {view === 'bracket' ? 'var(--gold)' : 'var(--border)'}; background: {view === 'bracket' ? 'rgba(201,168,76,0.12)' : 'var(--bg-card)'}; color: {view === 'bracket' ? 'var(--gold)' : 'var(--text-muted)'};">🏆 Clasificados y cuadro</button>
+    </div>
+
+    {#if view === 'standings'}
     <!-- Projected standings -->
     <div style="position: sticky; top: 0; z-index: 5; background: var(--bg-base); padding: 6px 0 10px;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -143,6 +196,67 @@
         {/each}
       </div>
     </div>
+    {:else}
+    <!-- Qualification + projected R32 -->
+    {@const br = bracket}
+    <p style="font-size: 9px; color: var(--text-dim); margin: 0 0 12px; line-height: 1.5;">
+      Clasificados según los resultados que decidas abajo. {#if !br.allComplete}Completa los 6 partidos de un grupo para ver sus clasificados.{/if} Los puestos de 3.º en el cuadro son aproximados.
+    </p>
+
+    <!-- Qualified per group -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px;">
+      {#each GROUPS as g}
+        {@const pg = br.perGroup[g]}
+        <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 7px; padding: 8px 9px;">
+          <div style="font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">Grupo {g}</div>
+          {#if pg.complete && pg.order}
+            {#each pg.order as tid, idx}
+              {@const qualifies = idx === 2 && br.thirdsRanked.qualifyingGroups.has(g)}
+              <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; padding: 1px 0; {idx < 2 ? 'color: var(--text);' : 'color: var(--text-muted);'}">
+                <span style="width: 10px; color: var(--text-dim);">{idx + 1}</span>
+                <span>{@html tFlag(tid)}</span>
+                <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{tName(tid)}</span>
+                {#if idx < 2}<span style="color: var(--green); font-size: 9px;">✓</span>{:else if idx === 2}<span style="font-size: 8px; color: {qualifies ? 'var(--green)' : 'var(--text-dim)'};">{qualifies ? '3.º ✓' : br.allComplete ? 'fuera' : '3.º ?'}</span>{/if}
+              </div>
+            {/each}
+          {:else}
+            <div style="font-size: 10px; color: var(--text-dim);">sin decidir ({pg.played}/6)</div>
+          {/if}
+        </div>
+      {/each}
+    </div>
+
+    <!-- Best thirds -->
+    {#if br.thirds.length > 0}
+      <h2 style="font-size: 12px; font-weight: 700; color: var(--text); margin: 0 0 4px;">Mejores terceros</h2>
+      <p style="font-size: 8px; color: var(--text-dim); margin: 0 0 8px;">Los 8 mejores clasifican.{#if !br.allComplete} Provisional hasta que terminen los 12 grupos ({br.completeCount}/12).{/if}</p>
+      <div style="display: flex; flex-direction: column; gap: 3px; margin-bottom: 18px;">
+        {#each br.thirdsRanked.ranked as t, i}
+          {@const inTop8 = i < 8}
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 10px; padding: 4px 8px; border-radius: 5px; background: {inTop8 ? 'rgba(0,229,160,0.06)' : 'var(--bg-card)'}; border: 1px solid {inTop8 ? 'rgba(0,229,160,0.2)' : 'var(--border)'};">
+            <span style="width: 14px; color: var(--text-dim);">{i + 1}</span>
+            <span>{@html tFlag(t.teamId)}</span>
+            <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{tName(t.teamId)} <span style="color: var(--text-dim);">({t.group})</span></span>
+            <span style="color: var(--text-muted); font-size: 9px;">{t.points} pts · {t.gd > 0 ? '+' : ''}{t.gd}</span>
+            {#if inTop8}<span style="color: var(--green); font-size: 9px;">✓</span>{/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
+
+    <!-- R32 bracket -->
+    <h2 style="font-size: 12px; font-weight: 700; color: var(--text); margin: 0 0 8px;">Dieciseisavos (proyección)</h2>
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      {#each br.r32 as mu}
+        <div style="display: flex; align-items: center; gap: 6px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px;">
+          <span style="width: 28px; flex-shrink: 0; font-size: 8px; color: var(--text-dim);">M{mu.official}</span>
+          <span style="flex: 1; min-width: 0; text-align: right; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{#if mu.a.teamId}{tName(mu.a.teamId)} {@html tFlag(mu.a.teamId)}{:else}<span style="color: var(--text-dim);">{mu.a.label}</span>{/if}</span>
+          <span style="font-size: 8px; color: var(--text-dim); flex-shrink: 0;">vs</span>
+          <span style="flex: 1; min-width: 0; text-align: left; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{#if mu.b.teamId}{@html tFlag(mu.b.teamId)} {tName(mu.b.teamId)}{:else}<span style="color: var(--text-dim);">{mu.b.label}</span>{/if}</span>
+        </div>
+      {/each}
+    </div>
+    {/if}
 
     <!-- Match controls -->
     <div style="margin-top: 14px;">
