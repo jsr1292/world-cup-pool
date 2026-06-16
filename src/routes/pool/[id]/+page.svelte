@@ -250,6 +250,7 @@
 
   const tabs = [
     { id: 'predictions', label: '🔮 Pronósticos' },
+    { id: 'simulator', label: '🎲 Simulador', link: true },
     { id: 'leaderboard', label: '🏅 Clasificación' },
     { id: 'calendar', label: '📅 Calendario' },
     { id: 'members', label: '👥 Miembros' },
@@ -408,11 +409,15 @@
   <!-- Tabs -->
   <div class="pool-tabs">
     {#each tabs as t}
-      <button
-        onclick={() => switchTab(t.id)}
-        class="pool-tab"
-        class:active={tab === t.id}
-      >{t.label}</button>
+      {#if t.link}
+        <a href="/pool/{pool.id}/{t.id}" class="pool-tab" style="text-decoration: none;">{t.label}</a>
+      {:else}
+        <button
+          onclick={() => switchTab(t.id)}
+          class="pool-tab"
+          class:active={tab === t.id}
+        >{t.label}</button>
+      {/if}
     {/each}
   </div>
 
@@ -534,7 +539,6 @@
       <div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; margin-bottom: 4px;">
         {#if betsLocked}
           <a href="/pool/{pool.id}/stats" style="border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: var(--text-muted); text-decoration: none; margin-right: auto;">📊 Estadísticas</a>
-          <a href="/pool/{pool.id}/simulator" style="border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: var(--text-muted); text-decoration: none;">🎲 Simulador</a>
           <a href="/pool/{pool.id}/h2h" style="border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: var(--text-muted); text-decoration: none;">⚔️ Comparar</a>
         {/if}
         <button onclick={() => { shareScoreboard(); haptic(10); }} style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: {shared ? 'var(--green)' : 'var(--text-muted)'}; cursor: pointer;">
