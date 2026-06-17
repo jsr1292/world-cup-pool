@@ -346,11 +346,11 @@
   <div style="flex: 1; display: flex; flex-direction: column;">
 
   <!-- Pool Header -->
-  <div style="margin-bottom: 24px; padding: 24px; background: linear-gradient(135deg, rgba(201,168,76,0.08) 0%, transparent 100%); border-radius: 16px; border: 1px solid rgba(201,168,76,0.12);">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
-      <div>
-        <h1 style="font-family: 'Libre Baskerville', serif; font-size: 24px; color: var(--gold); margin-bottom: 8px;">{pool.name}</h1>
-        <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted);">
+  <div style="margin-bottom: 18px; padding: 14px 16px; background: linear-gradient(135deg, rgba(201,168,76,0.08) 0%, transparent 100%); border-radius: 14px; border: 1px solid rgba(201,168,76,0.12);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+      <div style="min-width: 0;">
+        <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold); margin-bottom: 6px;">{pool.name}</h1>
+        <div style="display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted);">
           <span>👥 {data.members.length} miembros</span>
           {#if pool.buy_in > 0}
             <span>💰 {fmtMoney(Number(pool.buy_in) || 0)} entrada</span>
@@ -360,10 +360,7 @@
           {/if}
         </div>
       </div>
-      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-        <span style="font-size: 10px; color: var(--text-muted);">🔗 <span style="color: var(--gold); font-weight: 600;">{pool.invite_code}</span></span>
-        <button onclick={openSheet} style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 14px; color: var(--text-muted); cursor: pointer; line-height: 1;">⋯</button>
-      </div>
+      <button onclick={openSheet} aria-label="Opciones" style="flex-shrink: 0; background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 16px; color: var(--text-muted); cursor: pointer; line-height: 1;">⋯</button>
     </div>
   </div>
 
