@@ -628,7 +628,10 @@
                   {:else if finished}
                     <span style="font-size: 9px; color: var(--text-dim);">{mt.phase === 'group' && v.picked == null ? 'sin pronóstico' : 'final'}</span>
                   {:else if live}
-                    <span style="font-size: 9px; color: var(--red); font-weight: 700;">● EN JUEGO</span>
+                    <span style="display: inline-flex; align-items: center; gap: 5px; justify-content: flex-end;">
+                      {#if mt.phase === 'group' && v.picked}<span style="font-size: 9px; color: var(--text-muted);">Tu: <strong style="color: var(--gold);">{v.picked}</strong></span>{/if}
+                      <span class="cal-live-dot" aria-label="En juego"></span>
+                    </span>
                   {:else if mt.phase === 'group' && v.picked}
                     <span style="font-size: 9px; color: var(--text-muted);">Tu: <strong style="color: var(--gold);">{v.picked}</strong></span>
                   {:else}
@@ -1054,6 +1057,17 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .cal-live { animation: none; box-shadow: 0 0 0 1px rgba(255,77,106,0.5), 0 0 14px rgba(255,77,106,0.4); }
+  }
+  .cal-live-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--red);
+    flex-shrink: 0; animation: calDot 1.4s ease-in-out infinite;
+  }
+  @keyframes calDot {
+    0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(255,77,106,0.7); }
+    50%      { opacity: 0.45; box-shadow: 0 0 10px rgba(255,77,106,0.95); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cal-live-dot { animation: none; box-shadow: 0 0 6px rgba(255,77,106,0.8); }
   }
   .tab-content-wrapper {
     transition: transform 0.2s ease-out, opacity 0.2s ease-out;
