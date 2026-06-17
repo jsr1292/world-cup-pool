@@ -350,10 +350,13 @@
     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
       <div style="min-width: 0;">
         <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold); margin-bottom: 6px;">{pool.name}</h1>
-        <div style="display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted);">
-          <span>👥 {data.members.length} miembros</span>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted);">
+          <span title="Miembros">👥 {data.members.length}</span>
           {#if pool.buy_in > 0}
-            <span style="white-space: nowrap;">💰 {fmtMoney(Number(pool.buy_in) || 0)} entrada{#if pot > 0} · <span style="color: var(--gold);">🏆 Bote: {fmtMoney(pot)}</span>{/if}</span>
+            <span title="Entrada">💰 {fmtMoney(Number(pool.buy_in) || 0)}</span>
+            {#if pot > 0}
+              <span title="Bote" style="color: var(--gold);">🏆 {fmtMoney(pot)}</span>
+            {/if}
           {/if}
         </div>
       </div>
