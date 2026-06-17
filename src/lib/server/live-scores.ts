@@ -65,7 +65,11 @@ export async function fetchLiveTicker(): Promise<TickerMatch[]> {
     const { rows: gmRows } = await query(`SELECT id, home_team_id, away_team_id FROM matches WHERE phase = 'group'`);
     const pairKey = (x: number, y: number) => `${Math.min(x, y)}-${Math.max(x, y)}`;
     const matchByPair = new Map<string, number>();
-    for (const r of gmRows) if (r.home_team_id && r.away_team_id) matchByPair.set(pairKey(r.home_team_id, r.away_team_id), r.id);
+    const homeByMatch = new Map<number, number>();
+    for (const r of gmRows) if (r.home_team_id && r.away_team_id) {
+      matchByPair.set(pairKey(r.home_team_id, r.away_team_id), r.id);
+      homeByMatch.set(r.id, r.home_team_id);
+    }
 
     const side = (t: any): { id: number | null; name: string; code: string; flag: string } => {
       const fifaName = t?.TeamName?.[0]?.Description ?? t?.ShortClubName ?? '';
@@ -77,11 +81,19 @@ export async function fetchLiveTicker(): Promise<TickerMatch[]> {
       return { id, name: ours?.name ?? fifaName, code, flag: ours?.flag_code ?? '' };
     };
     return live.map((m: any): TickerMatch => {
-      const h = side(m.Home), a = side(m.Away);
-      const match_id = h.id != null && a.id != null ? (matchByPair.get(pairKey(h.id, a.id)) ?? null) : null;
+      const fh = side(m.Home), fa = side(m.Away);
+      const fhScore = m.Home?.Score ?? m.HomeTeamScore ?? 0;
+      const faScore = m.Away?.Score ?? m.AwayTeamScore ?? 0;
+      const match_id = fh.id != null && fa.id != null ? (matchByPair.get(pairKey(fh.id, fa.id)) ?? null) : null;
+      // Show teams in OUR stored orientation (home/away as seeded), so the ticker
+      // matches the Calendario and the viewer's 1/X/2 pick lines up with the
+      // shown sides — FIFA's feed sometimes lists home/away the other way round.
+      let h = fh, a = fa, hScore = fhScore, aScore = faScore;
+      const dbHome = match_id != null ? homeByMatch.get(match_id) : undefined;
+      if (dbHome != null && fa.id === dbHome) { h = fa; a = fh; hScore = faScore; aScore = fhScore; }
       return {
-        home: h.name, home_code: h.code, home_flag: h.flag, home_score: m.Home?.Score ?? m.HomeTeamScore ?? 0,
-        away: a.name, away_code: a.code, away_flag: a.flag, away_score: m.Away?.Score ?? m.AwayTeamScore ?? 0,
+        home: h.name, home_code: h.code, home_flag: h.flag, home_score: hScore,
+        away: a.name, away_code: a.code, away_flag: a.flag, away_score: aScore,
         minute: typeof m.MatchTime === 'string' ? m.MatchTime : '',
         match_id,
       };
