@@ -593,7 +593,7 @@
               {@const homeWin = finished && mt.home_score > mt.away_score}
               {@const awayWin = finished && mt.away_score > mt.home_score}
               {@const clickable = betsLocked && mt.phase === 'group'}
-              <svelte:element this={clickable ? 'button' : 'div'} type={clickable ? 'button' : undefined} onclick={clickable ? () => openMatchBets(mt) : undefined} style="display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--bg-card); border: 1px solid {v.correct === true ? 'rgba(0,229,160,0.3)' : v.correct === false ? 'rgba(255,77,106,0.25)' : 'var(--border)'}; border-radius: 7px; padding: 8px 10px; {clickable ? 'cursor: pointer;' : ''}">
+              <svelte:element this={clickable ? 'button' : 'div'} type={clickable ? 'button' : undefined} onclick={clickable ? () => openMatchBets(mt) : undefined} class="cal-row" class:cal-live={live} style="display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--bg-card); border: 1px solid {v.correct === true ? 'rgba(0,229,160,0.3)' : v.correct === false ? 'rgba(255,77,106,0.25)' : 'var(--border)'}; border-radius: 7px; padding: 8px 10px; {clickable ? 'cursor: pointer;' : ''}">
                 <!-- phase / time -->
                 <div style="width: 42px; flex-shrink: 0; text-align: center;">
                   {#if mt.phase !== 'group'}
@@ -1042,6 +1042,18 @@
 {/if}
 
 <style>
+  /* Live game in the Calendario: glowing red, like the live score. */
+  .cal-live {
+    border-color: var(--red) !important;
+    animation: calPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes calPulse {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(255,77,106,0.35), 0 0 10px rgba(255,77,106,0.25); }
+    50%      { box-shadow: 0 0 0 1px rgba(255,77,106,0.6), 0 0 18px rgba(255,77,106,0.5); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cal-live { animation: none; box-shadow: 0 0 0 1px rgba(255,77,106,0.5), 0 0 14px rgba(255,77,106,0.4); }
+  }
   .tab-content-wrapper {
     transition: transform 0.2s ease-out, opacity 0.2s ease-out;
   }

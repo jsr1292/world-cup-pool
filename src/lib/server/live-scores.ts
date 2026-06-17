@@ -28,6 +28,10 @@ export interface TickerMatch {
   home: string; home_code: string; home_flag: string; home_score: number;
   away: string; away_code: string; away_flag: string; away_score: number;
   minute: string;
+  /** Our group-match id (for looking up the viewer's pick); null if unresolved. */
+  match_id: number | null;
+  /** The viewer's 1/X/2 pick for this match, attached per-request by /api/live. */
+  my_pick?: '1' | 'X' | '2' | null;
 }
 
 /**
@@ -56,21 +60,30 @@ export async function fetchLiveTicker(): Promise<TickerMatch[]> {
     const resolver = new Map<string, number>();
     for (const r of rows) resolver.set(normalizeTeamName(r.canon), r.id);
     const teams = await getTeamsMapCached();
-    const side = (t: any): { name: string; code: string; flag: string } => {
+    // Map each group fixture by its unordered team pair, so a live game can be
+    // tied back to our match id (live group games aren't synced with a fifa_id).
+    const { rows: gmRows } = await query(`SELECT id, home_team_id, away_team_id FROM matches WHERE phase = 'group'`);
+    const pairKey = (x: number, y: number) => `${Math.min(x, y)}-${Math.max(x, y)}`;
+    const matchByPair = new Map<string, number>();
+    for (const r of gmRows) if (r.home_team_id && r.away_team_id) matchByPair.set(pairKey(r.home_team_id, r.away_team_id), r.id);
+
+    const side = (t: any): { id: number | null; name: string; code: string; flag: string } => {
       const fifaName = t?.TeamName?.[0]?.Description ?? t?.ShortClubName ?? '';
-      const id = resolver.get(normalizeTeamName(fifaName));
+      const id = resolver.get(normalizeTeamName(fifaName)) ?? null;
       const ours = id != null ? (teams as Record<number, any>)[id] : null;
       // 3-letter code: FIFA's official abbreviation (MEX, ESP…), falling back to
       // the IOC country id or, last resort, the first 3 letters of the name.
       const code = (t?.Abbreviation || t?.IdCountry || fifaName.slice(0, 3)).toString().toUpperCase().slice(0, 3);
-      return { name: ours?.name ?? fifaName, code, flag: ours?.flag_code ?? '' };
+      return { id, name: ours?.name ?? fifaName, code, flag: ours?.flag_code ?? '' };
     };
     return live.map((m: any): TickerMatch => {
       const h = side(m.Home), a = side(m.Away);
+      const match_id = h.id != null && a.id != null ? (matchByPair.get(pairKey(h.id, a.id)) ?? null) : null;
       return {
         home: h.name, home_code: h.code, home_flag: h.flag, home_score: m.Home?.Score ?? m.HomeTeamScore ?? 0,
         away: a.name, away_code: a.code, away_flag: a.flag, away_score: m.Away?.Score ?? m.AwayTeamScore ?? 0,
         minute: typeof m.MatchTime === 'string' ? m.MatchTime : '',
+        match_id,
       };
     });
   } catch (e) {
