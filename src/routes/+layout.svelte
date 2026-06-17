@@ -28,6 +28,20 @@
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
 
+  // Self-heal blank pages: if a lazily-loaded route chunk fails to load (a
+  // transient network blip, or a deploy that rotated chunk hashes mid-session),
+  // the page can render blank. Reload once to fetch the current build instead of
+  // leaving an empty screen. Guarded per-session so it can never loop.
+  if (browser) {
+    window.addEventListener('vite:preloadError', () => {
+      try {
+        if (sessionStorage.getItem('preload-reloaded')) return;
+        sessionStorage.setItem('preload-reloaded', '1');
+      } catch { /* private mode — reload anyway */ }
+      location.reload();
+    });
+  }
+
   // ── Live-score ticker (single poller, shared by the top-bar + sidebar) ──────
   /** @type {any[]} */
   let liveMatches = $state([]);
