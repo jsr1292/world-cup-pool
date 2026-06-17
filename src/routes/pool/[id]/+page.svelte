@@ -353,10 +353,7 @@
         <div style="display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted);">
           <span>👥 {data.members.length} miembros</span>
           {#if pool.buy_in > 0}
-            <span>💰 {fmtMoney(Number(pool.buy_in) || 0)} entrada</span>
-            {#if pot > 0}
-              <span style="color: var(--gold);">🏆 Bote: {fmtMoney(pot)}</span>
-            {/if}
+            <span style="white-space: nowrap;">💰 {fmtMoney(Number(pool.buy_in) || 0)} entrada{#if pot > 0} · <span style="color: var(--gold);">🏆 Bote: {fmtMoney(pot)}</span>{/if}</span>
           {/if}
         </div>
       </div>
