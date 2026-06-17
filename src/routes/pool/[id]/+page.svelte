@@ -2,6 +2,7 @@
   import { headerTitle } from '$lib/stores/header';
   import { haptic } from '$lib/haptic';
   import { flagEmoji, shortName } from '$lib/teams.js';
+  import { liveMatchIds } from '$lib/live.js';
   let { data } = $props();
   let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
   const tabIndexOrder = ['predictions', 'leaderboard', 'calendar', 'members', 'summary', 'results', 'scoring'];
@@ -588,7 +589,7 @@
           <div style="display: flex; flex-direction: column; gap: 5px;">
             {#each group.matches as mt}
               {@const finished = mt.status === 'finished' && mt.home_score != null}
-              {@const live = !finished && mt.status === 'live'}
+              {@const live = !finished && ($liveMatchIds.has(mt.id) || mt.status === 'live')}
               {@const v = matchVerdict(mt)}
               {@const homeWin = finished && mt.home_score > mt.away_score}
               {@const awayWin = finished && mt.away_score > mt.home_score}

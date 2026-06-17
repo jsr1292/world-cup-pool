@@ -9,6 +9,7 @@
   import LiveTicker from '$lib/LiveTicker.svelte';
   import NextMatch from '$lib/NextMatch.svelte';
   import InstallPrompt from '$lib/InstallPrompt.svelte';
+  import { liveMatchIds } from '$lib/live.js';
 
   let { children, data } = $props();
   import { onMount, onDestroy } from 'svelte';
@@ -54,13 +55,15 @@
     return now >= WORLD_CUP_KICKOFF_MS && now <= WORLD_CUP_KICKOFF_MS + WORLD_CUP_DURATION_MS;
   };
   async function pollLive() {
-    if (!inTournamentWindow()) { liveMatches = []; nextMatch = null; return; }
+    if (!inTournamentWindow()) { liveMatches = []; nextMatch = null; liveMatchIds.set(new Set()); return; }
     try {
       const r = await fetch('/api/live');
       if (r.ok) {
         const d = await r.json();
         liveMatches = Array.isArray(d.matches) ? d.matches : [];
         nextMatch = d.next ?? null;
+        // Publish in-play match ids so other pages (e.g. Calendario) can react.
+        liveMatchIds.set(new Set(liveMatches.map((m) => m.match_id).filter((x) => x != null)));
       }
     } catch { /* keep last */ }
   }
