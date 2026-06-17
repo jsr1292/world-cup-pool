@@ -89,6 +89,12 @@
     const now = new Date();
     return !!dg && dg <= now && !!dk && dk <= now;
   });
+  // The group games have begun (group deadline passed). Once true, the "saved"
+  // banner moves out of the top into the Pronósticos tab under the cards.
+  const gamesStarted = $derived.by(() => {
+    const dg = pool.deadline_group ? new Date(pool.deadline_group) : null;
+    return !!dg && dg <= new Date();
+  });
 
   const paidCount = $derived(data.members.filter((m: any) => m.has_paid).length);
   const memberCount = $derived(data.members.length);
@@ -378,8 +384,9 @@
     </div>
   {/if}
 
-  <!-- Prediction-completeness banner (only once the user has started an entry) -->
-  {#if myCompletion}
+  <!-- Prediction-completeness banner. Before the games begin it sits up here to
+       nudge completion; once they begin it moves into the Pronósticos tab. -->
+  {#if myCompletion && !gamesStarted}
     {#if predComplete}
       <div style="margin-bottom: 16px; padding: 10px 14px; display: flex; align-items: center; gap: 8px; background: rgba(0,229,160,0.07); border: 1px solid rgba(0,229,160,0.3); border-radius: 10px;">
         <span style="font-size: 15px;">✅</span>
@@ -742,6 +749,12 @@
           </div>
         </div>
       {/each}
+      {#if gamesStarted}
+        <div style="margin-top: 4px; padding: 10px 14px; display: flex; align-items: center; gap: 8px; background: rgba(0,229,160,0.07); border: 1px solid rgba(0,229,160,0.3); border-radius: 10px;">
+          <span style="font-size: 15px;">✅</span>
+          <span style="font-size: 11px; color: var(--green);">Tus pronósticos están <strong>{predComplete ? 'completos y guardados' : 'guardados'}</strong>.</span>
+        </div>
+      {/if}
     {/if}
   {/if}
 
