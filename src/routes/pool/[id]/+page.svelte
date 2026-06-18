@@ -1089,8 +1089,8 @@
   </div>
 {/if}
 
-<!-- Calendario: floating "back to top" once scrolled down -->
-{#if tab === 'calendar' && scrollY > 320}
+<!-- Calendario / Clasificación: floating "back to top" once scrolled down -->
+{#if (tab === 'calendar' || tab === 'leaderboard') && scrollY > 320}
   <button onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} class="scroll-top-fab" aria-label="Volver arriba">↑</button>
 {/if}
 

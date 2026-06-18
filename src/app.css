@@ -94,6 +94,13 @@ input[inputmode="decimal"]::-webkit-outer-spin-button {
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Installed PWA: hide scrollbars for a native-app feel (scrolling still works).
+   Scoped to standalone so the desktop browser keeps its normal scrollbar. */
+@media (display-mode: standalone) {
+  * { scrollbar-width: none; -ms-overflow-style: none; }
+  *::-webkit-scrollbar { width: 0; height: 0; display: none; }
+}
+
 html {
   height: -webkit-fill-available;
   height: 100dvh;
