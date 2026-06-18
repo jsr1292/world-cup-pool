@@ -1,7 +1,7 @@
 # Home Assistant add-on manifest for the World Cup Pool app.
 # HA renders the configuration form from the `schema` below.
 name: World Cup Pool
-version: "1.0.145"
+version: "1.0.146"
 slug: world-cup-pool
 description: >-
   Private FIFA World Cup 2026 prediction pool (SvelteKit + PostgreSQL/Neon).
@@ -51,6 +51,9 @@ options:
   smtp_from: ""
   api_football_key: ""
   auto_sync_minutes: 0
+  vapid_public_key: ""
+  vapid_private_key: ""
+  vapid_subject: ""
 schema:
   # Neon (or any Postgres) connection string. Required. Provided at runtime —
   # never baked into the image.
@@ -96,3 +99,10 @@ schema:
   # "Sincronizar ahora" only). Floored to 5 min to respect provider rate limits.
   # Suggested: 15–30 during the tournament.
   auto_sync_minutes: int(0,1440)
+  # ── Push notifications (optional) ──────────────────────────────────────────
+  # Web Push VAPID keys. Generate a pair once (e.g. `npx web-push generate-vapid-keys`)
+  # and paste both here; leave blank to disable push. The subject is a contact
+  # mailto:/https: URL (defaults to a placeholder if blank).
+  vapid_public_key: str?
+  vapid_private_key: password?
+  vapid_subject: str?

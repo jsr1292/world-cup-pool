@@ -20,6 +20,9 @@ SMTP_PASS="$(bashio::config 'smtp_pass')"
 SMTP_FROM="$(bashio::config 'smtp_from')"
 API_FOOTBALL_KEY="$(bashio::config 'api_football_key')"
 AUTO_SYNC_MINUTES="$(bashio::config 'auto_sync_minutes')"
+VAPID_PUBLIC_KEY="$(bashio::config 'vapid_public_key')"
+VAPID_PRIVATE_KEY="$(bashio::config 'vapid_private_key')"
+VAPID_SUBJECT="$(bashio::config 'vapid_subject')"
 
 # database_url is required.
 if bashio::var.is_empty "${DATABASE_URL}" || [ "${DATABASE_URL}" = "null" ]; then
@@ -62,6 +65,12 @@ export SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM
 [ "${API_FOOTBALL_KEY}" = "null" ] && API_FOOTBALL_KEY=""
 [ "${AUTO_SYNC_MINUTES}" = "null" ] && AUTO_SYNC_MINUTES="0"
 export API_FOOTBALL_KEY AUTO_SYNC_MINUTES
+
+# Web Push (optional): VAPID keypair + contact subject. Blank = push disabled.
+[ "${VAPID_PUBLIC_KEY}" = "null" ] && VAPID_PUBLIC_KEY=""
+[ "${VAPID_PRIVATE_KEY}" = "null" ] && VAPID_PRIVATE_KEY=""
+[ "${VAPID_SUBJECT}" = "null" ] && VAPID_SUBJECT=""
+export VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY VAPID_SUBJECT
 
 cd /app
 

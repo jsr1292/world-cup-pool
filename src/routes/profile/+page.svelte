@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PageData } from './$types.js';
   import { logout } from '$lib/logout.js';
+  import { onMount } from 'svelte';
   let { data }: { data: PageData } = $props();
 
   let currentPassword = $state('');
@@ -97,6 +98,87 @@
     }
     changing = false;
   }
+
+  // ── Push notifications ──────────────────────────────────────────────────────
+  const vapidKey = ((data as any).vapidPublicKey ?? null) as string | null;
+  let pushSupported = $state(false);
+  let pushEnabled = $state(false);
+  let pushBusy = $state(false);
+  let pushMsg = $state('');
+  let iosNeedsInstall = $state(false);
+
+  function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    const arr = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
+  }
+
+  onMount(async () => {
+    pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    const ua = navigator.userAgent || '';
+    const iOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+    iosNeedsInstall = iOS && !standalone;
+    if (!pushSupported) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      pushEnabled = !!(await reg.pushManager.getSubscription());
+    } catch { /* ignore */ }
+  });
+
+  async function enablePush() {
+    pushBusy = true; pushMsg = '';
+    try {
+      if (!vapidKey) { pushMsg = 'El servidor aún no tiene las notificaciones configuradas.'; return; }
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { pushMsg = 'Permiso de notificaciones denegado.'; return; }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = (await reg.pushManager.getSubscription())
+        ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource }));
+      const res = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) });
+      if (!res.ok) throw new Error('save failed');
+      pushEnabled = true;
+      pushMsg = '✓ Notificaciones activadas.';
+    } catch {
+      pushMsg = 'No se pudieron activar las notificaciones.';
+    } finally {
+      pushBusy = false;
+    }
+  }
+
+  async function disablePush() {
+    pushBusy = true; pushMsg = '';
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch('/api/push/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) });
+        await sub.unsubscribe();
+      }
+      pushEnabled = false;
+      pushMsg = 'Notificaciones desactivadas.';
+    } catch {
+      pushMsg = 'No se pudieron desactivar.';
+    } finally {
+      pushBusy = false;
+    }
+  }
+
+  async function testPush() {
+    pushBusy = true; pushMsg = '';
+    try {
+      const res = await fetch('/api/push/test', { method: 'POST' });
+      const d = await res.json().catch(() => ({}));
+      pushMsg = res.ok ? (d.sent > 0 ? '✓ Enviada — mira tus notificaciones.' : 'No hay dispositivos suscritos.') : (d.error || 'Error');
+    } catch {
+      pushMsg = 'Error de conexión.';
+    } finally {
+      pushBusy = false;
+    }
+  }
 </script>
 
 <div>
@@ -163,6 +245,36 @@
         <span style="position: absolute; top: 2px; {isDark ? 'right: 2px;' : 'left: 2px;'} width: 20px; height: 20px; border-radius: 50%; background: white; transition: all 0.2s;"></span>
       </button>
     </div>
+  </div>
+
+  <!-- Notifications -->
+  <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+    <div style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 6px;">🔔 Notificaciones</div>
+    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5;">
+      Recibe un aviso en el móvil cuando haya <strong>nuevos resultados</strong> y cambie la clasificación.
+    </p>
+    {#if !vapidKey}
+      <div style="font-size: 11px; padding: 8px 12px; border-radius: 6px; background: rgba(255,255,255,0.04); color: var(--text-muted);">No disponibles por ahora.</div>
+    {:else if iosNeedsInstall}
+      <div style="font-size: 11px; padding: 8px 12px; border-radius: 6px; background: rgba(201,168,76,0.08); color: var(--text-muted); line-height: 1.5;">
+        En iPhone, primero <strong>añade la app a la pantalla de inicio</strong> (Compartir → «Añadir a pantalla de inicio») y ábrela desde ahí para poder activar las notificaciones.
+      </div>
+    {:else if !pushSupported}
+      <div style="font-size: 11px; padding: 8px 12px; border-radius: 6px; background: rgba(255,255,255,0.04); color: var(--text-muted);">Tu navegador no soporta notificaciones.</div>
+    {:else}
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+        {#if pushEnabled}
+          <span style="font-size: 11px; color: var(--green); font-weight: 600;">✓ Activadas</span>
+          <button class="btn-ghost" style="font-size: 10px; padding: 7px 14px;" onclick={testPush} disabled={pushBusy}>Enviar prueba</button>
+          <button class="btn-ghost" style="font-size: 10px; padding: 7px 14px;" onclick={disablePush} disabled={pushBusy}>Desactivar</button>
+        {:else}
+          <button class="btn-primary" style="font-size: 11px;" onclick={enablePush} disabled={pushBusy}>{pushBusy ? 'Activando…' : 'Activar notificaciones'}</button>
+        {/if}
+      </div>
+      {#if pushMsg}
+        <div style="font-size: 10px; margin-top: 10px; color: {pushMsg.startsWith('✓') ? 'var(--green)' : 'var(--text-muted)'};">{pushMsg}</div>
+      {/if}
+    {/if}
   </div>
 
   <!-- Change Password -->

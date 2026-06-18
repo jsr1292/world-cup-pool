@@ -6,6 +6,7 @@
 import { query } from './db.js';
 import { syncScores, type SyncResult } from './live-scores.js';
 import { calculateAllScores } from './scoring.js';
+import { sendPushToUsers } from './push.js';
 import {
   invalidateCachedPoolLeaderboard,
   invalidateCachedPoolResults,
@@ -28,6 +29,20 @@ export async function syncAndRescore(): Promise<SyncResult & { pools: number }> 
       }
     }
     invalidateGlobalLeaderboard();
+
+    // Nudge opted-in users back into the app. Collapses via the 'results' tag so
+    // a string of finishes shows one notification, not a pile. Best-effort.
+    try {
+      const { rows: us } = await query('SELECT DISTINCT user_id FROM predictions');
+      await sendPushToUsers(us.map((r: any) => Number(r.user_id)), {
+        title: '⚽ Mundial 2026',
+        body: result.updated === 1 ? 'Hay un nuevo resultado — mira cómo vas.' : `${result.updated} resultados nuevos — mira cómo vas.`,
+        url: '/',
+        tag: 'results',
+      });
+    } catch (e) {
+      console.error('[sync-runner] push notify failed:', e);
+    }
   }
   // Record this run for the admin sync-health indicator (best-effort).
   try {
