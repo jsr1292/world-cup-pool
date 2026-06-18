@@ -223,12 +223,15 @@
   });
 
   const navItems = [
-    { path: '/', label: 'Inicio', icon: 'home' },
+    // `?h=1` forces the home list to show — single-pool users are otherwise
+    // redirected straight into their pool, so this keeps "Inicio" reaching the
+    // create/join screen instead of bouncing back to the pool.
+    { path: '/', href: '/?h=1', label: 'Inicio', icon: 'home' },
     // No global cross-pool leaderboard: pools are independent contests with their
     // own scoring, so a summed global board just rewarded being in more pools.
     // Each pool's own Clasificación tab is the real ranking.
-    ...(data?.user?.is_admin ? [{ path: '/admin', label: 'Admin', icon: 'settings' }] : []),
-    { path: '/profile', label: 'Perfil', icon: 'user' },
+    ...(data?.user?.is_admin ? [{ path: '/admin', href: '/admin', label: 'Admin', icon: 'settings' }] : []),
+    { path: '/profile', href: '/profile', label: 'Perfil', icon: 'user' },
   ];
 </script>
 
@@ -294,7 +297,7 @@
 
     {#each navItems as item}
       <a
-        href={item.path}
+        href={item.href}
         class="nav-link"
         class:active={isActive(item.path)}
       >
@@ -362,7 +365,7 @@
 {#if data?.user}
 <div class="bottom-nav">
   {#each navItems as item}
-    <a href={item.path} class:active={isActive(item.path)} aria-label={item.label}
+    <a href={item.href} class:active={isActive(item.path)} aria-label={item.label}
        onclick={() => { try { navigator.vibrate(5); } catch {} }}>
       <svg class="nav-icon-mobile"><use href="/icon.svg#{item.icon}" /></svg>
     </a>
