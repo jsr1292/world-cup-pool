@@ -3,10 +3,12 @@
   import { haptic } from '$lib/haptic';
   import { flagEmoji, shortName } from '$lib/teams.js';
   import { liveMatchIds } from '$lib/live.js';
+  import { onMount } from 'svelte';
   let { data } = $props();
   let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
   const tabIndexOrder = ['predictions', 'leaderboard', 'calendar', 'members', 'summary', 'results', 'scoring'];
   let slideDir = $state<'left' | 'right' | ''>('');
+  let scrollY = $state(0);
   function switchTab(newTab: string) {
     if (newTab === tab) return; // already here — don't replay the slide (the "wiggle")
     haptic(8);
@@ -14,7 +16,23 @@
     const newIdx = tabIndexOrder.indexOf(newTab);
     slideDir = newIdx > oldIdx ? 'left' : 'right';
     tab = newTab;
+    if (newTab === 'calendar') scrollToCurrentGame();
   }
+  // Auto-scroll the Calendario to the live game (or the next one to be played).
+  function scrollToCurrentGame() {
+    if (typeof document === 'undefined' || scrollTargetId == null) return;
+    // Let the tab content render/animate in first, then centre the target row.
+    setTimeout(() => {
+      document.getElementById(`cal-m${scrollTargetId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 90);
+  }
+  onMount(() => {
+    if (tab === 'calendar') scrollToCurrentGame();
+    const onScroll = () => { scrollY = window.scrollY; };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  });
   let copied = $state(false);
   let summaryEntry = $state(data.predictions.length > 0 ? data.predictions[0].id : null);
 
@@ -232,6 +250,19 @@
       cur.matches.push(mt);
     }
     return groups;
+  });
+
+  // Where the Calendario should jump to: a live game if any, else the next
+  // not-yet-played fixture (matches are in kickoff order).
+  const scrollTargetId = $derived.by(() => {
+    let firstUpcoming: number | null = null;
+    for (const g of calendarByDay) {
+      for (const mt of g.matches) {
+        if ($liveMatchIds.has(mt.id)) return mt.id;
+        if (firstUpcoming == null && !(mt.status === 'finished' && mt.home_score != null)) firstUpcoming = mt.id;
+      }
+    }
+    return firstUpcoming;
   });
 
   // ── Tap a calendar game → modal with everyone's bet on it (group games only,
@@ -601,7 +632,7 @@
               {@const homeWin = finished && mt.home_score > mt.away_score}
               {@const awayWin = finished && mt.away_score > mt.home_score}
               {@const clickable = betsLocked && mt.phase === 'group'}
-              <svelte:element this={clickable ? 'button' : 'div'} type={clickable ? 'button' : undefined} onclick={clickable ? () => openMatchBets(mt) : undefined} class="cal-row" class:cal-live={live} style="display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--bg-card); border: 1px solid {v.correct === true ? 'rgba(0,229,160,0.3)' : v.correct === false ? 'rgba(255,77,106,0.25)' : 'var(--border)'}; border-radius: 7px; padding: 8px 10px; {clickable ? 'cursor: pointer;' : ''}">
+              <svelte:element this={clickable ? 'button' : 'div'} type={clickable ? 'button' : undefined} onclick={clickable ? () => openMatchBets(mt) : undefined} id="cal-m{mt.id}" class="cal-row" class:cal-live={live} style="display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--bg-card); border: 1px solid {v.correct === true ? 'rgba(0,229,160,0.3)' : v.correct === false ? 'rgba(255,77,106,0.25)' : 'var(--border)'}; border-radius: 7px; padding: 8px 10px; {clickable ? 'cursor: pointer;' : ''}">
                 <!-- phase / time -->
                 <div style="width: 42px; flex-shrink: 0; text-align: center;">
                   {#if mt.phase !== 'group'}
@@ -1058,7 +1089,31 @@
   </div>
 {/if}
 
+<!-- Calendario: floating "back to top" once scrolled down -->
+{#if tab === 'calendar' && scrollY > 320}
+  <button onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} class="scroll-top-fab" aria-label="Volver arriba">↑</button>
+{/if}
+
 <style>
+  .scroll-top-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 76px);
+    z-index: 60;
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(135deg, #c9a84c, #e8c96a);
+    color: #1a1a2e;
+    font-size: 20px; font-weight: 700; line-height: 1;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    animation: fabIn 0.18s ease-out;
+  }
+  @keyframes fabIn { from { opacity: 0; transform: translateY(8px) scale(0.9); } to { opacity: 1; transform: none; } }
+  @media (min-width: 768px) { .scroll-top-fab { bottom: 24px; } }
+
   /* Live game in the Calendario: glowing red, like the live score. */
   .cal-live {
     border-color: var(--red) !important;
