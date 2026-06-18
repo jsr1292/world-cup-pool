@@ -6,39 +6,74 @@
 import { query } from './db.js';
 import { syncScores, type SyncResult } from './live-scores.js';
 import { calculateAllScores } from './scoring.js';
-import { sendPushToUsers } from './push.js';
+import { sendPushToUser, sendPushToUsers, notifyUpcomingMatches } from './push.js';
 import {
   invalidateCachedPoolLeaderboard,
   invalidateCachedPoolResults,
   invalidateGlobalLeaderboard,
 } from './cache.js';
 
+/** Each user's BEST (lowest) entry rank in a pool — dense ranking by score. */
+async function bestRanksByUser(poolId: number): Promise<Map<number, number>> {
+  const { rows } = await query(
+    `SELECT user_id, MIN(rnk)::int AS rank FROM (
+       SELECT user_id, DENSE_RANK() OVER (ORDER BY total_score DESC) AS rnk
+       FROM predictions WHERE pool_id = $1
+     ) t GROUP BY user_id`,
+    [poolId]
+  );
+  const m = new Map<number, number>();
+  for (const r of rows) m.set(Number(r.user_id), Number(r.rank));
+  return m;
+}
+
 export async function syncAndRescore(): Promise<SyncResult & { pools: number }> {
   const result = await syncScores();
   let pools = 0;
   if (result.updated > 0) {
-    const { rows } = await query('SELECT id FROM pools WHERE is_active = true');
+    const { rows } = await query('SELECT id, name FROM pools WHERE is_active = true');
     pools = rows.length;
+    // Per user, the personalized "you moved" nudge (latest changed pool wins).
+    const moved = new Map<number, { title: string; body: string }>();
     for (const p of rows) {
+      const before = await bestRanksByUser(p.id);
       try {
         await calculateAllScores(p.id);
         invalidateCachedPoolLeaderboard(p.id);
         invalidateCachedPoolResults(p.id);
       } catch (e) {
         console.error(`[sync-runner] rescore pool ${p.id} failed:`, e);
+        continue;
+      }
+      const after = await bestRanksByUser(p.id);
+      for (const [uid, newRank] of after) {
+        const oldRank = before.get(uid);
+        if (oldRank == null || oldRank === newRank) continue;
+        const up = newRank < oldRank;
+        moved.set(uid, {
+          title: up ? '📈 ¡Has subido!' : '📉 Has bajado',
+          body: up
+            ? `Ahora vas ${newRank}.º en ${p.name}. ¡Mira la clasificación!`
+            : `Ahora vas ${newRank}.º en ${p.name}.`,
+        });
       }
     }
     invalidateGlobalLeaderboard();
 
-    // Nudge opted-in users back into the app. Collapses via the 'results' tag so
-    // a string of finishes shows one notification, not a pile. Best-effort.
+    // Notify: users whose position changed get the personalized nudge; everyone
+    // else with a prediction gets the generic "new results". One shared tag so a
+    // user sees a single notification, not a pile. Best-effort.
     try {
+      for (const [uid, n] of moved) {
+        await sendPushToUser(uid, { ...n, url: '/', tag: 'wc-update' });
+      }
       const { rows: us } = await query('SELECT DISTINCT user_id FROM predictions');
-      await sendPushToUsers(us.map((r: any) => Number(r.user_id)), {
+      const others = us.map((r: any) => Number(r.user_id)).filter((uid: number) => !moved.has(uid));
+      await sendPushToUsers(others, {
         title: '⚽ Mundial 2026',
         body: result.updated === 1 ? 'Hay un nuevo resultado — mira cómo vas.' : `${result.updated} resultados nuevos — mira cómo vas.`,
         url: '/',
-        tag: 'results',
+        tag: 'wc-update',
       });
     } catch (e) {
       console.error('[sync-runner] push notify failed:', e);
@@ -67,14 +102,15 @@ export async function syncAndRescore(): Promise<SyncResult & { pools: number }> 
 let timer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 
-/** True if any fixture is within its play window (kickoff−5min … kickoff+3h)
- *  and not yet recorded finished — i.e. a result could land imminently. */
+/** True if any fixture is within its active window (kickoff−20min … kickoff+3h)
+ *  and not yet recorded finished. Starts 20 min before kickoff so the scheduler
+ *  is already polling frequently in time to fire the "about to start" reminder. */
 async function anyMatchInPlayWindow(): Promise<boolean> {
   try {
     const { rows } = await query(
       `SELECT 1 FROM matches
          WHERE kickoff_time IS NOT NULL AND status <> 'finished'
-           AND NOW() BETWEEN kickoff_time - INTERVAL '5 minutes'
+           AND NOW() BETWEEN kickoff_time - INTERVAL '20 minutes'
                          AND kickoff_time + INTERVAL '180 minutes'
          LIMIT 1`
     );
@@ -129,9 +165,10 @@ export function startSyncScheduler(): void {
         }
       } catch (e) {
         console.error('[scheduler] auto-sync failed:', e);
-      } finally {
-        running = false;
       }
+      // Fire "match about to start" reminders (independent of sync success).
+      try { await notifyUpcomingMatches(); } catch (e) { console.error('[scheduler] kickoff notify failed:', e); }
+      running = false;
     }
     // Re-arm AFTER the run completes (so ticks never overlap): fast while a
     // match is in its play window, otherwise the idle gap.
