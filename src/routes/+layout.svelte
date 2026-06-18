@@ -105,11 +105,15 @@
   $effect(() => {
     if (!browser) return;
     let startY = null;            // gesture start Y, or null when not eligible
+    let startX = 0;               // gesture start X, to tell horizontal swipes apart
+    let locked = null;            // 'h' | 'v' once the gesture direction is decided
 
     const onStart = (e) => {
+      locked = null;
       if (refreshing || e.touches.length !== 1) { startY = null; return; }
       // Only arm when already scrolled to the very top.
       startY = window.scrollY <= 0 ? e.touches[0].clientY : null;
+      startX = e.touches[0].clientX;
     };
     const onMove = (e) => {
       if (startY == null || refreshing) return;
@@ -117,6 +121,14 @@
       // delta — bail out of the gesture instead.
       if (e.touches.length !== 1) { ptrActive = false; ptrY = 0; startY = null; return; }
       const dy = e.touches[0].clientY - startY;
+      const dx = e.touches[0].clientX - startX;
+      // Decide the gesture direction once it's moved enough, then stick with it.
+      // A horizontal swipe (e.g. the scrollable tab bar) must NOT be hijacked by
+      // pull-to-refresh — otherwise it feels stuck and takes a few tries.
+      if (locked == null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      }
+      if (locked === 'h') { ptrActive = false; ptrY = 0; return; } // let the tabs scroll
       if (dy <= 0 || window.scrollY > 0) { ptrActive = false; ptrY = 0; return; }
       // Resistance curve so the pull feels rubbery and never runs away.
       ptrY = Math.min(dy * 0.5, PTR_MAX);
