@@ -106,7 +106,8 @@
     if (!browser) return;
     let startY = null;            // gesture start Y, or null when not eligible
     let startX = 0;               // gesture start X, to tell horizontal swipes apart
-    let locked = null;            // 'h' | 'v' once the gesture direction is decided
+    /** @type {'h' | 'v' | null} */
+    let locked = null;            // gesture direction once decided
 
     const onStart = (e) => {
       locked = null;
