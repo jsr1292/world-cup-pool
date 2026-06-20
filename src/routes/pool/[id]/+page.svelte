@@ -6,7 +6,7 @@
   import { onMount } from 'svelte';
   let { data } = $props();
   let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
-  const tabIndexOrder = ['predictions', 'leaderboard', 'chat', 'calendar', 'members', 'summary', 'results', 'scoring'];
+  const tabIndexOrder = ['predictions', 'leaderboard', 'calendar', 'members', 'summary', 'results', 'scoring'];
   let slideDir = $state<'left' | 'right' | ''>('');
   let scrollY = $state(0);
   function switchTab(newTab: string) {
@@ -286,7 +286,8 @@
   }
   function closeMatchBets() { matchBetsOpen = false; matchBetsData = null; }
 
-  // ── Banter chat ─────────────────────────────────────────────────────────────
+  // ── Banter chat (opened from a floating button, not a tab) ──────────────────
+  let chatOpen = $state(false);
   let chatMessages = $state<any[]>([]);
   let chatInput = $state('');
   let chatSending = $state(false);
@@ -353,20 +354,24 @@
       if (r.ok) chatMessages = chatMessages.filter((m) => m.id !== id);
     } catch { /* ignore */ }
   }
-  // Poll only while the Banter tab is open AND the app is foregrounded — keeps it
-  // cheap on the DB (incremental, returns 0 rows most of the time).
+  function openChat() { chatOpen = true; haptic(8); }
+  function closeChat() { chatOpen = false; }
+  // Poll only while the chat overlay is open AND the app is foregrounded — keeps
+  // it cheap on the DB (incremental, returns 0 rows most of the time).
   $effect(() => {
-    if (tab !== 'chat' || typeof document === 'undefined') return;
-    if (!chatLoaded) loadChat(); else chatScrollBottom();
+    if (!chatOpen || typeof document === 'undefined') return;
+    if (!chatLoaded) loadChat(); else { pollChat(); chatScrollBottom(); }
     const iv = setInterval(() => { if (document.visibilityState === 'visible') pollChat(); }, 10_000);
     return () => clearInterval(iv);
   });
+  // The back-to-top FAB shows on the long tabs once scrolled; the chat FAB then
+  // sits above it.
+  const showScrollTop = $derived((tab === 'calendar' || tab === 'leaderboard') && scrollY > 320);
 
   const tabs = [
     { id: 'predictions', label: '🔮 Pronósticos' },
     { id: 'simulator', label: '🎲 Simulador', link: true },
     { id: 'leaderboard', label: '🏅 Clasificación' },
-    { id: 'chat', label: '💬 Banter' },
     { id: 'calendar', label: '📅 Calendario' },
     { id: 'members', label: '👥 Miembros' },
     { id: 'summary', label: '📋 Resumen' },
@@ -817,39 +822,6 @@
     {/if}
   {/if}
 
-  <!-- Banter Tab -->
-  {#if tab === 'chat'}
-    <div style="max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; height: 65vh; min-height: 320px;">
-      <div bind:this={chatListEl} style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 12px;">
-        {#if !chatLoaded}
-          <p style="text-align: center; color: var(--text-muted); font-size: 11px; padding: 20px;">Cargando…</p>
-        {:else if chatMessages.length === 0}
-          <p style="text-align: center; color: var(--text-muted); font-size: 11px; padding: 24px; line-height: 1.6;">Aún no hay mensajes.<br>¡Rompe el hielo! 🧊</p>
-        {:else}
-          {#each chatMessages as m (m.id)}
-            <div style="display: flex; flex-direction: column; align-items: {m.mine ? 'flex-end' : 'flex-start'};">
-              <div style="max-width: 82%; background: {m.mine ? 'rgba(201,168,76,0.16)' : 'var(--bg-card)'}; border: 1px solid {m.mine ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 12px; padding: 7px 11px;">
-                {#if !m.mine}<div style="font-size: 9px; font-weight: 700; color: var(--gold); margin-bottom: 2px;">{m.display_name}</div>{/if}
-                <div style="font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-word; line-height: 1.4;">{m.body}</div>
-                <div style="display: flex; align-items: center; gap: 7px; justify-content: flex-end; margin-top: 3px;">
-                  <span style="font-size: 8px; color: var(--text-dim);">{fmtChatTime(m.created_at)}</span>
-                  {#if m.mine || data.isAdmin}<button onclick={() => deleteChat(m.id)} aria-label="Borrar mensaje" style="background: none; border: none; color: var(--text-dim); font-size: 10px; cursor: pointer; padding: 0; line-height: 1;">✕</button>{/if}
-                </div>
-              </div>
-            </div>
-          {/each}
-        {/if}
-      </div>
-      <div style="display: flex; gap: 8px; padding: 8px 0 2px; border-top: 1px solid var(--border);">
-        <input bind:value={chatInput} maxlength="500" placeholder="Escribe un mensaje…"
-          onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
-          style="flex: 1; min-width: 0; font-size: 12px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text);" />
-        <button onclick={sendChat} disabled={chatSending || !chatInput.trim()} class="btn-primary" style="font-size: 11px; padding: 9px 16px; flex-shrink: 0;">Enviar</button>
-      </div>
-      {#if chatErr}<div style="font-size: 9px; color: var(--red); padding: 4px 2px;">{chatErr}</div>{/if}
-    </div>
-  {/if}
-
   <!-- Pronósticos Tab -->
   {#if tab === 'predictions'}
     {#if data.predictions.length === 0}
@@ -1199,9 +1171,51 @@
   </div>
 {/if}
 
-<!-- Calendario / Clasificación: floating "back to top" once scrolled down -->
-{#if (tab === 'calendar' || tab === 'leaderboard') && scrollY > 320}
+<!-- Floating actions: back-to-top (when scrolled) + chat (always). Chat sits
+     above the back-to-top button when both are showing. -->
+{#if showScrollTop}
   <button onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} class="scroll-top-fab" aria-label="Volver arriba">↑</button>
+{/if}
+{#if !chatOpen}
+  <button onclick={openChat} class="chat-fab" class:raised={showScrollTop} aria-label="Abrir chat de la quiniela">💬</button>
+{/if}
+
+{#if chatOpen}
+  <div class="chat-overlay" role="dialog" aria-modal="true" onclick={closeChat}>
+    <div class="chat-sheet" onclick={(e) => e.stopPropagation()}>
+      <div class="chat-head">
+        <span style="font-size: 13px; font-weight: 700; color: var(--gold);">💬 {pool.name}</span>
+        <button onclick={closeChat} aria-label="Cerrar" style="background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; line-height: 1; padding: 2px 4px;">✕</button>
+      </div>
+      <div bind:this={chatListEl} class="chat-list">
+        {#if !chatLoaded}
+          <p class="chat-empty">Cargando…</p>
+        {:else if chatMessages.length === 0}
+          <p class="chat-empty">Aún no hay mensajes.<br>¡Rompe el hielo! 🧊</p>
+        {:else}
+          {#each chatMessages as m (m.id)}
+            <div style="display: flex; flex-direction: column; align-items: {m.mine ? 'flex-end' : 'flex-start'};">
+              <div style="max-width: 82%; background: {m.mine ? 'rgba(201,168,76,0.16)' : 'var(--bg-card)'}; border: 1px solid {m.mine ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 12px; padding: 7px 11px;">
+                {#if !m.mine}<div style="font-size: 9px; font-weight: 700; color: var(--gold); margin-bottom: 2px;">{m.display_name}</div>{/if}
+                <div style="font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-word; line-height: 1.4;">{m.body}</div>
+                <div style="display: flex; align-items: center; gap: 7px; justify-content: flex-end; margin-top: 3px;">
+                  <span style="font-size: 8px; color: var(--text-dim);">{fmtChatTime(m.created_at)}</span>
+                  {#if m.mine || data.isAdmin}<button onclick={() => deleteChat(m.id)} aria-label="Borrar mensaje" style="background: none; border: none; color: var(--text-dim); font-size: 10px; cursor: pointer; padding: 0; line-height: 1;">✕</button>{/if}
+                </div>
+              </div>
+            </div>
+          {/each}
+        {/if}
+      </div>
+      <div class="chat-input-row">
+        <input bind:value={chatInput} maxlength="500" placeholder="Escribe un mensaje…"
+          onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+          style="flex: 1; min-width: 0; font-size: 12px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; color: var(--text);" />
+        <button onclick={sendChat} disabled={chatSending || !chatInput.trim()} class="btn-primary" style="font-size: 11px; padding: 10px 16px; flex-shrink: 0;">Enviar</button>
+      </div>
+      {#if chatErr}<div style="font-size: 9px; color: var(--red); padding: 2px 2px 0;">{chatErr}</div>{/if}
+    </div>
+  </div>
 {/if}
 
 <style>
@@ -1223,6 +1237,56 @@
   }
   @keyframes fabIn { from { opacity: 0; transform: translateY(8px) scale(0.9); } to { opacity: 1; transform: none; } }
   @media (min-width: 768px) { .scroll-top-fab { bottom: 24px; } }
+
+  /* Banter chat: floating button + bottom-sheet overlay */
+  .chat-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 76px);
+    z-index: 60;
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    border: 1px solid rgba(201,168,76,0.4);
+    cursor: pointer;
+    background: var(--bg-card);
+    font-size: 22px; line-height: 1;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    transition: bottom 0.2s ease;
+  }
+  .chat-fab.raised { bottom: calc(env(safe-area-inset-bottom, 0px) + 130px); }
+  @media (min-width: 768px) {
+    .chat-fab { bottom: 24px; }
+    .chat-fab.raised { bottom: 78px; }
+  }
+  .chat-overlay {
+    position: fixed; inset: 0; z-index: 1300;
+    background: rgba(0,0,0,0.6);
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .chat-sheet {
+    width: 100%; max-width: 560px;
+    height: 80vh;
+    display: flex; flex-direction: column;
+    background: var(--bg-base);
+    border: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    padding: 12px 14px calc(env(safe-area-inset-bottom, 0px) + 10px);
+    box-shadow: 0 -8px 30px rgba(0,0,0,0.5);
+  }
+  .chat-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 8px; margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .chat-list {
+    flex: 1; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 8px 2px;
+  }
+  .chat-empty { text-align: center; color: var(--text-muted); font-size: 11px; padding: 24px; line-height: 1.6; }
+  .chat-input-row { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
 
   /* Live game in the Calendario: glowing red, like the live score. */
   .cal-live {
