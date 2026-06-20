@@ -6,7 +6,7 @@
 import { query } from './db.js';
 import { syncScores, type SyncResult } from './live-scores.js';
 import { calculateAllScores } from './scoring.js';
-import { sendPushToUser, sendPushToUsers, notifyUpcomingMatches } from './push.js';
+import { sendPushToUser, sendPushToUsers, notifyUpcomingMatches, isQuietHours } from './push.js';
 import {
   invalidateCachedPoolLeaderboard,
   invalidateCachedPoolResults,
@@ -62,21 +62,24 @@ export async function syncAndRescore(): Promise<SyncResult & { pools: number }> 
 
     // Notify: users whose position changed get the personalized nudge; everyone
     // else with a prediction gets the generic "new results". One shared tag so a
-    // user sees a single notification, not a pile. Best-effort.
-    try {
-      for (const [uid, n] of moved) {
-        await sendPushToUser(uid, { ...n, url: '/', tag: 'wc-update' });
+    // user sees a single notification, not a pile. Best-effort. Suppressed during
+    // quiet hours (late night) — scores still update, just no buzz.
+    if (!isQuietHours()) {
+      try {
+        for (const [uid, n] of moved) {
+          await sendPushToUser(uid, { ...n, url: '/', tag: 'wc-update' });
+        }
+        const { rows: us } = await query('SELECT DISTINCT user_id FROM predictions');
+        const others = us.map((r: any) => Number(r.user_id)).filter((uid: number) => !moved.has(uid));
+        await sendPushToUsers(others, {
+          title: '⚽ Mundial 2026',
+          body: result.updated === 1 ? 'Hay un nuevo resultado — mira cómo vas.' : `${result.updated} resultados nuevos — mira cómo vas.`,
+          url: '/',
+          tag: 'wc-update',
+        });
+      } catch (e) {
+        console.error('[sync-runner] push notify failed:', e);
       }
-      const { rows: us } = await query('SELECT DISTINCT user_id FROM predictions');
-      const others = us.map((r: any) => Number(r.user_id)).filter((uid: number) => !moved.has(uid));
-      await sendPushToUsers(others, {
-        title: '⚽ Mundial 2026',
-        body: result.updated === 1 ? 'Hay un nuevo resultado — mira cómo vas.' : `${result.updated} resultados nuevos — mira cómo vas.`,
-        url: '/',
-        tag: 'wc-update',
-      });
-    } catch (e) {
-      console.error('[sync-runner] push notify failed:', e);
     }
   }
   // Record this run for the admin sync-health indicator (best-effort).

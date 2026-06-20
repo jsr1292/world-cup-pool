@@ -38,6 +38,25 @@ function ensureConfigured(): boolean {
 export function pushConfigured(): boolean { return ensureConfigured(); }
 export function vapidPublicKey(): string | null { return process.env.VAPID_PUBLIC_KEY ?? null; }
 
+// Quiet hours: suppress AUTOMATIC notifications from 22:30 to 10:00 (Spain time).
+// The "Enviar prueba" button bypasses this (it doesn't go through these helpers).
+const QUIET_TZ = process.env.QUIET_TZ || 'Europe/Madrid';
+const QUIET_START = 22 * 60 + 30; // 22:30
+const QUIET_END = 10 * 60;        // 10:00
+export function isQuietHours(at: Date = new Date()): boolean {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: QUIET_TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(at);
+    const h = Number(parts.find((p) => p.type === 'hour')?.value ?? '0') % 24;
+    const m = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+    const mins = h * 60 + m;
+    return mins >= QUIET_START || mins < QUIET_END; // window crosses midnight
+  } catch {
+    return false; // never block on a TZ error
+  }
+}
+
 export async function saveSubscription(userId: number, sub: any): Promise<void> {
   await query(
     `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
@@ -93,7 +112,7 @@ const CHAT_NOTIFY_THROTTLE_MS = 90_000;
 export async function notifyPoolMessage(
   poolId: number, authorId: number, authorName: string, poolName: string, body: string
 ): Promise<void> {
-  if (!ensureConfigured()) return;
+  if (!ensureConfigured() || isQuietHours()) return;
   const now = Date.now();
   if (now - (_lastChatNotify.get(poolId) ?? 0) < CHAT_NOTIFY_THROTTLE_MS) return;
   _lastChatNotify.set(poolId, now);
@@ -134,7 +153,7 @@ async function saveNotifiedKickoffs(ids: Set<number>): Promise<void> {
 }
 
 export async function notifyUpcomingMatches(): Promise<void> {
-  if (!ensureConfigured()) return;
+  if (!ensureConfigured() || isQuietHours()) return;
   const { rows } = await query(`
     SELECT m.id, t1.name AS home, t2.name AS away,
            CEIL(EXTRACT(EPOCH FROM (m.kickoff_time - NOW())) / 60)::int AS mins
