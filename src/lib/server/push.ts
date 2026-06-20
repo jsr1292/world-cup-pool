@@ -85,6 +85,33 @@ export async function sendPushToUsers(userIds: number[], payload: PushPayload): 
   return sendToRows(rows as SubRow[], payload);
 }
 
+// ── Banter chat ──────────────────────────────────────────────────────────────
+// Throttled per pool so a rapid exchange is one ping, not a buzz per line.
+const _lastChatNotify = new Map<number, number>();
+const CHAT_NOTIFY_THROTTLE_MS = 90_000;
+
+export async function notifyPoolMessage(
+  poolId: number, authorId: number, authorName: string, poolName: string, body: string
+): Promise<void> {
+  if (!ensureConfigured()) return;
+  const now = Date.now();
+  if (now - (_lastChatNotify.get(poolId) ?? 0) < CHAT_NOTIFY_THROTTLE_MS) return;
+  _lastChatNotify.set(poolId, now);
+  const { rows } = await query(
+    'SELECT user_id FROM pool_members WHERE pool_id = $1 AND user_id <> $2',
+    [poolId, authorId]
+  );
+  const ids = rows.map((r: any) => Number(r.user_id));
+  if (ids.length === 0) return;
+  const text = body.length > 80 ? body.slice(0, 79) + '…' : body;
+  await sendPushToUsers(ids, {
+    title: `💬 ${poolName}`,
+    body: `${authorName}: ${text}`,
+    url: `/pool/${poolId}`,
+    tag: `chat-${poolId}`,
+  });
+}
+
 // ── "Match about to start" reminders ─────────────────────────────────────────
 // Called from the sync scheduler. Notifies once per fixture, ~within 20 min of
 // kickoff. Already-sent ids are remembered in site_settings so a restart or a

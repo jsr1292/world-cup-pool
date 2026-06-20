@@ -6,7 +6,7 @@
   import { onMount } from 'svelte';
   let { data } = $props();
   let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
-  const tabIndexOrder = ['predictions', 'leaderboard', 'calendar', 'members', 'summary', 'results', 'scoring'];
+  const tabIndexOrder = ['predictions', 'leaderboard', 'chat', 'calendar', 'members', 'summary', 'results', 'scoring'];
   let slideDir = $state<'left' | 'right' | ''>('');
   let scrollY = $state(0);
   function switchTab(newTab: string) {
@@ -286,10 +286,87 @@
   }
   function closeMatchBets() { matchBetsOpen = false; matchBetsData = null; }
 
+  // ── Banter chat ─────────────────────────────────────────────────────────────
+  let chatMessages = $state<any[]>([]);
+  let chatInput = $state('');
+  let chatSending = $state(false);
+  let chatErr = $state('');
+  let chatLoaded = $state(false);
+  let chatLastId = 0;
+  let chatListEl: HTMLElement | null = null;
+
+  function fmtChatTime(ts: string): string {
+    try {
+      const d = new Date(ts), now = new Date();
+      const t = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      return d.toDateString() === now.toDateString() ? t : `${d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} ${t}`;
+    } catch { return ''; }
+  }
+  function chatNearBottom(): boolean {
+    return !chatListEl || chatListEl.scrollHeight - chatListEl.scrollTop - chatListEl.clientHeight < 90;
+  }
+  function chatScrollBottom() {
+    setTimeout(() => { if (chatListEl) chatListEl.scrollTop = chatListEl.scrollHeight; }, 30);
+  }
+  async function loadChat() {
+    try {
+      const r = await fetch(`/api/pools/${pool.id}/messages`);
+      if (!r.ok) return;
+      const d = await r.json();
+      chatMessages = d.messages || [];
+      chatLastId = chatMessages.length ? chatMessages[chatMessages.length - 1].id : 0;
+      chatLoaded = true;
+      chatScrollBottom();
+    } catch { /* keep last */ }
+  }
+  async function pollChat() {
+    try {
+      const r = await fetch(`/api/pools/${pool.id}/messages?after=${chatLastId}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.messages?.length) {
+        const stick = chatNearBottom();
+        chatMessages = [...chatMessages, ...d.messages];
+        chatLastId = chatMessages[chatMessages.length - 1].id;
+        if (stick) chatScrollBottom();
+      }
+    } catch { /* keep last */ }
+  }
+  async function sendChat() {
+    const body = chatInput.trim();
+    if (!body || chatSending) return;
+    chatSending = true; chatErr = '';
+    try {
+      const r = await fetch(`/api/pools/${pool.id}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { chatErr = d.error || 'No se pudo enviar'; }
+      else {
+        chatInput = '';
+        if (d.message && d.message.id > chatLastId) { chatMessages = [...chatMessages, d.message]; chatLastId = d.message.id; chatScrollBottom(); }
+      }
+    } catch { chatErr = 'Error de conexión'; }
+    chatSending = false;
+  }
+  async function deleteChat(id: number) {
+    try {
+      const r = await fetch(`/api/pools/${pool.id}/messages`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      if (r.ok) chatMessages = chatMessages.filter((m) => m.id !== id);
+    } catch { /* ignore */ }
+  }
+  // Poll only while the Banter tab is open AND the app is foregrounded — keeps it
+  // cheap on the DB (incremental, returns 0 rows most of the time).
+  $effect(() => {
+    if (tab !== 'chat' || typeof document === 'undefined') return;
+    if (!chatLoaded) loadChat(); else chatScrollBottom();
+    const iv = setInterval(() => { if (document.visibilityState === 'visible') pollChat(); }, 10_000);
+    return () => clearInterval(iv);
+  });
+
   const tabs = [
     { id: 'predictions', label: '🔮 Pronósticos' },
     { id: 'simulator', label: '🎲 Simulador', link: true },
     { id: 'leaderboard', label: '🏅 Clasificación' },
+    { id: 'chat', label: '💬 Banter' },
     { id: 'calendar', label: '📅 Calendario' },
     { id: 'members', label: '👥 Miembros' },
     { id: 'summary', label: '📋 Resumen' },
@@ -738,6 +815,39 @@
         </div>
       </div>
     {/if}
+  {/if}
+
+  <!-- Banter Tab -->
+  {#if tab === 'chat'}
+    <div style="max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; height: 65vh; min-height: 320px;">
+      <div bind:this={chatListEl} style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 12px;">
+        {#if !chatLoaded}
+          <p style="text-align: center; color: var(--text-muted); font-size: 11px; padding: 20px;">Cargando…</p>
+        {:else if chatMessages.length === 0}
+          <p style="text-align: center; color: var(--text-muted); font-size: 11px; padding: 24px; line-height: 1.6;">Aún no hay mensajes.<br>¡Rompe el hielo! 🧊</p>
+        {:else}
+          {#each chatMessages as m (m.id)}
+            <div style="display: flex; flex-direction: column; align-items: {m.mine ? 'flex-end' : 'flex-start'};">
+              <div style="max-width: 82%; background: {m.mine ? 'rgba(201,168,76,0.16)' : 'var(--bg-card)'}; border: 1px solid {m.mine ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 12px; padding: 7px 11px;">
+                {#if !m.mine}<div style="font-size: 9px; font-weight: 700; color: var(--gold); margin-bottom: 2px;">{m.display_name}</div>{/if}
+                <div style="font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-word; line-height: 1.4;">{m.body}</div>
+                <div style="display: flex; align-items: center; gap: 7px; justify-content: flex-end; margin-top: 3px;">
+                  <span style="font-size: 8px; color: var(--text-dim);">{fmtChatTime(m.created_at)}</span>
+                  {#if m.mine || data.isAdmin}<button onclick={() => deleteChat(m.id)} aria-label="Borrar mensaje" style="background: none; border: none; color: var(--text-dim); font-size: 10px; cursor: pointer; padding: 0; line-height: 1;">✕</button>{/if}
+                </div>
+              </div>
+            </div>
+          {/each}
+        {/if}
+      </div>
+      <div style="display: flex; gap: 8px; padding: 8px 0 2px; border-top: 1px solid var(--border);">
+        <input bind:value={chatInput} maxlength="500" placeholder="Escribe un mensaje…"
+          onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+          style="flex: 1; min-width: 0; font-size: 12px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text);" />
+        <button onclick={sendChat} disabled={chatSending || !chatInput.trim()} class="btn-primary" style="font-size: 11px; padding: 9px 16px; flex-shrink: 0;">Enviar</button>
+      </div>
+      {#if chatErr}<div style="font-size: 9px; color: var(--red); padding: 4px 2px;">{chatErr}</div>{/if}
+    </div>
   {/if}
 
   <!-- Pronósticos Tab -->

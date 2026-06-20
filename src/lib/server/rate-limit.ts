@@ -81,3 +81,24 @@ export function checkAuthRate(userId: number): boolean {
   e.count++;
   return true;
 }
+
+// Banter chat: 20 messages / minute per user. Separate from the prediction
+// limiter so chatting can never lock someone out of saving their bets.
+const _chatLimits = new Map<number, { count: number; resetAt: number }>();
+const CHAT_LIMIT = 20;
+const CHAT_WINDOW = 60_000;
+
+export function checkChatRate(userId: number): boolean {
+  const now = Date.now();
+  if (_chatLimits.size > 10_000) {
+    for (const [k, v] of _chatLimits) if (now > v.resetAt) _chatLimits.delete(k);
+  }
+  const e = _chatLimits.get(userId);
+  if (!e || now > e.resetAt) {
+    _chatLimits.set(userId, { count: 1, resetAt: now + CHAT_WINDOW });
+    return true;
+  }
+  if (e.count >= CHAT_LIMIT) return false;
+  e.count++;
+  return true;
+}
