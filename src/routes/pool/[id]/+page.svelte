@@ -3,10 +3,11 @@
   import { haptic } from '$lib/haptic';
   import { flagEmoji, shortName } from '$lib/teams.js';
   import { liveMatchIds } from '$lib/live.js';
+  import Simulator from '$lib/Simulator.svelte';
   import { onMount } from 'svelte';
   let { data } = $props();
   let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
-  const tabIndexOrder = ['predictions', 'leaderboard', 'calendar', 'members', 'summary', 'results', 'scoring'];
+  const tabIndexOrder = ['predictions', 'simulator', 'leaderboard', 'calendar', 'members', 'summary', 'results', 'scoring'];
   let slideDir = $state<'left' | 'right' | ''>('');
   let scrollY = $state(0);
   function switchTab(newTab: string) {
@@ -17,6 +18,24 @@
     slideDir = newIdx > oldIdx ? 'left' : 'right';
     tab = newTab;
     if (newTab === 'calendar') scrollToCurrentGame();
+    if (newTab === 'simulator') loadSim();
+  }
+
+  // Lazy-load the simulator data the first time the tab is opened (keeps it off
+  // the pool page's initial load). Renders inline via the shared component.
+  let simData = $state<any>(null);
+  let simLoading = $state(false);
+  let simErr = $state('');
+  async function loadSim() {
+    if (simData || simLoading) return;
+    simLoading = true; simErr = '';
+    try {
+      const r = await fetch(`/api/pools/${pool.id}/simulator`);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) simErr = d.error || 'No se pudo cargar el simulador';
+      else simData = d;
+    } catch { simErr = 'Error de conexión'; }
+    simLoading = false;
   }
   // Auto-scroll the Calendario to the live game (or the next one to be played).
   function scrollToCurrentGame() {
@@ -370,7 +389,7 @@
 
   const tabs = [
     { id: 'predictions', label: '🔮 Pronósticos' },
-    { id: 'simulator', label: '🎲 Simulador', link: true },
+    { id: 'simulator', label: '🎲 Simulador' },
     { id: 'leaderboard', label: '🏅 Clasificación' },
     { id: 'calendar', label: '📅 Calendario' },
     { id: 'members', label: '👥 Miembros' },
@@ -527,15 +546,11 @@
   <!-- Tabs -->
   <div class="pool-tabs">
     {#each tabs as t}
-      {#if t.link}
-        <a href="/pool/{pool.id}/{t.id}" class="pool-tab" style="text-decoration: none;">{t.label}</a>
-      {:else}
-        <button
-          onclick={() => switchTab(t.id)}
-          class="pool-tab"
-          class:active={tab === t.id}
-        >{t.label}</button>
-      {/if}
+      <button
+        onclick={() => switchTab(t.id)}
+        class="pool-tab"
+        class:active={tab === t.id}
+      >{t.label}</button>
     {/each}
   </div>
 
@@ -819,6 +834,17 @@
           {/if}
         </div>
       </div>
+    {/if}
+  {/if}
+
+  <!-- Simulador Tab (inline, lazy-loaded) -->
+  {#if tab === 'simulator'}
+    {#if simErr}
+      <p style="font-size: 12px; color: var(--red); padding: 16px; text-align: center;">{simErr}</p>
+    {:else if !simData}
+      <p style="font-size: 12px; color: var(--text-muted); padding: 24px; text-align: center;">Cargando simulador…</p>
+    {:else}
+      <Simulator data={simData} />
     {/if}
   {/if}
 

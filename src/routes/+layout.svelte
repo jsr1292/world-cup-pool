@@ -41,6 +41,17 @@
       } catch { /* private mode — reload anyway */ }
       location.reload();
     });
+    // Auto-hide the top bar based on scroll direction (mobile only — the bar is
+    // display:none on desktop, so the transform is a no-op there).
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (y < 12) topHidden = false;
+      else if (y > lastY + 5) topHidden = true;
+      else if (y < lastY - 5) topHidden = false;
+      lastY = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
   }
 
   // ── Live-score ticker (single poller, shared by the top-bar + sidebar) ──────
@@ -50,6 +61,8 @@
   let nextMatch = $state(null);
   /** @type {ReturnType<typeof setInterval> | null} */
   let liveTimer = null;
+  // Auto-hide the mobile top bar on scroll-down (more screen), reveal on scroll-up.
+  let topHidden = $state(false);
   const inTournamentWindow = () => {
     const now = Date.now();
     return now >= WORLD_CUP_KICKOFF_MS && now <= WORLD_CUP_KICKOFF_MS + WORLD_CUP_DURATION_MS;
@@ -253,7 +266,7 @@
 <div class="app-layout" style="height: 100vh; padding-bottom: 0;">
   <!-- Top Bar (mobile only) -->
   {#if data?.user}
-    <header class="top-bar">
+    <header class="top-bar" class:top-hidden={topHidden}>
       <div class="top-bar-inner">
         <div class="top-bar-brand">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="url(#gold-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e8c96a"/><stop offset="50%" stop-color="#c9a84c"/><stop offset="100%" stop-color="#f0d98c"/></linearGradient></defs><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
@@ -450,7 +463,9 @@
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     padding: max(12px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
+    transition: transform 0.25s ease;
   }
+  .top-bar.top-hidden { transform: translateY(-100%); }
 
   .top-bar-inner {
     display: flex;

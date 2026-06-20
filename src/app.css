@@ -347,7 +347,7 @@ button {
   .main-content {
     margin-left: 220px;
     flex: 1;
-    padding: 36px 40px;
+    padding: 36px 40px 96px;
     max-width: 1200px;
     width: calc(100% - 220px);
   }
@@ -377,7 +377,8 @@ button {
   .main-content {
     padding: 12px;
     padding-top: calc(8px + 36px + max(12px, env(safe-area-inset-top, 0px)));
-    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+    /* clears the bottom nav AND the floating chat / back-to-top buttons */
+    padding-bottom: calc(132px + env(safe-area-inset-bottom));
     flex: 1;
   }
   .pool-grid { grid-template-columns: 1fr !important; }
