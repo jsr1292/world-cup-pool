@@ -2,42 +2,46 @@ import { json, type RequestHandler } from '@sveltejs/kit';
 import { fetchLiveTicker, getNextMatch, type TickerMatch, type NextMatch } from '$lib/server/live-scores.js';
 import { query } from '$lib/server/db.js';
 
-// Shared, process-wide cache so the upstream FIFA API is polled at most once per
-// CACHE_MS no matter how many clients are watching the ticker. A failed fetch
-// serves the last good payload rather than flickering to empty.
-type Payload = { matches: TickerMatch[]; next: NextMatch | null };
-let cache: { at: number; data: Payload } | null = null;
-let inflight: Promise<Payload> | null = null;
-const CACHE_MS = 30_000;
+// Two shared, process-wide caches so the DB/upstream are hit at most once per TTL
+// regardless of how many clients are watching:
+//   • live matches (FIFA fetch + team-resolution DB reads) — 30s, needs freshness.
+//   • next match (a small DB lookup that changes only when a game starts/finishes)
+//     — 5 min, so it stops querying the DB every 30s.
+let matchesCache: { at: number; data: TickerMatch[] } | null = null;
+let matchesInflight: Promise<TickerMatch[]> | null = null;
+let nextCache: { at: number; data: NextMatch | null } | null = null;
+let nextInflight: Promise<NextMatch | null> | null = null;
+const MATCHES_TTL = 30_000;
+const NEXT_TTL = 300_000;
+
+function getMatches(): Promise<TickerMatch[]> {
+  if (matchesCache && Date.now() - matchesCache.at < MATCHES_TTL) return Promise.resolve(matchesCache.data);
+  if (!matchesInflight) {
+    matchesInflight = fetchLiveTicker()
+      .then((m) => { matchesCache = { at: Date.now(), data: m }; return m; })
+      .catch(() => matchesCache?.data ?? [])
+      .finally(() => { matchesInflight = null; });
+  }
+  return matchesInflight;
+}
+function getNext(): Promise<NextMatch | null> {
+  if (nextCache && Date.now() - nextCache.at < NEXT_TTL) return Promise.resolve(nextCache.data);
+  if (!nextInflight) {
+    nextInflight = getNextMatch()
+      .then((n) => { nextCache = { at: Date.now(), data: n }; return n; })
+      .catch(() => nextCache?.data ?? null)
+      .finally(() => { nextInflight = null; });
+  }
+  return nextInflight;
+}
 
 export const GET: RequestHandler = async ({ locals }) => {
-  const now = Date.now();
-  let data: Payload;
-  if (cache && now - cache.at < CACHE_MS) {
-    data = cache.data;
-  } else {
-    // Collapse concurrent refreshes into a single upstream request. The live
-    // matches come from FIFA; the "next match" is a cheap local DB lookup,
-    // fetched together so the header can show the upcoming game when nothing is
-    // live. Both are user-agnostic, so they're safe to share across viewers.
-    if (!inflight) {
-      inflight = Promise.all([fetchLiveTicker(), getNextMatch()])
-        .then(([matches, next]): Payload => {
-          const fresh = { matches, next };
-          cache = { at: Date.now(), data: fresh };
-          return fresh;
-        })
-        .catch(() => cache?.data ?? { matches: [], next: null })
-        .finally(() => { inflight = null; });
-    }
-    data = await inflight;
-  }
+  const [liveMatches, next] = await Promise.all([getMatches(), getNext()]);
 
-  // Per-viewer: attach their own 1/X/2 pick for each live group game (so the
-  // ticker can show "what I bet"). NOT cached — computed fresh per request, and
-  // the response is marked private to keep it out of shared caches.
-  let matches = data.matches;
-  const ids = data.matches.map((m) => m.match_id).filter((x): x is number => x != null);
+  // Per-viewer: attach their own 1/X/2 pick for each live group game (the "tú X"
+  // badge). Only runs while a match is live; not cached; response marked private.
+  let matches = liveMatches;
+  const ids = liveMatches.map((m) => m.match_id).filter((x): x is number => x != null);
   if (locals.user && ids.length > 0) {
     const pickByMatch: Record<number, '1' | 'X' | '2'> = {};
     try {
@@ -53,8 +57,8 @@ export const GET: RequestHandler = async ({ locals }) => {
         if (pickByMatch[r.mid] === undefined) pickByMatch[r.mid] = r.ph > r.pa ? '1' : r.ph < r.pa ? '2' : 'X';
       }
     } catch { /* no picks → no badge */ }
-    matches = data.matches.map((m) => ({ ...m, my_pick: m.match_id != null ? (pickByMatch[m.match_id] ?? null) : null }));
+    matches = liveMatches.map((m) => ({ ...m, my_pick: m.match_id != null ? (pickByMatch[m.match_id] ?? null) : null }));
   }
 
-  return json({ matches, next: data.next }, { headers: { 'Cache-Control': 'private, max-age=10' } });
+  return json({ matches, next }, { headers: { 'Cache-Control': 'private, max-age=10' } });
 };

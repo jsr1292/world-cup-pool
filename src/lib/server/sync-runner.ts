@@ -105,22 +105,39 @@ export async function syncAndRescore(): Promise<SyncResult & { pools: number }> 
 let timer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 
-/** True if any fixture is within its active window (kickoff−20min … kickoff+3h)
- *  and not yet recorded finished. Starts 20 min before kickoff so the scheduler
- *  is already polling frequently in time to fire the "about to start" reminder. */
-async function anyMatchInPlayWindow(): Promise<boolean> {
+// Cap on how long we sleep between matches — a safety re-check in case the
+// schedule shifts; the compute is suspended the whole time anyway.
+const MAX_IDLE_MS = 6 * 60 * 60 * 1000; // 6h
+
+/** How long to wait before the next tick.
+ *  - While a fixture is in its active window (kickoff−20min … +3h) → `liveMs`
+ *    (poll fast so finals post within ~a minute).
+ *  - Otherwise → sleep until ~20 min before the NEXT fixture, clamped to
+ *    [liveMs, MAX_IDLE_MS]. This is the key compute saver: between matches and
+ *    overnight the scheduler issues one query then sleeps for hours, so Neon's
+ *    compute can auto-suspend instead of being woken every few minutes. */
+async function nextDelayMs(liveMs: number): Promise<number> {
   try {
     const { rows } = await query(
-      `SELECT 1 FROM matches
-         WHERE kickoff_time IS NOT NULL AND status <> 'finished'
-           AND NOW() BETWEEN kickoff_time - INTERVAL '20 minutes'
-                         AND kickoff_time + INTERVAL '180 minutes'
-         LIMIT 1`
+      `SELECT
+         EXISTS (
+           SELECT 1 FROM matches
+           WHERE kickoff_time IS NOT NULL AND status <> 'finished'
+             AND NOW() BETWEEN kickoff_time - INTERVAL '20 minutes'
+                           AND kickoff_time + INTERVAL '180 minutes'
+         ) AS active,
+         (SELECT MIN(kickoff_time) FROM matches
+          WHERE kickoff_time IS NOT NULL AND status <> 'finished' AND kickoff_time > NOW()
+         ) AS next_kick`
     );
-    return rows.length > 0;
+    if (rows[0]?.active) return liveMs;
+    const nk = rows[0]?.next_kick ? new Date(rows[0].next_kick).getTime() : null;
+    if (nk == null) return MAX_IDLE_MS; // no upcoming fixtures
+    const untilActive = nk - 20 * 60_000 - Date.now(); // until 20 min before kickoff
+    return Math.max(liveMs, Math.min(untilActive, MAX_IDLE_MS));
   } catch (e) {
-    console.error('[scheduler] live-window check failed:', e);
-    return false;
+    console.error('[scheduler] next-delay check failed:', e);
+    return MAX_IDLE_MS;
   }
 }
 
@@ -174,14 +191,13 @@ export function startSyncScheduler(): void {
       running = false;
     }
     // Re-arm AFTER the run completes (so ticks never overlap): fast while a
-    // match is in its play window, otherwise the idle gap.
-    const fast = liveMs < idleMs && (await anyMatchInPlayWindow());
-    timer = setTimeout(tick, fast ? liveMs : idleMs);
+    // match is in play, otherwise sleep until just before the next fixture.
+    timer = setTimeout(tick, await nextDelayMs(liveMs));
   };
 
   // First run shortly after boot, then self-schedule adaptively.
   timer = setTimeout(tick, 20_000);
   console.log(
-    `[scheduler] adaptive auto-sync: ~${Math.round(liveMs / 1000)}s in-match · ${Math.max(5, minutes)} min idle${usingFifa ? '' : ' (API-Football: fixed)'}.`
+    `[scheduler] auto-sync: ~${Math.round(liveMs / 1000)}s in-match · sleeps until the next fixture otherwise${usingFifa ? '' : ' (API-Football)'}.`
   );
 }

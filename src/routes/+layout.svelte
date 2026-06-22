@@ -59,7 +59,7 @@
   let liveMatches = $state([]);
   /** @type {any} */
   let nextMatch = $state(null);
-  /** @type {ReturnType<typeof setInterval> | null} */
+  /** @type {ReturnType<typeof setTimeout> | null} */
   let liveTimer = null;
   // Auto-hide the mobile top bar on scroll-down (more screen), reveal on scroll-up.
   let topHidden = $state(false);
@@ -67,8 +67,19 @@
     const now = Date.now();
     return now >= WORLD_CUP_KICKOFF_MS && now <= WORLD_CUP_KICKOFF_MS + WORLD_CUP_DURATION_MS;
   };
+  // Adaptive cadence — fast only when it matters, so quiet hours/days are cheap.
+  function nextPollDelay() {
+    if (liveMatches.length > 0) return 30_000;                         // a game is live
+    const k = nextMatch?.kickoff_time ? new Date(nextMatch.kickoff_time).getTime() : null;
+    if (k != null && k - Date.now() < 3_600_000) return 60_000;        // next match within 1h
+    return 300_000;                                                    // nothing near → 5 min
+  }
+  function scheduleLive(/** @type {number} */ ms) { if (liveTimer) clearTimeout(liveTimer); liveTimer = setTimeout(pollLive, ms); }
+  // Self-scheduling poller. Skips the fetch (and therefore the server DB hit)
+  // while the app is backgrounded — the biggest client-side compute saver.
   async function pollLive() {
-    if (!inTournamentWindow()) { liveMatches = []; nextMatch = null; liveMatchIds.set(new Set()); return; }
+    if (!inTournamentWindow()) { liveMatches = []; nextMatch = null; liveMatchIds.set(new Set()); scheduleLive(600_000); return; }
+    if (typeof document !== 'undefined' && document.hidden) { scheduleLive(nextPollDelay()); return; }
     try {
       const r = await fetch('/api/live');
       if (r.ok) {
@@ -79,16 +90,16 @@
         liveMatchIds.set(new Set(liveMatches.map((m) => m.match_id).filter((x) => x != null)));
       }
     } catch { /* keep last */ }
+    scheduleLive(nextPollDelay());
   }
   onMount(() => {
     if (!browser || !data?.user || !inTournamentWindow()) return;
-    pollLive();
-    liveTimer = setInterval(pollLive, 30_000);
+    pollLive(); // self-schedules
     const onVis = () => { if (document.visibilityState === 'visible') pollLive(); };
     document.addEventListener('visibilitychange', onVis);
     onDestroy(() => document.removeEventListener('visibilitychange', onVis));
   });
-  onDestroy(() => { if (liveTimer) clearInterval(liveTimer); });
+  onDestroy(() => { if (liveTimer) clearTimeout(liveTimer); });
 
   const currentPath = $derived($page.url.pathname);
 
