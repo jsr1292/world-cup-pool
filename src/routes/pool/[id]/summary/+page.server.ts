@@ -2,6 +2,7 @@ import { getPoolById, getUserPredictions } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
 import { getTeamsMapCached } from '$lib/server/cache.js';
 import { isEmailConfigured } from '$lib/server/email.js';
+import { rankGroup, type GsMatch } from '$lib/group-standings.js';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types.js';
 
@@ -80,7 +81,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     const predIds = entries.map((e: any) => e.id);
 
     const { rows: allGP } = await query(`
-      SELECT prediction_id, group_name, position_1, position_2, position_3, position_4
+      SELECT prediction_id, group_name, position_1, position_2, position_3, position_4, points_earned
       FROM group_predictions WHERE prediction_id = ANY($1::int[])
       ORDER BY group_name
     `, [predIds]);
@@ -124,8 +125,34 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     }
   }
 
+  // Actual final group tables, so the "Clasificación de grupos" section can mark
+  // each predicted position ✓/✗ and show what really finished there. Ranked with
+  // the SAME canonical rankGroup() the scorer uses, so the marks can never disagree
+  // with the stored points. Only fully-finished groups (6/6) are scored, but we
+  // expose the live order + finished-count and let the view decide what to show.
+  const actualGroups: Record<string, number[]> = {};
+  const groupFinished: Record<string, number> = {};
+  const { rows: finishedMatches } = await query(`
+    SELECT group_name, home_team_id, away_team_id, home_score, away_score
+    FROM matches
+    WHERE phase = 'group' AND status = 'finished'
+      AND home_score IS NOT NULL AND away_score IS NOT NULL AND group_name IS NOT NULL
+  `);
+  const byGroup: Record<string, GsMatch[]> = {};
+  for (const m of finishedMatches) {
+    (byGroup[m.group_name] ??= []).push({
+      homeTeamId: m.home_team_id, awayTeamId: m.away_team_id,
+      homeScore: m.home_score, awayScore: m.away_score,
+    });
+  }
+  for (const [g, ms] of Object.entries(byGroup)) {
+    groupFinished[g] = ms.length;
+    actualGroups[g] = rankGroup(ms);
+  }
+
   return {
     pool: safePool, entries, groupPreds, bracketPreds, matchPreds, teams,
+    actualGroups, groupFinished,
     emailEnabled: isEmailConfigured() && !!locals.user.email,
     viewing,
   };

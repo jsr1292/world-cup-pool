@@ -168,23 +168,41 @@
 
     <!-- Group predictions (final-table order) — secondary, below the games -->
     <div style="margin-bottom: 24px;">
-      <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">🏆 Clasificación de grupos (orden final)</h2>
+      <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px;">🏆 Clasificación de grupos (orden final)</h2>
+      <p style="font-size: 10px; color: var(--text-muted); margin: 0 0 10px;">Verde = posición acertada. El ✗ muestra qué equipo quedó realmente en ese puesto.</p>
       {#each getGroupPreds() as gp}
+        {@const actual = data.actualGroups?.[gp.group_name]}
+        {@const fin = data.groupFinished?.[gp.group_name] ?? 0}
+        {@const complete = fin === 6 && !!actual}
+        {@const nCorrect = complete ? [gp.position_1, gp.position_2, gp.position_3, gp.position_4].filter((tid, i) => tid && actual[i] === tid).length : 0}
         <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px;">
           <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">Grupo {gp.group_name}</div>
           <div style="display: flex; flex-direction: column; gap: 2px;">
             {#each [gp.position_1, gp.position_2, gp.position_3, gp.position_4] as tid, idx}
-              {#if tid}
-                <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; {idx < 2 ? 'color: var(--text); font-weight: 500;' : 'color: var(--text-muted);'}">
-                  <span style="width: 14px; font-size: 9px; color: var(--text-muted);">{idx + 1}.</span>
+              {@const correct = complete && !!tid && actual[idx] === tid}
+              {@const wrong = complete && !!tid && !!actual[idx] && actual[idx] !== tid}
+              <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; {idx < 2 ? 'color: var(--text); font-weight: 500;' : 'color: var(--text-muted);'}">
+                <span style="width: 14px; font-size: 9px; color: var(--text-muted);">{idx + 1}.</span>
+                {#if tid}
                   <span>{@html teamFlag(tid)}</span>
                   <span>{teamName(tid)}</span>
-                </div>
-              {:else}
-                <div style="font-size: 11px; color: var(--text-muted); opacity: 0.5;">{idx + 1}. —</div>
-              {/if}
+                {:else}
+                  <span style="opacity: 0.5;">—</span>
+                {/if}
+                {#if correct}
+                  <span style="color: var(--green); font-size: 10px; font-weight: 700;">✓</span>
+                {:else if wrong}
+                  <span style="color: var(--red); font-size: 10px;">✗</span>
+                  <span style="color: var(--text-dim); font-size: 10px;">→ {@html teamFlag(actual[idx])} {teamName(actual[idx])}</span>
+                {/if}
+              </div>
             {/each}
           </div>
+          {#if fin < 6}
+            <div style="margin-top: 8px; font-size: 9px; color: var(--text-muted); background: rgba(201,168,76,0.07); border: 1px solid rgba(201,168,76,0.2); border-radius: 5px; padding: 5px 7px;">⏳ Pendiente — se puntúa al completarse el grupo ({fin}/6)</div>
+          {:else}
+            <div style="margin-top: 8px; font-size: 9px; color: var(--green); background: rgba(0,229,160,0.07); border: 1px solid rgba(0,229,160,0.2); border-radius: 5px; padding: 5px 7px;">✓ Acertaste {nCorrect}/4{#if gp.points_earned > 0} · +{gp.points_earned} pts{/if}</div>
+          {/if}
         </div>
       {/each}
 
