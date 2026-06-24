@@ -97,7 +97,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   // F-06: Bulk-fetch enrichment data to eliminate N+1 queries in leaderboard loop
   const predIds = leaderboard.map((e: any) => e.id);
   let groupCorrectMap: Record<number, number> = {};
+  let resultPointsMap: Record<number, number> = {};
+  let positionPointsMap: Record<number, number> = {};
   let bracketByPredPhase: Record<number, Record<string, number>> = {};
+  let bracketPointsByPredPhase: Record<number, Record<string, number>> = {};
   let tiebreakerMap: Record<number, any> = {};
   let exactHitsMap: Record<number, number> = {};
 
@@ -116,15 +119,33 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     `, [predIds]);
     ehRows.forEach((r: any) => { exactHitsMap[r.prediction_id] = Number(r.cnt); });
 
-    // "Group correct" = correct 1/X/2 match results (W/D/L model). Match
-    // predictions earn points only for a correct outcome, so count those.
+    // "Group correct" = correct 1/X/2 match results (W/D/L model). We surface both
+    // the count of correct outcomes (cnt) and the points they earned (pts) so the
+    // leaderboard pills can add up to the gold total.
     const { rows: gcRows } = await query(`
-      SELECT prediction_id, COUNT(*) as cnt
+      SELECT prediction_id,
+        COUNT(*) FILTER (WHERE points_earned > 0) as cnt,
+        COALESCE(SUM(points_earned), 0) as pts
       FROM match_predictions
-      WHERE prediction_id = ANY($1::int[]) AND points_earned > 0
+      WHERE prediction_id = ANY($1::int[])
       GROUP BY prediction_id
     `, [predIds]);
-    gcRows.forEach((r: any) => { groupCorrectMap[r.prediction_id] = r.cnt; });
+    gcRows.forEach((r: any) => {
+      groupCorrectMap[r.prediction_id] = Number(r.cnt);
+      resultPointsMap[r.prediction_id] = Number(r.pts);
+    });
+
+    // Posición de la tabla final: points from correctly predicting a group's final
+    // standings (group_position rule, off in pools where it's 0). This is the piece
+    // the old "Grupos: N" pill hid — it's why a lower aciertos count can still rank
+    // higher.
+    const { rows: gpRows } = await query(`
+      SELECT prediction_id, COALESCE(SUM(points_earned), 0) as pts
+      FROM group_predictions
+      WHERE prediction_id = ANY($1::int[])
+      GROUP BY prediction_id
+    `, [predIds]);
+    gpRows.forEach((r: any) => { positionPointsMap[r.prediction_id] = Number(r.pts); });
 
     const { rows: brRows } = await query(`
       SELECT prediction_id, phase, points_earned
@@ -134,6 +155,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       if (br.points_earned > 0) {
         if (!bracketByPredPhase[br.prediction_id]) bracketByPredPhase[br.prediction_id] = {};
         bracketByPredPhase[br.prediction_id][br.phase] = (bracketByPredPhase[br.prediction_id][br.phase] || 0) + 1;
+        if (!bracketPointsByPredPhase[br.prediction_id]) bracketPointsByPredPhase[br.prediction_id] = {};
+        bracketPointsByPredPhase[br.prediction_id][br.phase] = (bracketPointsByPredPhase[br.prediction_id][br.phase] || 0) + Number(br.points_earned);
       }
     });
 
@@ -162,6 +185,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
       ...entry,
       group_correct: groupCorrect,
       bracket_correct: bracketByPhase,
+      result_points: resultPointsMap[predId] ?? 0,
+      position_points: positionPointsMap[predId] ?? 0,
+      bracket_points: bracketPointsByPredPhase[predId] ?? {},
       total_correct: groupCorrect + Object.values(bracketByPhase).reduce((a: number, b: number) => a + b, 0),
       exact_score_hits: exactHitsMap[predId] ?? 0,
       tiebreaker_close: tiebreakerClose,

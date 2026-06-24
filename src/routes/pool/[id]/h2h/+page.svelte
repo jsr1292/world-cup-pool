@@ -110,6 +110,14 @@
           {#if groupCorrect && groupCorrect.played > 0}
             <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">✓ aciertos: <strong style="color: var(--green);">{data.a.owner.split(' ')[0]} {groupCorrect.aOk}</strong> · <strong style="color: var(--green);">{data.b.owner.split(' ')[0]} {groupCorrect.bOk}</strong> <span style="color: var(--text-dim);">(de {groupCorrect.played} jugados)</span></div>
           {/if}
+          {#if data.a.totalScore != null && data.b.totalScore != null}
+            <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;">
+              🏅 <strong style="color: var(--gold);">{data.a.owner.split(' ')[0]} {data.a.totalScore} pts</strong>
+              <span style="color: var(--text-dim);">({data.a.resultPoints} resultados{#if data.a.positionPoints > 0} · +{data.a.positionPoints} posición{/if}{#if data.a.knockoutPoints > 0} · +{data.a.knockoutPoints} elim.{/if})</span>
+              · <strong style="color: var(--gold);">{data.b.owner.split(' ')[0]} {data.b.totalScore} pts</strong>
+              <span style="color: var(--text-dim);">({data.b.resultPoints} resultados{#if data.b.positionPoints > 0} · +{data.b.positionPoints} posición{/if}{#if data.b.knockoutPoints > 0} · +{data.b.knockoutPoints} elim.{/if})</span>
+            </div>
+          {/if}
         </div>
       {/if}
 

@@ -408,6 +408,12 @@
     '3rd': '3er puesto',
   };
 
+  // Does this pool award points for the final group standings? When it does, the
+  // leaderboard pills show a "Posición +N" segment so the row's points add up to
+  // its total (otherwise a lower aciertos count outranking a higher one looks like
+  // a bug). Pools with group_position = 0 behave exactly as before.
+  const awardsPosition = $derived(Number(data.scoring?.group_position ?? 0) > 0);
+
   let shared = $state(false);
   let sheetOpen = $state(false);
   let sheetStartY = 0;
@@ -691,11 +697,14 @@
             <div style="flex: 1; min-width: 0;">
               <div style="font-size: 13px; font-weight: 600; {entry.user_id === data.userId ? 'color: var(--gold);' : ''}">{leaderboardRanks[i]}.{#if moverDeltas[i] !== 0}<span style="font-size: 9px; font-weight: 700; color: {moverDeltas[i] > 0 ? 'var(--green)' : 'var(--red)'}; margin: 0 2px 0 3px;">{moverDeltas[i] > 0 ? '▲' : '▼'}{Math.abs(moverDeltas[i])}</span>{/if} {entry.display_name}{#if pool.allow_multiple_predictions}<span style="color: var(--text-muted); font-weight: 400;"> · {entry.label || 'Principal'}</span>{:else if entry.label}<span style="color: var(--text-muted); font-weight: 400;"> ({entry.label})</span>{/if}</div>
               <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">
-                {#if entry.group_correct > 0}
-                  <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">Grupos: {entry.group_correct}</span>
+                {#if entry.result_points > 0}
+                  <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">Resultados +{entry.result_points}</span>
                 {/if}
-                {#each Object.entries(entry.bracket_correct || {}) as [phase, count]}
-                  <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">{phaseLabels[phase] || phase}: {count}</span>
+                {#if awardsPosition && entry.position_points > 0}
+                  <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">Posición +{entry.position_points}</span>
+                {/if}
+                {#each Object.entries(entry.bracket_points || {}) as [phase, pts]}
+                  <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">{phaseLabels[phase] || phase} +{pts}</span>
                 {/each}
               </div>
             </div>

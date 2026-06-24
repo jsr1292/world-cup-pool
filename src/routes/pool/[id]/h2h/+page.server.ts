@@ -70,6 +70,17 @@ async function sideFor(pid: number, entries: any[]) {
     `SELECT group_name, position_1 FROM group_predictions WHERE prediction_id = $1 AND position_1 IS NOT NULL`, [pid]
   )).rows) gw[r.group_name] = r.position_1;
   const tb = (await query('SELECT home_score, away_score FROM tiebreaker WHERE prediction_id = $1', [pid])).rows[0] ?? null;
+  // Points breakdown so the header can show why each side totals what it does
+  // (mirrors the Clasificación pills): resultados 1/X/2 + posición tabla + elim.
+  const pts = (await query(`
+    SELECT
+      (SELECT COALESCE(SUM(points_earned), 0) FROM match_predictions WHERE prediction_id = $1) AS result_pts,
+      (SELECT COALESCE(SUM(points_earned), 0) FROM group_predictions WHERE prediction_id = $1) AS position_pts,
+      (SELECT COALESCE(SUM(points_earned), 0) FROM bracket_predictions WHERE prediction_id = $1) AS knockout_pts
+  `, [pid])).rows[0] ?? {};
+  const resultPoints = Number(pts.result_pts ?? 0);
+  const positionPoints = Number(pts.position_pts ?? 0);
+  const knockoutPoints = Number(pts.knockout_pts ?? 0);
   // Per-match group picks as 1/X/2 (derived from the stored canonical scoreline),
   // keyed by match id for side-by-side comparison.
   const groupPicks: Record<number, '1' | 'X' | '2'> = {};
@@ -86,5 +97,7 @@ async function sideFor(pid: number, entries: any[]) {
     label: meta?.label || null,
     champion, finalists, groupWinners: gw, groupPicks,
     tiebreaker: tb ? { home: tb.home_score, away: tb.away_score } : null,
+    resultPoints, positionPoints, knockoutPoints,
+    totalScore: resultPoints + positionPoints + knockoutPoints,
   };
 }
