@@ -213,17 +213,20 @@
 
     <!-- Bracket predictions -->
     <div style="margin-bottom: 24px;">
-      <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">⚔️ Eliminatorias</h2>
+      <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px;">⚔️ Eliminatorias</h2>
+      <p style="font-size: 10px; color: var(--text-muted); margin: 0 0 10px;">Verde = avanzó (puntos sumados) · Rojo = eliminado.</p>
       {#each phaseOrder as phase}
         {@const bracketPreds = getBracketPreds()}
         {@const picks = bracketPreds[phase]}
         {#if picks && picks.length > 0}
+          {@const phasePts = picks.reduce((sum: number, p: any) => sum + (p.points_earned || 0), 0)}
           <div style="margin-bottom: 12px;">
-            <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">{phaseLabels[phase] || phase}</div>
+            <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">{phaseLabels[phase] || phase}{#if phasePts > 0}<span style="color: var(--green); font-weight: 700; text-transform: none; letter-spacing: 0;"> · +{phasePts} pts</span>{/if}</div>
             <div style="display: flex; flex-wrap: wrap; gap: 4px;">
               {#each picks as pick}
-                <span style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 11px;">
-                  {@html teamFlag(pick.team_id)} {teamName(pick.team_id)}
+                {@const st = pick.state}
+                <span style="border-radius: 4px; padding: 4px 8px; font-size: 11px; background: {st === 'correct' ? 'rgba(0,229,160,0.12)' : st === 'wrong' ? 'rgba(255,77,106,0.10)' : 'var(--bg-surface)'}; border: 1px solid {st === 'correct' ? 'rgba(0,229,160,0.4)' : st === 'wrong' ? 'rgba(255,77,106,0.3)' : 'var(--border)'}; {st === 'wrong' ? 'opacity: 0.65;' : ''}">
+                  {@html teamFlag(pick.team_id)} {teamName(pick.team_id)}{#if st === 'correct'} <span style="color: var(--green); font-weight: 700;">✓+{pick.points_earned}</span>{:else if st === 'wrong'} <span style="color: var(--red);">✗</span>{/if}
                 </span>
               {/each}
             </div>

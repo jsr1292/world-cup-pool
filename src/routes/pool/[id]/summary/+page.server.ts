@@ -91,7 +91,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     }
 
     const { rows: allBP } = await query(`
-      SELECT prediction_id, phase, slot as match_index, team_id
+      SELECT prediction_id, phase, slot as match_index, team_id, points_earned
       FROM bracket_predictions WHERE prediction_id = ANY($1::int[])
       ORDER BY phase, slot
     `, [predIds]);
@@ -148,6 +148,42 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   for (const [g, ms] of Object.entries(byGroup)) {
     groupFinished[g] = ms.length;
     actualGroups[g] = rankGroup(ms);
+  }
+
+  // Knockout: tag each bracket pick so the Eliminatorias section can mark it
+  // ✓ (the team advanced — earned points), ✗ (the team has been knocked out) or
+  // leave it pending. Correctness comes straight from the stored points_earned
+  // (computed by the scorer); "wrong" means the picked team lost a finished KO
+  // match. A non-advancing R32 wildcard occupant (even slot whose sibling odd slot
+  // is also filled) never scores and isn't a real advancer, so it stays unmarked —
+  // mirrors isNonAdvancingR32Occupant in scoring.ts.
+  const eliminated = new Set<number>();
+  const { rows: koMatches } = await query(`
+    SELECT home_team_id, away_team_id, home_score, away_score, penalty_winner_id
+    FROM matches
+    WHERE phase IN ('r32','r16','qf','sf','final','3rd')
+      AND status = 'finished' AND home_score IS NOT NULL AND away_score IS NOT NULL
+  `);
+  for (const m of koMatches) {
+    const winner = m.home_score > m.away_score ? m.home_team_id
+      : m.home_score < m.away_score ? m.away_team_id
+      : m.penalty_winner_id ?? null;
+    if (winner == null) continue;
+    const loser = winner === m.home_team_id ? m.away_team_id : m.home_team_id;
+    if (loser != null) eliminated.add(loser);
+  }
+  for (const picks of Object.values(bracketPreds)) {
+    const r32Slots = new Set(
+      picks.filter((b: any) => b.phase === 'r32' && b.team_id != null).map((b: any) => Number(b.match_index))
+    );
+    for (const b of picks as any[]) {
+      const slot = Number(b.match_index);
+      const isOccupant = b.phase === 'r32' && slot % 2 === 0 && r32Slots.has(slot - 1);
+      if (isOccupant) b.state = null;
+      else if (b.points_earned > 0) b.state = 'correct';
+      else if (b.team_id != null && eliminated.has(b.team_id)) b.state = 'wrong';
+      else b.state = null; // not yet decided
+    }
   }
 
   return {
