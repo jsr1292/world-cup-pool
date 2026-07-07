@@ -144,6 +144,17 @@
   const myIds = $derived(new Set((data.entries as any[]).filter((e) => e.user_id === data.userId).map((e) => e.id)));
   const myPrimaryId = $derived((data.entries as any[]).find((e) => e.user_id === data.userId)?.id ?? null);
   function myPick(mid: number): string | null { return myPrimaryId != null ? (data.picks[myPrimaryId]?.[mid] ?? null) : null; }
+
+  // ── Knockout win/podium probabilities (computed server-side) ────────────────
+  const oddsRows = $derived((data.odds as any[]) ?? []);
+  const oddsMeta = $derived(data.oddsMeta as any);
+  function fmtPct(p: number): string {
+    if (p <= 0) return '0%';
+    if (p >= 100) return '100%';
+    if (p < 1) return '<1%';
+    if (p > 99) return '99%';
+    return Math.round(p) + '%';
+  }
 </script>
 
 <div style="max-width: 560px; margin: 0 auto;">
@@ -157,9 +168,40 @@
       <div style="font-size: 28px; margin-bottom: 8px;">🔒</div>
       <p style="font-size: 12px; color: var(--text-muted);">Disponible cuando se cierren las apuestas.</p>
     </div>
-  {:else if unplayed.length === 0}
-    <p style="font-size: 12px; color: var(--text-muted); margin-top: 16px;">No quedan partidos de grupos por jugar.</p>
   {:else}
+    {#if oddsRows.length > 0}
+      <!-- Knockout win / podium probabilities -->
+      <div style="margin: 8px 0 20px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 2px;">
+          <h2 style="font-size: 13px; font-weight: 700; color: var(--text); margin: 0;">🔮 ¿Quién puede ganar?</h2>
+          {#if oddsMeta}<span style="font-size: 8px; color: var(--text-dim);">{oddsMeta.remaining} partido{oddsMeta.remaining === 1 ? '' : 's'} · {oddsMeta.scenarios.toLocaleString('es-ES')} escenarios{#if !oddsMeta.exact} (muestra){/if}</span>{/if}
+        </div>
+        <p style="font-size: 9px; color: var(--text-muted); margin: 0 0 10px; line-height: 1.5;">
+          Probabilidad de acabar <strong>1.º</strong> o <strong>entre los 3 primeros</strong>, contando todos los resultados aún posibles de lo que queda (cada partido 50/50; los equipos ya eliminados quedan descartados). Tiene en cuenta los pronósticos de todos.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          {#each oddsRows as e (e.id)}
+            {@const mine = myIds.has(e.id)}
+            <div style="display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px; background: {mine ? 'rgba(201,168,76,0.1)' : 'var(--bg-card)'}; border: 1px solid {mine ? 'var(--gold)' : 'var(--border)'};">
+              <span style="flex: 1; min-width: 0;">
+                <span style="display: block; font-size: 11px; font-weight: {mine ? '700' : '500'}; color: {mine ? 'var(--gold)' : 'var(--text)'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{e.name}{#if data.pool.allow_multiple_predictions && e.label} · {e.label}{:else if e.label} ({e.label}){/if}{#if e.clinchedWin}<span title="Campeón matemático"> 👑</span>{:else if e.clinchedPodium}<span title="Podio asegurado" style="color: var(--green);"> ✅</span>{:else if !e.alive}<span title="Sin opciones de podio" style="color: var(--text-dim);"> ❌</span>{/if}</span>
+                {#if e.bestRank}<span style="display: block; font-size: 8px; color: var(--text-dim);">puede acabar {e.bestRank === e.worstRank ? e.bestRank + '.º' : e.bestRank + '.º–' + e.worstRank + '.º'}</span>{/if}
+              </span>
+              <div style="width: 60px; flex-shrink: 0; text-align: right;">
+                <div style="font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em;">ganar</div>
+                <div style="font-size: 13px; font-weight: 700; color: {e.winPct > 0 ? 'var(--gold)' : 'var(--text-dim)'};">{fmtPct(e.winPct)}</div>
+              </div>
+              <div style="width: 60px; flex-shrink: 0; text-align: right;">
+                <div style="font-size: 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em;">podio</div>
+                <div style="font-size: 13px; font-weight: 700; color: {e.podiumPct > 0 ? 'var(--green)' : 'var(--text-dim)'};">{fmtPct(e.podiumPct)}</div>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+    {#if unplayed.length > 0}
     <p style="font-size: 10px; color: var(--text-muted); margin: 4px 0 14px; line-height: 1.5;">
       Decide los partidos de grupos que faltan (1/X/2) y mira cómo cambiaría la clasificación.
       {#if data.groupPositionPts > 0}Si completas <strong>todos</strong> los partidos de un grupo, también se suman los puntos por la tabla final.{/if}
@@ -285,7 +327,10 @@
     </div>
 
     <p style="font-size: 9px; color: var(--text-dim); margin-top: 16px; line-height: 1.5;">
-      Proyección sobre los puntos de grupos (1/X/2{#if data.groupPositionPts > 0} y tabla final{/if}). Los puntos de eliminatorias no se simulan aquí.
+      Proyección sobre los puntos de grupos (1/X/2{#if data.groupPositionPts > 0} y tabla final{/if}). Los puntos de eliminatorias se muestran arriba como probabilidades.
     </p>
+    {:else if oddsRows.length === 0}
+      <p style="font-size: 12px; color: var(--text-muted); margin-top: 16px;">No quedan partidos por jugar.</p>
+    {/if}
   {/if}
 </div>

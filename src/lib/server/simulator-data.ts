@@ -2,6 +2,15 @@ import { getPoolById, getScoringConfig } from './queries.js';
 import { query } from './db.js';
 import { getTeamsMapCached } from './cache.js';
 import { DEFAULT_SCORING_RULES } from './scoring.js';
+import { computeKnockoutOdds, type OddsMatchIn, type OddsEntryIn, type Phase } from '../knockout-odds.js';
+
+// Small process-wide cache for the pool-wide payload (everything except the
+// per-request userId). The knockout-odds enumeration + a handful of queries only
+// need to run once per minute per pool no matter how many people open the tab —
+// important while Neon compute is tight. Standings change only when a match
+// finishes, so 60s of staleness is harmless.
+const CACHE_TTL = 60_000;
+const cache = new Map<number, { at: number; payload: Record<string, any> }>();
 
 // Raw inputs for the "what-if" standings simulator. The projection is computed
 // live on the client. Gated to fully locked pools (exposes everyone's picks,
@@ -24,8 +33,11 @@ export async function getSimulatorData(
   const safePool = { id: pool.id, name: pool.name, allow_multiple_predictions: pool.allow_multiple_predictions };
 
   if (!betsLocked) {
-    return { pool: safePool, betsLocked: false, teams: {}, entries: [], matches: [], picks: {}, orders: {}, matchOutcomePts: 0, groupPositionPts: 0, userId };
+    return { pool: safePool, betsLocked: false, teams: {}, entries: [], matches: [], picks: {}, orders: {}, matchOutcomePts: 0, groupPositionPts: 0, odds: [], oddsMeta: null, userId };
   }
+
+  const cached = cache.get(poolId);
+  if (cached && Date.now() - cached.at < CACHE_TTL) return { ...cached.payload, userId };
 
   const scoring = { ...DEFAULT_SCORING_RULES, ...(await getScoringConfig(poolId)) };
   const matchOutcomePts = Number(scoring.match_outcome) || 0;
@@ -74,5 +86,76 @@ export async function getSimulatorData(
     for (const r of gpRows) { (orders[r.pid] ??= {})[r.g] = [r.p1, r.p2, r.p3, r.p4]; }
   }
 
-  return { pool: safePool, betsLocked: true, teams, entries, matches, picks, orders, matchOutcomePts, groupPositionPts, userId };
+  // ── Knockout win/podium probabilities ──────────────────────────────────────
+  // Enumerate every still-possible outcome of the remaining knockout matches and
+  // report each member's chance of finishing 1st / top-3. Runs only once the
+  // knockout bracket exists.
+  let odds: any[] = [];
+  let oddsMeta: any = null;
+  const { rows: koRows } = await query(
+    `SELECT phase, sort_order, status, home_team_id, away_team_id, home_score, away_score, penalty_winner_id
+     FROM matches WHERE phase IN ('r32','r16','qf','sf','3rd','final')
+     ORDER BY phase, sort_order`
+  );
+  // Only meaningful once the Round of 32 is fully decided (from R16 onward the
+  // remaining tree is ≤16 matches — always exactly enumerable — and every future
+  // participant resolves from finished results). Before that, skip.
+  const r32Rows = koRows.filter((m: any) => m.phase === 'r32');
+  const r32AllDone = r32Rows.length > 0 && r32Rows.every((m: any) => m.status === 'finished' && m.home_score != null);
+  if (r32AllDone) {
+    // Assign each match its 0-based index within its phase (sort_order order).
+    const idxByPhase: Record<string, number> = {};
+    const koMatches: OddsMatchIn[] = koRows.map((m: any) => {
+      const i = (idxByPhase[m.phase] = (idxByPhase[m.phase] ?? -1) + 1);
+      return {
+        phase: m.phase as Phase, index: i,
+        finished: m.status === 'finished' && m.home_score != null && m.away_score != null,
+        homeTeamId: m.home_team_id, awayTeamId: m.away_team_id,
+        homeScore: m.home_score, awayScore: m.away_score, penaltyWinnerId: m.penalty_winner_id ?? null,
+      };
+    });
+
+    // Per-entry fixed inputs: base = total_score minus already-earned knockout
+    // points (so we can re-add the full simulated knockout total), plus the
+    // fixed correct-pick count (group correct) for the ranking tiebreak, plus
+    // their bracket picks.
+    const { rows: koPtsRows } = await query(
+      `SELECT bp.prediction_id AS pid, COALESCE(SUM(bp.points_earned), 0) AS pts
+       FROM bracket_predictions bp JOIN predictions p ON p.id = bp.prediction_id
+       WHERE p.pool_id = $1 GROUP BY bp.prediction_id`, [poolId]
+    );
+    const koPtsByPred: Record<number, number> = {};
+    for (const r of koPtsRows) koPtsByPred[r.pid] = Number(r.pts) || 0;
+
+    const { rows: gcRows } = await query(
+      `SELECT mp.prediction_id AS pid, COUNT(*) FILTER (WHERE mp.points_earned > 0) AS cnt
+       FROM match_predictions mp JOIN predictions p ON p.id = mp.prediction_id
+       WHERE p.pool_id = $1 GROUP BY mp.prediction_id`, [poolId]
+    );
+    const groupCorrectByPred: Record<number, number> = {};
+    for (const r of gcRows) groupCorrectByPred[r.pid] = Number(r.cnt) || 0;
+
+    const { rows: bpRows } = await query(
+      `SELECT bp.prediction_id AS pid, bp.phase, bp.slot, bp.team_id
+       FROM bracket_predictions bp JOIN predictions p ON p.id = bp.prediction_id
+       WHERE p.pool_id = $1`, [poolId]
+    );
+    const picksByPred: Record<number, { phase: string; slot: number; teamId: number | null }[]> = {};
+    for (const r of bpRows) (picksByPred[r.pid] ??= []).push({ phase: r.phase, slot: Number(r.slot), teamId: r.team_id });
+
+    const oddsEntries: OddsEntryIn[] = entries.map((e) => ({
+      id: e.id, userId: e.user_id, name: e.display_name, label: e.label,
+      base: e.total_score - (koPtsByPred[e.id] ?? 0),
+      baseCorrect: groupCorrectByPred[e.id] ?? 0,
+      picks: picksByPred[e.id] ?? [],
+    }));
+
+    const result = computeKnockoutOdds(koMatches, oddsEntries, scoring);
+    odds = result.rows;
+    oddsMeta = { scenarios: result.scenarios, remaining: result.remaining, exact: result.exact };
+  }
+
+  const payload = { pool: safePool, betsLocked: true, teams, entries, matches, picks, orders, matchOutcomePts, groupPositionPts, odds, oddsMeta };
+  cache.set(poolId, { at: Date.now(), payload });
+  return { ...payload, userId };
 }
