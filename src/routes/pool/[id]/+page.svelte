@@ -479,12 +479,12 @@
   }
 </script>
 
-<div style="flex: 1; display: flex; flex-direction: column;">
+<div class="pool-page" style="flex: 1; display: flex; flex-direction: column;">
   <!-- Sticky Back Link -->
-  <div style="position: sticky; top: 0; z-index: 10; background: var(--bg-base); padding: 8px 0; margin-bottom: 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-    <a href="/" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; text-decoration: none;">← Quinielas</a>
-    <span style="color: var(--border); font-size: 10px;">/</span>
-    <span style="font-size: 10px; color: var(--gold);">{pool.name}</span>
+  <div class="pool-crumb" style="position: sticky; top: 0; z-index: 10; background: var(--bg-base); padding: 8px 0; margin-bottom: 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+    <a href="/" style="color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; text-decoration: none;">← Quinielas</a>
+    <span style="color: var(--border);">/</span>
+    <span style="color: var(--gold);">{pool.name}</span>
   </div>
 
   <!-- Content -->
@@ -494,8 +494,8 @@
   <div style="margin-bottom: 18px; padding: 14px 16px; background: linear-gradient(135deg, rgba(201,168,76,0.08) 0%, transparent 100%); border-radius: 14px; border: 1px solid rgba(201,168,76,0.12);">
     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
       <div style="min-width: 0;">
-        <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold); margin-bottom: 6px;">{pool.name}</h1>
-        <div style="display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted);">
+        <h1 class="pool-title" style="font-family: 'Libre Baskerville', serif; color: var(--gold); margin-bottom: 6px;">{pool.name}</h1>
+        <div class="pool-meta" style="display: flex; gap: 12px; flex-wrap: wrap; color: var(--text-muted);">
           <span title="Miembros">👥 {data.members.length}</span>
           {#if pool.buy_in > 0}
             <span title="Entrada">💰 {fmtMoney(Number(pool.buy_in) || 0)}</span>
@@ -690,30 +690,32 @@
       {/if}
       <div style="display: flex; flex-direction: column; gap: 8px;">
         {#each data.leaderboard as entry, i}
-          <svelte:element this={betsLocked ? 'a' : 'div'} href={betsLocked ? `/pool/${pool.id}/summary?view=${entry.id}` : undefined} id={entry.user_id === data.userId ? 'my-row' : ''} class="leaderboard-row" style="display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; {betsLocked ? 'cursor: pointer;' : ''} background: {entry.user_id === data.userId ? 'rgba(201,168,76,0.08)' : 'var(--bg-card)'}; border: 1px solid {entry.user_id === data.userId ? 'var(--gold)' : leaderboardRanks[i] === 1 ? 'rgba(201,168,76,0.2)' : 'var(--border)'}; border-radius: 8px; padding: 12px 16px; {entry.user_id === data.userId ? 'box-shadow: 0 0 12px rgba(201,168,76,0.15);' : leaderboardRanks[i] === 1 ? 'box-shadow: 0 0 16px rgba(201,168,76,0.1);' : ''}">
-            <div style="width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; {leaderboardRanks[i] === 1 ? 'background: linear-gradient(135deg, #c9a84c, #e8c96a); color: #1a1a2e;' : leaderboardRanks[i] === 2 ? 'background: linear-gradient(135deg, #a0a0a0, #c0c0c0); color: #1a1a2e;' : leaderboardRanks[i] === 3 ? 'background: linear-gradient(135deg, #b87333, #cd7f32); color: #1a1a2e;' : 'background: rgba(255,255,255,0.06); color: var(--text-dim);'} flex-shrink: 0;">
+          {@const mine = entry.user_id === data.userId}
+          {@const rank = leaderboardRanks[i]}
+          <svelte:element this={betsLocked ? 'a' : 'div'} href={betsLocked ? `/pool/${pool.id}/summary?view=${entry.id}` : undefined} id={mine ? 'my-row' : ''} class="leaderboard-row" class:is-me={mine} class:is-first={rank === 1} class:is-link={betsLocked}>
+            <div class="lb-avatar" style={rank === 1 ? 'background: linear-gradient(135deg, #c9a84c, #e8c96a); color: #1a1a2e;' : rank === 2 ? 'background: linear-gradient(135deg, #a0a0a0, #c0c0c0); color: #1a1a2e;' : rank === 3 ? 'background: linear-gradient(135deg, #b87333, #cd7f32); color: #1a1a2e;' : 'background: rgba(255,255,255,0.06); color: var(--text-dim);'}>
               {entry.display_name?.[0]?.toUpperCase() || '?'}
             </div>
-            <div style="flex: 1; min-width: 0;">
-              <div style="font-size: 13px; font-weight: 600; {entry.user_id === data.userId ? 'color: var(--gold);' : ''}">{leaderboardRanks[i]}.{#if moverDeltas[i] !== 0}<span style="font-size: 9px; font-weight: 700; color: {moverDeltas[i] > 0 ? 'var(--green)' : 'var(--red)'}; margin: 0 2px 0 3px;">{moverDeltas[i] > 0 ? '▲' : '▼'}{Math.abs(moverDeltas[i])}</span>{/if} {entry.display_name}{#if pool.allow_multiple_predictions}<span style="color: var(--text-muted); font-weight: 400;"> · {entry.label || 'Principal'}</span>{:else if entry.label}<span style="color: var(--text-muted); font-weight: 400;"> ({entry.label})</span>{/if}</div>
-              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">
+            <div class="lb-main">
+              <div class="lb-name" class:mine>{rank}.{#if moverDeltas[i] !== 0}<span class="lb-mover" style="color: {moverDeltas[i] > 0 ? 'var(--green)' : 'var(--red)'};">{moverDeltas[i] > 0 ? '▲' : '▼'}{Math.abs(moverDeltas[i])}</span>{/if} {entry.display_name}{#if pool.allow_multiple_predictions}<span class="lb-label"> · {entry.label || 'Principal'}</span>{:else if entry.label}<span class="lb-label"> ({entry.label})</span>{/if}</div>
+              <div class="lb-tags">
                 {#if entry.result_points > 0}
-                  <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">Resultados +{entry.result_points}</span>
+                  <span class="lb-tag">Resultados +{entry.result_points}</span>
                 {/if}
                 {#if awardsPosition && entry.position_points > 0}
-                  <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">Posición +{entry.position_points}</span>
+                  <span class="lb-tag">Posición +{entry.position_points}</span>
                 {/if}
                 {#each Object.entries(entry.bracket_points || {}) as [phase, pts]}
-                  <span style="font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px;">{phaseLabels[phase] || phase} +{pts}</span>
+                  <span class="lb-tag">{phaseLabels[phase] || phase} +{pts}</span>
                 {/each}
               </div>
             </div>
-            <div style="text-align: right;">
-              <div style="font-size: 18px; font-weight: 700; color: var(--gold);">{entry.total_score}</div>
-              <div style="font-size: 9px; color: var(--text-muted);">pts</div>
-              {#if leaderboardPrizes[i] > 0}<div style="font-size: 10px; font-weight: 700; color: var(--green); margin-top: 3px;">💰 {fmtMoney(leaderboardPrizes[i])}</div>{/if}
+            <div class="lb-score">
+              <div class="lb-pts">{entry.total_score}</div>
+              <div class="lb-pts-label">pts</div>
+              {#if leaderboardPrizes[i] > 0}<div class="lb-prize">💰 {fmtMoney(leaderboardPrizes[i])}</div>{/if}
             </div>
-            {#if betsLocked}<span style="font-size: 14px; color: var(--text-dim); margin-left: 2px;">›</span>{/if}
+            {#if betsLocked}<span class="lb-chevron">›</span>{/if}
           </svelte:element>
         {/each}
       </div>
@@ -1254,6 +1256,60 @@
 {/if}
 
 <style>
+  /* ── Desktop pilot: Clasificación + shell ──────────────────────────────────
+     Base values equal the previous inline px exactly, so the phone view is
+     unchanged. Everything only grows behind @media (min-width: 768px). */
+  .pool-crumb a, .pool-crumb span { font-size: 10px; }
+  .pool-title { font-size: 22px; }
+  .pool-meta { font-size: 11px; }
+
+  .leaderboard-row {
+    display: flex; align-items: center; gap: 12px;
+    text-decoration: none; color: inherit;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+  .leaderboard-row.is-link { cursor: pointer; }
+  .leaderboard-row.is-first { border-color: rgba(201,168,76,0.2); box-shadow: 0 0 16px rgba(201,168,76,0.1); }
+  .leaderboard-row.is-me { background: rgba(201,168,76,0.08); border-color: var(--gold); box-shadow: 0 0 12px rgba(201,168,76,0.15); }
+  .lb-avatar {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  .lb-main { flex: 1; min-width: 0; }
+  .lb-name { font-size: 13px; font-weight: 600; }
+  .lb-name.mine { color: var(--gold); }
+  .lb-mover { font-size: 9px; font-weight: 700; margin: 0 2px 0 3px; }
+  .lb-label { color: var(--text-muted); font-weight: 400; }
+  .lb-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .lb-tag { font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px; }
+  .lb-score { text-align: right; flex-shrink: 0; }
+  .lb-pts { font-size: 18px; font-weight: 700; color: var(--gold); line-height: 1.1; }
+  .lb-pts-label { font-size: 9px; color: var(--text-muted); }
+  .lb-prize { font-size: 10px; font-weight: 700; color: var(--green); margin-top: 3px; }
+  .lb-chevron { font-size: 14px; color: var(--text-dim); margin-left: 2px; }
+
+  @media (min-width: 768px) {
+    .pool-page { max-width: 860px; margin: 0 auto; }
+    .pool-crumb a, .pool-crumb span { font-size: 12px; }
+    .pool-title { font-size: 30px; margin-bottom: 8px !important; }
+    .pool-meta { font-size: 13px; gap: 16px !important; }
+
+    .leaderboard-row { gap: 16px; padding: 16px 22px; border-radius: 10px; }
+    .lb-avatar { width: 40px; height: 40px; font-size: 16px; }
+    .lb-name { font-size: 15px; }
+    .lb-mover { font-size: 11px; }
+    .lb-tags { gap: 7px; margin-top: 6px; }
+    .lb-tag { font-size: 11px; padding: 3px 8px; border-radius: 4px; }
+    .lb-pts { font-size: 24px; }
+    .lb-pts-label { font-size: 10px; }
+    .lb-prize { font-size: 12px; margin-top: 4px; }
+    .lb-chevron { font-size: 18px; }
+  }
+
   .scroll-top-fab {
     position: fixed;
     right: 16px;
