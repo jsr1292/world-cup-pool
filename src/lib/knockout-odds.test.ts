@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { computeKnockoutOdds, type OddsMatchIn, type OddsEntryIn } from './knockout-odds.js';
+import {
+  computeKnockoutOdds, groupByPhase, resolveTree, prepEntry, scoreEntry,
+  type OddsMatchIn, type OddsEntryIn,
+} from './knockout-odds.js';
 
 const RULES = {
   match_outcome: 1, group_position: 0,
@@ -72,5 +75,23 @@ describe('computeKnockoutOdds', () => {
     // Champ (team 1) is 1st in the only scenario, runner-up 2nd.
     expect(out.rows.find((r) => r.id === 10)!.winPct).toBe(100);
     expect(out.rows.find((r) => r.id === 20)!.winPct).toBe(0);
+  });
+
+  it('resolveTree + scoreEntry score a single chosen scenario (interactive what-if)', () => {
+    const byPhase = groupByPhase(finalOnlyMatches());
+    // Choose team 1 to win the final.
+    const tree = resolveTree(byPhase, () => 1);
+    expect(tree.rounds.final.winner).toBe(1);
+    expect([...tree.finalists].sort()).toEqual([1, 2]);
+
+    const champ = prepEntry({ id: 1, userId: 1, name: 'C', label: null, base: 0, baseCorrect: 0, picks: [{ phase: 'final', slot: 1, teamId: 1 }] });
+    const runner = prepEntry({ id: 2, userId: 2, name: 'R', label: null, base: 0, baseCorrect: 0, picks: [{ phase: 'final', slot: 1, teamId: 2 }] });
+    expect(scoreEntry(champ, tree, RULES).pts).toBe(RULES.knockout_final + RULES.knockout_winner); // 6 + 8
+    expect(scoreEntry(runner, tree, RULES).pts).toBe(RULES.knockout_final); // 6 (reached final, didn't win)
+
+    // With no choice made, the final is undecided → neither scores the final.
+    const pending = resolveTree(byPhase, () => null);
+    expect(pending.rounds.final.winner).toBe(null);
+    expect(scoreEntry(champ, pending, RULES).pts).toBe(0);
   });
 });

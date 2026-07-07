@@ -33,7 +33,7 @@ export async function getSimulatorData(
   const safePool = { id: pool.id, name: pool.name, allow_multiple_predictions: pool.allow_multiple_predictions };
 
   if (!betsLocked) {
-    return { pool: safePool, betsLocked: false, teams: {}, entries: [], matches: [], picks: {}, orders: {}, matchOutcomePts: 0, groupPositionPts: 0, odds: [], oddsMeta: null, userId };
+    return { pool: safePool, betsLocked: false, teams: {}, entries: [], matches: [], picks: {}, orders: {}, matchOutcomePts: 0, groupPositionPts: 0, odds: [], oddsMeta: null, koMatches: [], bracketEntries: [], knockoutRules: {}, userId };
   }
 
   const cached = cache.get(poolId);
@@ -92,6 +92,14 @@ export async function getSimulatorData(
   // knockout bracket exists.
   let odds: any[] = [];
   let oddsMeta: any = null;
+  let koMatchesOut: any[] = [];      // for the interactive what-if bracket
+  let bracketEntries: any[] = [];    // per-entry base + picks (client scores a chosen scenario)
+  const knockoutRules: Record<string, number> = {
+    knockout_r32: Number(scoring.knockout_r32) || 0, knockout_r16: Number(scoring.knockout_r16) || 0,
+    knockout_qf: Number(scoring.knockout_qf) || 0, knockout_sf: Number(scoring.knockout_sf) || 0,
+    knockout_final: Number(scoring.knockout_final) || 0, knockout_winner: Number(scoring.knockout_winner) || 0,
+    third_place: Number(scoring.third_place) || 0,
+  };
   const { rows: koRows } = await query(
     `SELECT phase, sort_order, status, home_team_id, away_team_id, home_score, away_score, penalty_winner_id
      FROM matches WHERE phase IN ('r32','r16','qf','sf','3rd','final')
@@ -153,9 +161,11 @@ export async function getSimulatorData(
     const result = computeKnockoutOdds(koMatches, oddsEntries, scoring);
     odds = result.rows;
     oddsMeta = { scenarios: result.scenarios, remaining: result.remaining, exact: result.exact };
+    koMatchesOut = koMatches;
+    bracketEntries = oddsEntries;
   }
 
-  const payload = { pool: safePool, betsLocked: true, teams, entries, matches, picks, orders, matchOutcomePts, groupPositionPts, odds, oddsMeta };
+  const payload = { pool: safePool, betsLocked: true, teams, entries, matches, picks, orders, matchOutcomePts, groupPositionPts, odds, oddsMeta, koMatches: koMatchesOut, bracketEntries, knockoutRules };
   cache.set(poolId, { at: Date.now(), payload });
   return { ...payload, userId };
 }

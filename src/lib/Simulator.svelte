@@ -1,6 +1,7 @@
 <script lang="ts">
   import { rankGroup, type GsMatch } from '$lib/group-standings.js';
   import { rankThirds, assignThirds, buildR32 } from '$lib/sim-bracket.js';
+  import { groupByPhase, resolveTree, prepEntry, scoreEntry, type OddsMatchIn, type Phase } from '$lib/knockout-odds.js';
   import { flagEmoji, shortName } from '$lib/teams.js';
   let { data, standalone = false } = $props();
 
@@ -155,6 +156,41 @@
     if (p > 99) return '99%';
     return Math.round(p) + '%';
   }
+
+  // ── Interactive knockout what-if ────────────────────────────────────────────
+  const koMatches = $derived((data.koMatches as OddsMatchIn[]) ?? []);
+  const koRules = $derived((data.knockoutRules as Record<string, number>) ?? {});
+  const koEntriesPrepped = $derived(((data.bracketEntries as any[]) ?? []).map(prepEntry));
+  let koView = $state<'odds' | 'whatif'>('odds');
+  let koChoice = $state<Record<string, number>>({});
+  const koKey = (phase: string, index: number) => phase + ':' + index;
+  const koByPhase = $derived(groupByPhase(koMatches));
+  // choose honours a pick only while its team is still one of the two participants
+  // (so choices auto-clear when an upstream pick changes who reaches this match).
+  const koTree = $derived(resolveTree(koByPhase, (m, a, b) => {
+    const w = koChoice[koKey(m.phase, m.index)];
+    return w === a || w === b ? w : null;
+  }));
+  const koDecided = $derived(Object.keys(koChoice).length);
+  function setKoWinner(phase: string, index: number, teamId: number | null) {
+    if (teamId == null) return;
+    const k = koKey(phase, index);
+    if (koChoice[k] === teamId) { const { [k]: _drop, ...rest } = koChoice; koChoice = rest; }
+    else koChoice = { ...koChoice, [k]: teamId };
+  }
+  function koReset() { koChoice = {}; }
+  const koProjection = $derived.by(() => {
+    const rows = koEntriesPrepped.map((pe) => {
+      const { pts, correct } = scoreEntry(pe, koTree, koRules);
+      return { id: pe.in.id, userId: pe.in.userId, name: pe.in.name, label: pe.in.label, pts, correct };
+    });
+    rows.sort((a, b) => b.pts - a.pts || b.correct - a.correct);
+    let r = 0, prevP: number | null = null, prevC: number | null = null;
+    return rows.map((row, i) => {
+      if (i === 0 || row.pts !== prevP || row.correct !== prevC) { r = i + 1; prevP = row.pts; prevC = row.correct; }
+      return { ...row, rank: r, move: (baseRankById[row.id] ?? r) - r };
+    });
+  });
 </script>
 
 <div style="max-width: 560px; margin: 0 auto;">
@@ -169,9 +205,15 @@
       <p style="font-size: 12px; color: var(--text-muted);">Disponible cuando se cierren las apuestas.</p>
     </div>
   {:else}
-    {#if oddsRows.length > 0}
+    {#if koMatches.length > 0}
+      <div style="display: flex; gap: 6px; margin: 6px 0 14px;">
+        <button onclick={() => (koView = 'odds')} style="flex: 1; font-size: 10px; font-weight: 600; padding: 7px; border-radius: 7px; cursor: pointer; border: 1px solid {koView === 'odds' ? 'var(--gold)' : 'var(--border)'}; background: {koView === 'odds' ? 'rgba(201,168,76,0.12)' : 'var(--bg-card)'}; color: {koView === 'odds' ? 'var(--gold)' : 'var(--text-muted)'};">🔮 Probabilidades</button>
+        <button onclick={() => (koView = 'whatif')} style="flex: 1; font-size: 10px; font-weight: 600; padding: 7px; border-radius: 7px; cursor: pointer; border: 1px solid {koView === 'whatif' ? 'var(--gold)' : 'var(--border)'}; background: {koView === 'whatif' ? 'rgba(201,168,76,0.12)' : 'var(--bg-card)'}; color: {koView === 'whatif' ? 'var(--gold)' : 'var(--text-muted)'};">🎯 Cuadro interactivo</button>
+      </div>
+
+      {#if koView === 'odds' && oddsRows.length > 0}
       <!-- Knockout win / podium probabilities -->
-      <div style="margin: 8px 0 20px;">
+      <div style="margin: 0 0 20px;">
         <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 2px;">
           <h2 style="font-size: 13px; font-weight: 700; color: var(--text); margin: 0;">🔮 ¿Quién puede ganar?</h2>
           {#if oddsMeta}<span style="font-size: 8px; color: var(--text-dim);">{oddsMeta.remaining} partido{oddsMeta.remaining === 1 ? '' : 's'} · {oddsMeta.scenarios.toLocaleString('es-ES')} escenarios{#if !oddsMeta.exact} (muestra){/if}</span>{/if}
@@ -199,6 +241,56 @@
           {/each}
         </div>
       </div>
+      {:else if koView === 'whatif'}
+      <!-- Interactive knockout what-if -->
+      <p style="font-size: 9px; color: var(--text-muted); margin: 0 0 12px; line-height: 1.5;">
+        Elige el ganador de cada partido que queda y mira cómo quedaría la <strong>clasificación final</strong> del bote. Los partidos ya jugados están fijados.
+      </p>
+
+      {#snippet koMatch(phase: Phase, index: number, slot: any)}
+        {@const m = koByPhase[phase]?.[index]}
+        {@const fin = m?.finished ?? false}
+        {@const w = slot.winner}
+        <div style="display: flex; align-items: stretch; gap: 4px; margin-bottom: 4px;">
+          {#each [slot.a, slot.b] as tid}
+            {@const isW = w != null && w === tid}
+            <button onclick={() => setKoWinner(phase, index, tid)} disabled={fin || tid == null}
+              style="flex: 1; min-width: 0; text-align: left; font-size: 10px; padding: 6px 8px; border-radius: 6px; cursor: {fin || tid == null ? 'default' : 'pointer'}; border: 1px solid {isW ? 'var(--gold)' : 'var(--border)'}; background: {isW ? 'rgba(201,168,76,0.16)' : 'var(--bg-surface)'}; color: {tid == null ? 'var(--text-dim)' : isW ? 'var(--gold)' : 'var(--text)'}; font-weight: {isW ? '700' : '400'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              {#if tid != null}{@html tFlag(tid)} {tName(tid)}{#if isW} ✓{/if}{:else}—{/if}
+            </button>
+          {/each}
+        </div>
+      {/snippet}
+
+      <!-- Resulting final standings -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <h2 style="font-size: 12px; font-weight: 700; color: var(--text); margin: 0;">Clasificación resultante</h2>
+        <span style="font-size: 9px; color: var(--text-dim);">{koDecided} elegido{koDecided === 1 ? '' : 's'}{#if koDecided > 0} · <button onclick={koReset} style="background: none; border: none; color: var(--gold); font-size: 9px; cursor: pointer; padding: 0; text-decoration: underline;">limpiar</button>{/if}</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 3px; max-height: 34vh; overflow-y: auto; margin-bottom: 18px;">
+        {#each koProjection as e (e.id)}
+          {@const mine = myIds.has(e.id)}
+          <div style="display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 6px; background: {mine ? 'rgba(201,168,76,0.1)' : 'var(--bg-card)'}; border: 1px solid {mine ? 'var(--gold)' : 'var(--border)'};">
+            <span style="width: 18px; font-size: 11px; font-weight: 700; color: {e.rank === 1 ? 'var(--gold)' : 'var(--text-muted)'};">{e.rank}</span>
+            {#if e.move !== 0}<span style="font-size: 9px; font-weight: 700; color: {e.move > 0 ? 'var(--green)' : 'var(--red)'};">{e.move > 0 ? '▲' : '▼'}{Math.abs(e.move)}</span>{:else}<span style="width: 12px;"></span>{/if}
+            <span style="flex: 1; min-width: 0; font-size: 11px; font-weight: {mine ? '700' : '500'}; color: {mine ? 'var(--gold)' : 'var(--text)'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{e.name}{#if data.pool.allow_multiple_predictions && e.label} · {e.label}{:else if e.label} ({e.label}){/if}</span>
+            <span style="font-size: 13px; font-weight: 700; color: var(--gold); flex-shrink: 0;">{e.pts}</span>
+          </div>
+        {/each}
+      </div>
+
+      <!-- Bracket picker -->
+      <div style="font-size: 9px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin: 6px 0 5px;">Octavos</div>
+      {#each koTree.rounds.r16 as slot, i}{@render koMatch('r16', i, slot)}{/each}
+      <div style="font-size: 9px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 5px;">Cuartos</div>
+      {#each koTree.rounds.qf as slot, i}{@render koMatch('qf', i, slot)}{/each}
+      <div style="font-size: 9px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 5px;">Semifinales</div>
+      {#each koTree.rounds.sf as slot, i}{@render koMatch('sf', i, slot)}{/each}
+      <div style="font-size: 9px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 5px;">Final</div>
+      {@render koMatch('final', 0, koTree.rounds.final)}
+      <div style="font-size: 9px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 5px;">3.er puesto</div>
+      {@render koMatch('3rd', 0, koTree.rounds.third)}
+      {/if}
     {/if}
 
     {#if unplayed.length > 0}
@@ -329,8 +421,8 @@
     <p style="font-size: 9px; color: var(--text-dim); margin-top: 16px; line-height: 1.5;">
       Proyección sobre los puntos de grupos (1/X/2{#if data.groupPositionPts > 0} y tabla final{/if}). Los puntos de eliminatorias se muestran arriba como probabilidades.
     </p>
-    {:else if oddsRows.length === 0}
-      <p style="font-size: 12px; color: var(--text-muted); margin-top: 16px;">No quedan partidos por jugar.</p>
+    {:else if koMatches.length === 0}
+      <p style="font-size: 12px; color: var(--text-muted); margin-top: 16px;">No hay nada que simular por ahora.</p>
     {/if}
   {/if}
 </div>

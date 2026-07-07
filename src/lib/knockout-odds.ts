@@ -1,11 +1,11 @@
-// Pure knockout-probability engine. Given the current knockout bracket (some
-// matches decided, some pending), every pool member's bracket picks, and their
-// FIXED points (everything already locked — group points + already-decided
-// knockout points), this enumerates every still-possible combination of the
-// remaining matches and reports, per member, the fraction of futures in which
-// they finish 1st ("win") or top-3 ("podium").
+// Pure knockout engine. Two uses share ONE implementation of the bracket cascade
+// and the scoring rules:
+//   • computeKnockoutOdds — enumerates every still-possible future and reports
+//     each member's chance to finish 1st / top-3.
+//   • resolveTree + scoreEntry — resolve a SINGLE chosen scenario (the
+//     interactive "what-if" bracket) and score each member against it.
 //
-// The bracket cascade is the FIFA 2026 tree (see bracket-2026.ts): DB knockout
+// The bracket cascade is the FIFA 2026 tree (see bracket-2026.ts). DB knockout
 // matches ordered by sort_order within a phase are already in bracket-index
 // order, so child[i] takes the winners of parents [2i] and [2i+1]:
 //   r16[i] ← r32[2i], r32[2i+1]   qf[i] ← r16[2i], r16[2i+1]
@@ -67,6 +67,15 @@ export interface OddsOutput {
   exact: boolean;     // true = every combination enumerated; false = sampled
 }
 
+/** One tie in the resolved tree: the two participants and the (chosen/known) winner. */
+export interface TreeSlot { a: number | null; b: number | null; winner: number | null; }
+
+export interface ResolvedTree {
+  rounds: { r16: TreeSlot[]; qf: TreeSlot[]; sf: TreeSlot[]; final: TreeSlot; third: TreeSlot };
+  pw: Record<Phase, Set<number>>; // teams that win a match in each phase
+  finalists: Set<number>;
+}
+
 function finishedWinner(m: OddsMatchIn | undefined): number | null {
   if (!m || !m.finished || m.homeScore == null || m.awayScore == null) return null;
   if (m.homeScore > m.awayScore) return m.homeTeamId;
@@ -76,14 +85,81 @@ function finishedWinner(m: OddsMatchIn | undefined): number | null {
 
 const PHASE_ORDER: Phase[] = ['r32', 'r16', 'qf', 'sf', 'final', '3rd'];
 
+export function groupByPhase(matches: OddsMatchIn[]): Record<Phase, OddsMatchIn[]> {
+  const byPhase: Record<Phase, OddsMatchIn[]> = { r32: [], r16: [], qf: [], sf: [], '3rd': [], final: [] };
+  for (const m of matches) byPhase[m.phase][m.index] = m;
+  return byPhase;
+}
+
+/** The undecided matches (free variables), in a stable (phase, index) order. */
+export function undecidedMatches(byPhase: Record<Phase, OddsMatchIn[]>): OddsMatchIn[] {
+  const out: OddsMatchIn[] = [];
+  for (const ph of PHASE_ORDER) for (const m of byPhase[ph]) if (m && !m.finished) out.push(m);
+  return out;
+}
+
+/**
+ * Resolve the whole knockout tree. `choose(match, a, b)` decides the winner of an
+ * UNDECIDED match given its two participants (return null = not yet decided);
+ * finished matches use their real result. Returns the per-round matchups (for
+ * rendering) plus the phase-winner sets (for scoring).
+ */
+export function resolveTree(
+  byPhase: Record<Phase, OddsMatchIn[]>,
+  choose: (m: OddsMatchIn, a: number | null, b: number | null) => number | null
+): ResolvedTree {
+  const pick = (m: OddsMatchIn | undefined, a: number | null, b: number | null): { winner: number | null; loser: number | null } => {
+    if (m && m.finished) { const w = finishedWinner(m); return { winner: w, loser: w === a ? b : a }; }
+    if (!m) return { winner: a ?? b, loser: null };
+    const w = choose(m, a, b);
+    return { winner: w, loser: w == null ? null : (w === a ? b : a) };
+  };
+
+  const r32w = (byPhase.r32 ?? []).map(finishedWinner);
+  const r16: TreeSlot[] = [];
+  for (let i = 0; i < 8; i++) {
+    const a = r32w[2 * i] ?? null, b = r32w[2 * i + 1] ?? null;
+    r16.push({ a, b, winner: pick(byPhase.r16?.[i], a, b).winner });
+  }
+  const qf: TreeSlot[] = [];
+  for (let i = 0; i < 4; i++) {
+    const a = r16[2 * i].winner, b = r16[2 * i + 1].winner;
+    qf.push({ a, b, winner: pick(byPhase.qf?.[i], a, b).winner });
+  }
+  const sf: TreeSlot[] = [];
+  const sfLose: (number | null)[] = [];
+  for (let i = 0; i < 2; i++) {
+    const a = qf[2 * i].winner, b = qf[2 * i + 1].winner;
+    const r = pick(byPhase.sf?.[i], a, b);
+    sf.push({ a, b, winner: r.winner }); sfLose.push(r.loser);
+  }
+  const fr = pick(byPhase.final?.[0], sf[0].winner, sf[1].winner);
+  const final: TreeSlot = { a: sf[0].winner, b: sf[1].winner, winner: fr.winner };
+  const tr = pick(byPhase['3rd']?.[0], sfLose[0], sfLose[1]);
+  const third: TreeSlot = { a: sfLose[0], b: sfLose[1], winner: tr.winner };
+
+  const S = (arr: (number | null)[]) => new Set(arr.filter((x): x is number => x != null));
+  const pw: Record<Phase, Set<number>> = {
+    r32: S(r32w), r16: S(r16.map((s) => s.winner)), qf: S(qf.map((s) => s.winner)),
+    sf: S(sf.map((s) => s.winner)), final: S([final.winner]), '3rd': S([third.winner]),
+  };
+  // The "reached the final" consolation (a correctly-picked losing finalist earns
+  // knockout_final) only applies once the final is DECIDED — matching the server
+  // scorer, whose finalists come from finished final matches. So a what-if with
+  // the final not yet chosen credits neither finalist, and a zero-pick projection
+  // equals the live standings.
+  const finalists = final.winner != null ? S([sf[0].winner, sf[1].winner]) : new Set<number>();
+  return { rounds: { r16, qf, sf, final, third }, pw, finalists };
+}
+
 // Per-entry, precomputed team lists per phase (occupant R32 slots removed), so
-// scoring each scenario is a handful of Set lookups.
-interface PreppedEntry {
+// scoring is a handful of Set lookups.
+export interface PreppedEntry {
   in: OddsEntryIn;
   r32: number[]; r16: number[]; qf: number[]; sf: number[]; final: number[]; third: number[];
 }
 
-function prepEntry(e: OddsEntryIn): PreppedEntry {
+export function prepEntry(e: OddsEntryIn): PreppedEntry {
   const r32Slots = new Set(e.picks.filter((p) => p.phase === 'r32' && p.teamId != null).map((p) => p.slot));
   const isOccupant = (p: OddsPickIn) => p.phase === 'r32' && p.slot % 2 === 0 && r32Slots.has(p.slot - 1);
   const grab = (phase: string, filter?: (p: OddsPickIn) => boolean) =>
@@ -96,25 +172,35 @@ function prepEntry(e: OddsEntryIn): PreppedEntry {
   };
 }
 
+/** Score one prepped entry against a resolved tree. Returns points + correct count. */
+export function scoreEntry(pe: PreppedEntry, tree: ResolvedTree, rules: Record<string, number>): { pts: number; correct: number } {
+  let pts = pe.in.base, correct = pe.in.baseCorrect;
+  const { pw, finalists } = tree;
+  const champion = tree.rounds.final.winner;
+  const thirdWinner = tree.rounds.third.winner;
+  for (const t of pe.r32) if (pw.r32.has(t)) { pts += rules['knockout_r32'] ?? 0; correct++; }
+  for (const t of pe.r16) if (pw.r16.has(t)) { pts += rules['knockout_r16'] ?? 0; correct++; }
+  for (const t of pe.qf) if (pw.qf.has(t)) { pts += rules['knockout_qf'] ?? 0; correct++; }
+  for (const t of pe.sf) if (pw.sf.has(t)) { pts += rules['knockout_sf'] ?? 0; correct++; }
+  for (const t of pe.final) {
+    if (t === champion) { pts += (rules['knockout_final'] ?? 0) + (rules['knockout_winner'] ?? 0); correct++; }
+    else if (finalists.has(t)) { pts += rules['knockout_final'] ?? 0; correct++; }
+  }
+  for (const t of pe.third) if (t === thirdWinner) { pts += rules['third_place'] ?? 0; correct++; }
+  return { pts, correct };
+}
+
 export function computeKnockoutOdds(
   matchesIn: OddsMatchIn[],
   entries: OddsEntryIn[],
   rules: Record<string, number>,
   opts?: { maxExact?: number; samples?: number }
 ): OddsOutput {
-  const byPhase: Record<Phase, OddsMatchIn[]> = { r32: [], r16: [], qf: [], sf: [], '3rd': [], final: [] };
-  for (const m of matchesIn) byPhase[m.phase][m.index] = m;
-
-  // The undecided matches are the free variables. Order is fixed (phase, index).
-  const undecided: OddsMatchIn[] = [];
-  for (const ph of PHASE_ORDER) for (const m of byPhase[ph]) if (m && !m.finished) undecided.push(m);
+  const byPhase = groupByPhase(matchesIn);
+  const undecided = undecidedMatches(byPhase);
   const bitOf = new Map<OddsMatchIn, number>();
   undecided.forEach((m, i) => bitOf.set(m, i));
   const n = undecided.length;
-
-  const rR32 = rules['knockout_r32'] ?? 0, rR16 = rules['knockout_r16'] ?? 0;
-  const rQF = rules['knockout_qf'] ?? 0, rSF = rules['knockout_sf'] ?? 0;
-  const rFinal = rules['knockout_final'] ?? 0, rWinner = rules['knockout_winner'] ?? 0, rThird = rules['third_place'] ?? 0;
 
   const maxExact = opts?.maxExact ?? (1 << 16);
   const exact = Math.pow(2, n) <= maxExact;
@@ -125,55 +211,21 @@ export function computeKnockoutOdds(
   const podiumCount = new Array(entries.length).fill(0);
   const bestRank = new Array(entries.length).fill(Infinity);
   const worstRank = new Array(entries.length).fill(0);
-
-  // Scratch buffers reused across scenarios.
   const scored = new Array(entries.length);
 
   for (let s = 0; s < N; s++) {
-    const bit = (m: OddsMatchIn): number => {
+    const choose = (m: OddsMatchIn, a: number | null, b: number | null): number | null => {
       const j = bitOf.get(m)!;
-      return exact ? (s >> j) & 1 : (Math.random() < 0.5 ? 0 : 1);
+      const bit = exact ? (s >> j) & 1 : (Math.random() < 0.5 ? 0 : 1);
+      return bit === 0 ? a : b;
     };
-    const resolve = (m: OddsMatchIn | undefined, pa: number | null, pb: number | null) => {
-      if (m && m.finished) { const w = finishedWinner(m); return { winner: w, loser: w === pa ? pb : pa }; }
-      if (m) { const b = bit(m); return b === 0 ? { winner: pa, loser: pb } : { winner: pb, loser: pa }; }
-      return { winner: pa ?? pb, loser: null };
-    };
-
-    const r32w = byPhase.r32.map(finishedWinner);
-    const r16w: (number | null)[] = [];
-    for (let i = 0; i < 8; i++) r16w[i] = resolve(byPhase.r16[i], r32w[2 * i] ?? null, r32w[2 * i + 1] ?? null).winner;
-    const qfw: (number | null)[] = [];
-    for (let i = 0; i < 4; i++) qfw[i] = resolve(byPhase.qf[i], r16w[2 * i] ?? null, r16w[2 * i + 1] ?? null).winner;
-    const sfRes = [resolve(byPhase.sf[0], qfw[0], qfw[1]), resolve(byPhase.sf[1], qfw[2], qfw[3])];
-    const sfw = [sfRes[0].winner, sfRes[1].winner];
-    const finalRes = resolve(byPhase.final[0], sfw[0], sfw[1]);
-    const thirdRes = resolve(byPhase['3rd'][0], sfRes[0].loser, sfRes[1].loser);
-
-    const w32 = new Set(r32w.filter((x): x is number => x != null));
-    const w16 = new Set(r16w.filter((x): x is number => x != null));
-    const wqf = new Set(qfw.filter((x): x is number => x != null));
-    const wsf = new Set(sfw.filter((x): x is number => x != null));
-    const champion = finalRes.winner;
-    const finalists = new Set(sfw.filter((x): x is number => x != null));
-    const thirdWinner = thirdRes.winner;
+    const tree = resolveTree(byPhase, choose);
 
     for (let k = 0; k < prepped.length; k++) {
-      const pe = prepped[k];
-      let pts = pe.in.base, correct = pe.in.baseCorrect;
-      for (const t of pe.r32) if (w32.has(t)) { pts += rR32; correct++; }
-      for (const t of pe.r16) if (w16.has(t)) { pts += rR16; correct++; }
-      for (const t of pe.qf) if (wqf.has(t)) { pts += rQF; correct++; }
-      for (const t of pe.sf) if (wsf.has(t)) { pts += rSF; correct++; }
-      for (const t of pe.final) {
-        if (t === champion) { pts += rFinal + rWinner; correct++; }
-        else if (finalists.has(t)) { pts += rFinal; correct++; }
-      }
-      for (const t of pe.third) if (t === thirdWinner) { pts += rThird; correct++; }
+      const { pts, correct } = scoreEntry(prepped[k], tree, rules);
       scored[k] = { k, pts, correct };
     }
 
-    // Rank (competition ranking: 1,2,2,4) by score then correct-count.
     const order = scored.slice().sort((a: any, b: any) => b.pts - a.pts || b.correct - a.correct);
     let rank = 0;
     for (let i = 0; i < order.length; i++) {
@@ -196,7 +248,6 @@ export function computeKnockoutOdds(
     bestRank: bestRank[k] === Infinity ? 0 : bestRank[k],
     worstRank: worstRank[k],
   }));
-  // Sort by win chance, then podium chance, then best case.
   rows.sort((a, b) => b.winPct - a.winPct || b.podiumPct - a.podiumPct || a.bestRank - b.bestRank);
 
   return { rows, scenarios: N, remaining: n, exact };
