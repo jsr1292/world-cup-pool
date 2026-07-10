@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeKnockoutOdds, groupByPhase, resolveTree, prepEntry, scoreEntry,
-  type OddsMatchIn, type OddsEntryIn,
+  type OddsMatchIn, type OddsEntryIn, type Phase,
 } from './knockout-odds.js';
 
 const RULES = {
@@ -93,5 +93,41 @@ describe('computeKnockoutOdds', () => {
     const pending = resolveTree(byPhase, () => null);
     expect(pending.rounds.final.winner).toBe(null);
     expect(scoreEntry(champ, pending, RULES).pts).toBe(0);
+  });
+});
+
+// 16 empty (unfinished, team-less) R32 rows + empty later rounds — the pre-draw shape.
+function emptyKo(): OddsMatchIn[] {
+  const mk = (phase: Phase, n: number): OddsMatchIn[] =>
+    Array.from({ length: n }, (_, i) => ({
+      phase, index: i, finished: false,
+      homeTeamId: null, awayTeamId: null, homeScore: null, awayScore: null, penaltyWinnerId: null,
+    }));
+  return [...mk('r32', 16), ...mk('r16', 8), ...mk('qf', 4), ...mk('sf', 2), ...mk('final', 1), ...mk('3rd', 1)];
+}
+
+describe('resolveTree with external R32 participants', () => {
+  it('R32 is pickable and a chosen R32 winner appears in pw.r32', () => {
+    const byPhase = groupByPhase(emptyKo());
+    // participants: slot 0 = 101 vs 102, all others 201.. paired arbitrarily
+    const parts = Array.from({ length: 16 }, (_, i) => ({ a: 100 + i * 2, b: 101 + i * 2 }));
+    // choose r32 slot 0's winner = 100 (team a); leave everything else undecided
+    const tree = resolveTree(byPhase, (m, a, b) => {
+      if (m.phase === 'r32' && m.index === 0) return 100; // a
+      return null;
+    }, parts);
+    expect(tree.pw.r32.has(100)).toBe(true);
+    // r16 slot 0 waits for BOTH r32[0] and r32[1]; r32[1] undecided → r16[0] undecided
+    expect(tree.rounds.r16[0].winner).toBe(null);
+  });
+
+  it('omitting r32Participants preserves finished-only behavior (odds path)', () => {
+    const ko = emptyKo();
+    // finish r32[0]: 10 beats 20
+    ko[0] = { ...ko[0], finished: true, homeTeamId: 10, awayTeamId: 20, homeScore: 2, awayScore: 1 };
+    const byPhase = groupByPhase(ko);
+    const tree = resolveTree(byPhase, () => null); // no participants, no choices
+    expect(tree.pw.r32.has(10)).toBe(true);
+    expect(tree.pw.r32.has(20)).toBe(false);
   });
 });

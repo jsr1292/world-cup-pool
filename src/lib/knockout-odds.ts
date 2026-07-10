@@ -106,7 +106,8 @@ export function undecidedMatches(byPhase: Record<Phase, OddsMatchIn[]>): OddsMat
  */
 export function resolveTree(
   byPhase: Record<Phase, OddsMatchIn[]>,
-  choose: (m: OddsMatchIn, a: number | null, b: number | null) => number | null
+  choose: (m: OddsMatchIn, a: number | null, b: number | null) => number | null,
+  r32Participants?: { a: number | null; b: number | null }[]
 ): ResolvedTree {
   const pick = (m: OddsMatchIn | undefined, a: number | null, b: number | null): { winner: number | null; loser: number | null } => {
     if (m && m.finished) { const w = finishedWinner(m); return { winner: w, loser: w === a ? b : a }; }
@@ -115,7 +116,22 @@ export function resolveTree(
     return { winner: w, loser: w == null ? null : (w === a ? b : a) };
   };
 
-  const r32w = (byPhase.r32 ?? []).map(finishedWinner);
+  // R32 is the only round whose participants come from OUTSIDE the KO tree (group
+  // results). If r32Participants is supplied (unified sim), use it and let R32 be
+  // picked; otherwise fall back to each DB r32 row's own teams (odds path: those
+  // rows are finished, so pick() returns the real winner and choose is never hit).
+  const r32Slots: TreeSlot[] = [];
+  const r32w: (number | null)[] = [];
+  for (let i = 0; i < 16; i++) {
+    const m = byPhase.r32?.[i];
+    const ext = r32Participants?.[i];
+    const a = m && m.finished ? m.homeTeamId : (ext ? ext.a : (m?.homeTeamId ?? null));
+    const b = m && m.finished ? m.awayTeamId : (ext ? ext.b : (m?.awayTeamId ?? null));
+    const w = pick(m, a, b).winner;
+    r32Slots.push({ a, b, winner: w });
+    r32w.push(w);
+  }
+
   const r16: TreeSlot[] = [];
   for (let i = 0; i < 8; i++) {
     const a = r32w[2 * i] ?? null, b = r32w[2 * i + 1] ?? null;
