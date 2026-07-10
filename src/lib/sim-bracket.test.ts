@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rankThirds, assignThirds, buildR32, type ThirdInfo } from './sim-bracket.js';
+import { rankThirds, assignThirds, buildR32, type ThirdInfo, projectBracket, r32Participants, GROUPS } from './sim-bracket.js';
 import { THIRD_GROUP_MAP } from './bracket-2026.js';
 import { rankGroup, type GsMatch } from './group-standings.js';
 
@@ -75,5 +75,43 @@ describe('buildR32', () => {
     const m74 = r32[0]; // 1E vs 3rd(...)
     expect(m74.a).toMatchObject({ teamId: 50, label: '1E' });
     expect(m74.b).toMatchObject({ teamId: null, third: true }); // unassigned third
+  });
+});
+
+// Build a fully-decided group where seeds win in id order: team (base+1) tops it.
+function group(g: string, base: number): GsMatch[] {
+  const t = [base + 1, base + 2, base + 3, base + 4];
+  const ms: GsMatch[] = [];
+  // round-robin: higher-listed team always wins → deterministic 1>2>3>4
+  for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++)
+    ms.push({ homeTeamId: t[i], awayTeamId: t[j], homeScore: 1, awayScore: 0 });
+  return ms;
+}
+
+describe('projectBracket', () => {
+  it('with all 12 groups complete: 12 winners, 12 runners, 8 thirds → 16 R32 matchups fully filled', () => {
+    const gmsByGroup: Record<string, GsMatch[]> = {};
+    const played: Record<string, number> = {};
+    GROUPS.forEach((g, i) => { gmsByGroup[g] = group(g, i * 10); played[g] = 6; });
+    const proj = projectBracket(gmsByGroup, played);
+    expect(proj.allComplete).toBe(true);
+    expect(proj.completeCount).toBe(12);
+    expect(proj.thirdsRanked.qualifyingGroups.size).toBe(8);
+    expect(proj.r32).toHaveLength(16);
+    const parts = r32Participants(proj);
+    expect(parts).toHaveLength(16);
+    // every slot filled once all groups complete + a valid thirds assignment exists
+    expect(parts.every((p) => p.a != null && p.b != null)).toBe(true);
+  });
+
+  it('with an incomplete group: that group is not complete and its R32 slots are null', () => {
+    const gmsByGroup: Record<string, GsMatch[]> = {};
+    const played: Record<string, number> = {};
+    GROUPS.forEach((g, i) => { gmsByGroup[g] = group(g, i * 10); played[g] = 6; });
+    gmsByGroup['A'] = gmsByGroup['A'].slice(0, 5); played['A'] = 5; // 5/6
+    const proj = projectBracket(gmsByGroup, played);
+    expect(proj.perGroup['A'].complete).toBe(false);
+    expect(proj.allComplete).toBe(false);
+    expect(proj.completeCount).toBe(11);
   });
 });

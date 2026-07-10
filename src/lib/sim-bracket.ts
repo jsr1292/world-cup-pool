@@ -6,6 +6,7 @@
 // though FIFA's published combination table may pick a different valid one, so
 // the UI labels third-placed slots as approximate.
 import { R32_MAP, THIRD_GROUP_MAP, R32_OFFICIAL_MATCH, WILDCARD } from './bracket-2026.js';
+import { rankGroup, type GsMatch } from './group-standings.js';
 
 export interface ThirdInfo { group: string; teamId: number; points: number; gd: number; gf: number; }
 
@@ -66,4 +67,61 @@ export function buildR32(opts: {
     };
     return { index: i, official: R32_OFFICIAL_MATCH[i], a: resolve(mu.t1g, mu.t1p), b: resolve(mu.t2g, mu.t2p) };
   });
+}
+
+export const GROUPS = 'ABCDEFGHIJKL'.split('');
+
+export function statsOf(gms: GsMatch[]): Record<number, { points: number; gf: number; ga: number }> {
+  const t: Record<number, { points: number; gf: number; ga: number }> = {};
+  const ens = (id: number) => (t[id] ??= { points: 0, gf: 0, ga: 0 });
+  for (const m of gms) {
+    const h = ens(m.homeTeamId), a = ens(m.awayTeamId);
+    h.gf += m.homeScore; h.ga += m.awayScore; a.gf += m.awayScore; a.ga += m.homeScore;
+    if (m.homeScore > m.awayScore) h.points += 3;
+    else if (m.homeScore < m.awayScore) a.points += 3;
+    else { h.points++; a.points++; }
+  }
+  return t;
+}
+
+export interface GroupProjection {
+  perGroup: Record<string, { complete: boolean; order: number[] | null; played: number }>;
+  thirds: ThirdInfo[];
+  thirdsRanked: { ranked: ThirdInfo[]; qualifyingGroups: Set<string> };
+  allComplete: boolean;
+  completeCount: number;
+  r32: R32Matchup[];
+}
+
+export function projectBracket(
+  gmsByGroup: Record<string, GsMatch[]>,
+  playedCountByGroup: Record<string, number>
+): GroupProjection {
+  const winners: Record<string, number | undefined> = {};
+  const runners: Record<string, number | undefined> = {};
+  const thirdByGroup: Record<string, number | undefined> = {};
+  const perGroup: GroupProjection['perGroup'] = {};
+  const thirds: ThirdInfo[] = [];
+  let completeCount = 0;
+  for (const g of GROUPS) {
+    const gms = gmsByGroup[g] ?? [];
+    const complete = gms.length === 6;
+    perGroup[g] = { complete, order: complete ? rankGroup(gms) : null, played: playedCountByGroup[g] ?? 0 };
+    if (complete) {
+      completeCount++;
+      const order = perGroup[g].order as number[];
+      winners[g] = order[0]; runners[g] = order[1]; thirdByGroup[g] = order[2];
+      const s = statsOf(gms)[order[2]];
+      thirds.push({ group: g, teamId: order[2], points: s.points, gd: s.gf - s.ga, gf: s.gf });
+    }
+  }
+  const allComplete = completeCount === 12;
+  const thirdsRanked = rankThirds(thirds);
+  const assignment = allComplete ? assignThirds(thirdsRanked.qualifyingGroups) : null;
+  const r32 = buildR32({ winners, runners, thirdByGroup, thirdsAssignment: assignment });
+  return { perGroup, thirds, thirdsRanked, allComplete, completeCount, r32 };
+}
+
+export function r32Participants(proj: GroupProjection): { a: number | null; b: number | null }[] {
+  return proj.r32.map((mu) => ({ a: mu.a.teamId, b: mu.b.teamId }));
 }
