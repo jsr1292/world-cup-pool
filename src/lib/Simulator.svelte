@@ -3,6 +3,7 @@
   import { projectBracket, r32Participants, GROUPS } from '$lib/sim-bracket.js';
   import { groupByPhase, resolveTree, prepEntry, type OddsMatchIn, type Phase } from '$lib/knockout-odds.js';
   import { computeUnifiedProjection, type UnifiedEntry, type ProjCtx } from '$lib/sim-projection.js';
+  import { buildForecastSim } from '$lib/sim-forecast.js';
   import { flagEmoji, shortName } from '$lib/teams.js';
   let { data, standalone = false } = $props();
 
@@ -121,8 +122,8 @@
     baseRankById,
   });
   const leaderboard = $derived(computeUnifiedProjection(unifiedEntries, koTree, koRules, projCtx));
-  // Temporary alias — Task 7 replaces this with the "Solo cambios" filter.
-  const visibleLeaderboard = $derived(leaderboard);
+  let onlyChanges = $state(false);
+  const visibleLeaderboard = $derived(onlyChanges ? leaderboard.filter((e) => e.move !== 0 || e.total !== e.base) : leaderboard);
 
   const decidedCount = $derived(Object.keys(sim).length + Object.keys(koChoice).length);
   function setPick(mid: number, code: '1' | 'X' | '2') {
@@ -135,9 +136,48 @@
   }
   function resetAll() { sim = {}; koChoice = {}; }
 
+  let forecastId = $state<number | null>(null);
+  function applyForecast(predId: number | null) {
+    forecastId = predId;
+    if (predId == null) { resetAll(); return; }
+    const be = ((data.bracketEntries as any[]) ?? []).find((e) => e.id === predId);
+    if (!be) return;
+    // 1) group stage from their 1/X/2
+    const unplayedGroupMatchIds = unplayed.filter((m: any) => m.group_name).map((m: any) => m.id);
+    sim = buildForecastSim({ groupPicks: data.picks[predId] ?? {}, bracketPicks: be.picks }, { unplayedGroupMatchIds }).sim;
+    // 2) KO stage: iterate to a fixpoint, filling each newly-revealed tie with the
+    //    member's picked team for that phase (bounded passes = KO depth).
+    const wantByPhaseTeam = new Set(be.picks.filter((p: any) => p.teamId != null).map((p: any) => p.phase + ':' + p.teamId));
+    let next: Record<string, number> = {};
+    for (let pass = 0; pass < 6; pass++) {
+      const tree = resolveTree(koByPhase, (m, a, b) => {
+        const w = next[koKey(m.phase, m.index)];
+        return w === a || w === b ? w : null;
+      }, r32parts);
+      const rounds: [Phase, any[]][] = [
+        ['r32', r32parts.map((p, i) => ({ a: p.a, b: p.b, index: i }))],
+        ['r16', tree.rounds.r16], ['qf', tree.rounds.qf], ['sf', tree.rounds.sf],
+        ['final', [tree.rounds.final]], ['3rd', [tree.rounds.third]],
+      ];
+      const before = JSON.stringify(next);
+      for (const [phase, slots] of rounds) {
+        slots.forEach((s: any, i: number) => {
+          const k = koKey(phase, i);
+          if (next[k] != null) return;
+          for (const cand of [s.a, s.b]) {
+            if (cand != null && wantByPhaseTeam.has(phase + ':' + cand)) { next[k] = cand; break; }
+          }
+        });
+      }
+      if (JSON.stringify(next) === before) break;
+    }
+    koChoice = next;
+  }
+
   const myIds = $derived(new Set((data.entries as any[]).filter((e) => e.user_id === data.userId).map((e) => e.id)));
   const myPrimaryId = $derived((data.entries as any[]).find((e) => e.user_id === data.userId)?.id ?? null);
   function myPick(mid: number): string | null { return myPrimaryId != null ? (data.picks[myPrimaryId]?.[mid] ?? null) : null; }
+  const myRow = $derived(myPrimaryId != null ? leaderboard.find((e) => e.id === myPrimaryId) : null);
 
   // ── Knockout win/podium probabilities (computed server-side) ────────────────
   const oddsRows = $derived((data.odds as any[]) ?? []);
@@ -238,6 +278,13 @@
       <div class="sim-grid">
         <!-- LEFT: Pendientes -->
         <div class="sim-col">
+          <select onchange={(e) => applyForecast(e.currentTarget.value ? Number(e.currentTarget.value) : null)} style="width:100%; font-size:11px; padding:6px 8px; border-radius:6px; background:var(--bg-card); border:1px solid var(--border); color:var(--text); margin-bottom:10px;">
+            <option value="">Pronóstico de… (elige un participante)</option>
+            {#each (data.bracketEntries as any[]) ?? [] as be}
+              <option value={be.id} selected={forecastId === be.id}>{be.name}{be.label ? ' · ' + be.label : ''}</option>
+            {/each}
+          </select>
+
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
             <h2 style="font-size:12px; font-weight:700; color:var(--text); margin:0;">Pendientes</h2>
             <span style="font-size:9px; color:var(--text-dim);">{decidedCount} decidido{decidedCount===1?'':'s'}{#if decidedCount>0} · <button onclick={resetAll} style="background:none; border:none; color:var(--gold); font-size:9px; cursor:pointer; padding:0; text-decoration:underline;">limpiar</button>{/if}</span>
@@ -281,7 +328,10 @@
 
         <!-- RIGHT: projected leaderboard -->
         <div class="sim-col">
-          <h2 style="font-size:12px; font-weight:700; color:var(--text); margin:0 0 6px;">Clasificación proyectada</h2>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <h2 style="font-size:12px; font-weight:700; color:var(--text); margin:0;">Clasificación proyectada</h2>
+            <button onclick={() => (onlyChanges = !onlyChanges)} style="background:none; border:1px solid {onlyChanges?'var(--gold)':'var(--border)'}; color:{onlyChanges?'var(--gold)':'var(--text-muted)'}; font-size:9px; border-radius:5px; padding:2px 6px; cursor:pointer;">Solo cambios</button>
+          </div>
           <div style="display:flex; flex-direction:column; gap:3px;">
             {#each visibleLeaderboard as e (e.id)}
               {@const mine = myIds.has(e.id)}
@@ -298,6 +348,14 @@
           </div>
         </div>
       </div>
+
+      {#if myRow && decidedCount > 0}
+        <div class="impact-bar">
+          <span>Vas <strong style="color:var(--gold);">{myRow.rank}.º</strong></span>
+          <span style="color:{myRow.move>0?'var(--green)':myRow.move<0?'var(--red)':'var(--text-muted)'};">{myRow.move>0?`▲ subes ${myRow.move}`:myRow.move<0?`▼ bajas ${Math.abs(myRow.move)}`:'sin cambios'}</span>
+          <span style="color:var(--gold); font-weight:700;">{myRow.total}{#if myRow.total!==myRow.base} ({myRow.total>myRow.base?'+':''}{myRow.total-myRow.base}){/if}</span>
+        </div>
+      {/if}
     {/if}
   {/if}
 </div>
@@ -305,6 +363,10 @@
 <style>
   .sim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
   .sim-col { min-width: 0; }
+  .impact-bar { display: none; }
+  @media (max-width: 720px) {
+    .impact-bar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; gap: 12px; justify-content: space-around; align-items: center; padding: 8px 12px; font-size: 11px; background: var(--bg-card); border-top: 1px solid var(--gold); }
+  }
   @media (max-width: 720px) {
     .sim-grid { grid-template-columns: 1fr; gap: 10px; }
   }
