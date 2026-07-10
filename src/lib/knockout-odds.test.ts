@@ -141,3 +141,61 @@ describe('resolveTree with external R32 participants', () => {
     expect(tree.rounds.r32[0].winner).toBe(null);
   });
 });
+
+describe('cascade regression: stale picks & 3rd place', () => {
+  it('changing an R32 winner invalidates a downstream R16 pick for the team that no longer arrives', () => {
+    const byPhase = groupByPhase(emptyKo());
+    const parts = Array.from({ length: 16 }, (_, i) => ({ a: 100 + i * 2, b: 101 + i * 2 }));
+    // choose r32[0]=100, r32[1]=102 → r16[0] is 100 vs 102; pick r16[0]=100
+    const choiceA: Record<string, number> = { 'r32:0': 100, 'r32:1': 102, 'r16:0': 100 };
+    const chooseFrom = (c: Record<string, number>) => (m: OddsMatchIn, a: number | null, b: number | null) => {
+      const w = c[m.phase + ':' + m.index];
+      return w === a || w === b ? w : null; // honour pick only while its team participates
+    };
+    let tree = resolveTree(byPhase, chooseFrom(choiceA), parts);
+    expect(tree.rounds.r16[0].winner).toBe(100);
+
+    // now r32[0] winner changes to 101 → 100 never reaches r16[0]; the r16:0=100 pick is stale
+    const choiceB: Record<string, number> = { 'r32:0': 101, 'r32:1': 102, 'r16:0': 100 };
+    tree = resolveTree(byPhase, chooseFrom(choiceB), parts);
+    expect(tree.rounds.r16[0].a).toBe(101);
+    expect(tree.rounds.r16[0].winner).toBe(null); // stale 100 pick no longer honoured
+  });
+
+  it('third-place winner scores third_place; a finalist scores knockout_final only once final decided', () => {
+    const byPhase = groupByPhase(emptyKo());
+    const parts = Array.from({ length: 16 }, (_, i) => ({ a: 100 + i, b: 200 + i }));
+    // Drive one full wing to a final + 3rd. Choose team a at every step of the left half.
+    const choice: Record<string, number> = {};
+    for (let i = 0; i < 16; i++) choice['r32:' + i] = parts[i].a;
+    for (let i = 0; i < 8; i++) choice['r16:' + i] = parts[2 * i].a;
+    for (let i = 0; i < 4; i++) choice['qf:' + i] = parts[4 * i].a;
+    for (let i = 0; i < 2; i++) choice['sf:' + i] = parts[8 * i].a;
+    const choose = (m: OddsMatchIn, a: number | null, b: number | null) => {
+      const w = choice[m.phase + ':' + m.index];
+      return w === a || w === b ? w : null;
+    };
+    // final & 3rd NOT chosen yet
+    let tree = resolveTree(byPhase, choose, parts);
+    expect(tree.rounds.final.a).not.toBe(null);
+    expect(tree.rounds.final.b).not.toBe(null);
+    expect(tree.finalists.size).toBe(0); // final undecided → no consolation credited
+    const finalA = tree.rounds.final.a as number, finalB = tree.rounds.final.b as number;
+
+    // pick the final and the 3rd-place match
+    choice['final:0'] = finalA;
+    const sfLoserA = tree.rounds.third.a as number;
+    choice['3rd:0'] = sfLoserA;
+    tree = resolveTree(byPhase, choose, parts);
+    expect(tree.finalists.has(finalA)).toBe(true);
+    expect(tree.finalists.has(finalB)).toBe(true);
+    expect(tree.rounds.third.winner).toBe(sfLoserA);
+
+    // scoring: an entry that picked finalB as champion earns knockout_final (finalist) but not knockout_winner
+    const rules = { knockout_final: 5, knockout_winner: 10, third_place: 3 };
+    const loserPick = prepEntry({ id: 1, userId: 1, name: 'x', label: null, base: 0, baseCorrect: 0, picks: [{ phase: 'final', slot: 0, teamId: finalB }] });
+    expect(scoreEntry(loserPick, tree, rules).pts).toBe(5);
+    const thirdPick = prepEntry({ id: 2, userId: 2, name: 'y', label: null, base: 0, baseCorrect: 0, picks: [{ phase: '3rd', slot: 0, teamId: sfLoserA }] });
+    expect(scoreEntry(thirdPick, tree, rules).pts).toBe(3);
+  });
+});
