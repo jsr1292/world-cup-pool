@@ -834,14 +834,18 @@ Reuse the existing `koMatch` snippet (from the current file) for the KO rounds, 
 {/snippet}
 ```
 
-Then in the left column after the group matches:
+Then in the left column, after the group matches, render every KO round from `koTree.rounds` (see the R32 rendering detail below):
 
 ```svelte
-{@render koRound('Dieciseisavos', 'r32', koTree.rounds.r16.length ? [] : [])}
-<!-- R32 ties: build slots from r32parts + koTree is R16+, so render R32 from proj.r32/r32parts -->
+{@render koRound('Dieciseisavos', 'r32', koTree.rounds.r32)}
+{@render koRound('Octavos', 'r16', koTree.rounds.r16)}
+{@render koRound('Cuartos', 'qf', koTree.rounds.qf)}
+{@render koRound('Semifinales', 'sf', koTree.rounds.sf)}
+{@render koRound('Final', 'final', [koTree.rounds.final])}
+{@render koRound('3.er puesto', '3rd', [koTree.rounds.third])}
 ```
 
-**R32 rendering detail:** `koTree.rounds` starts at `r16`; R32 ties come from `proj.r32` (participants) + `koChoice`. Render R32 as its own round using the same two-button `koMatch` shape, keyed `('r32', i)`, with `slot = { a: r32parts[i].a, b: r32parts[i].b, winner: koChoice[koKey('r32', i)] ?? null }`, hidden when both participants are null. Then render `koRound('Octavos','r16',koTree.rounds.r16)`, `('Cuartos','qf',…)`, `('Semifinales','sf',…)`, Final and `3.er puesto` as single-tie rounds (as the current file does). Disable a `koMatch` button when its DB match is `finished`.
+**R32 rendering detail:** `koTree.rounds.r32` (added in Task 2's fix) is a `TreeSlot[]` of the 16 resolved R32 ties — participants from the projected groups, winner from a finished DB result or the user's `choose`. Render it as its own round with `koRound('Dieciseisavos','r32',koTree.rounds.r32)` (the `koRound` snippet hides ties whose participants are both null → progressive reveal). Then `koRound('Octavos','r16',koTree.rounds.r16)`, `('Cuartos','qf',…)`, `('Semifinales','sf',…)`, and Final / `3.er puesto` as single-tie rounds (as the current file does). Do NOT hand-roll R32 slots from `r32parts`/`koChoice` — read them from `koTree.rounds.r32`. Disable a `koMatch` button when its DB match is `finished`.
 
 - [ ] **Step 3: Add the scoped `<style>` block for responsive columns**
 
