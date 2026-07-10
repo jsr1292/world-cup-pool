@@ -105,64 +105,64 @@ export async function getSimulatorData(
      FROM matches WHERE phase IN ('r32','r16','qf','sf','3rd','final')
      ORDER BY phase, sort_order`
   );
-  // Only meaningful once the Round of 32 is fully decided (from R16 onward the
-  // remaining tree is ≤16 matches — always exactly enumerable — and every future
-  // participant resolves from finished results). Before that, skip.
+  // KO template rows (r32..final). Pre-draw these have null teams — fine, the
+  // client builds R32 participants from the projected group tables.
+  const idxByPhase: Record<string, number> = {};
+  const koMatches: OddsMatchIn[] = koRows.map((m: any) => {
+    const i = (idxByPhase[m.phase] = (idxByPhase[m.phase] ?? -1) + 1);
+    return {
+      phase: m.phase as Phase, index: i,
+      finished: m.status === 'finished' && m.home_score != null && m.away_score != null,
+      homeTeamId: m.home_team_id, awayTeamId: m.away_team_id,
+      homeScore: m.home_score, awayScore: m.away_score, penaltyWinnerId: m.penalty_winner_id ?? null,
+    };
+  });
+
+  // Per-entry fixed inputs: base = total_score minus already-earned knockout
+  // points (so we can re-add the full simulated knockout total), plus the
+  // fixed correct-pick count (group correct) for the ranking tiebreak, plus
+  // their bracket picks.
+  const { rows: koPtsRows } = await query(
+    `SELECT bp.prediction_id AS pid, COALESCE(SUM(bp.points_earned), 0) AS pts
+     FROM bracket_predictions bp JOIN predictions p ON p.id = bp.prediction_id
+     WHERE p.pool_id = $1 GROUP BY bp.prediction_id`, [poolId]
+  );
+  const koPtsByPred: Record<number, number> = {};
+  for (const r of koPtsRows) koPtsByPred[r.pid] = Number(r.pts) || 0;
+
+  const { rows: gcRows } = await query(
+    `SELECT mp.prediction_id AS pid, COUNT(*) FILTER (WHERE mp.points_earned > 0) AS cnt
+     FROM match_predictions mp JOIN predictions p ON p.id = mp.prediction_id
+     WHERE p.pool_id = $1 GROUP BY mp.prediction_id`, [poolId]
+  );
+  const groupCorrectByPred: Record<number, number> = {};
+  for (const r of gcRows) groupCorrectByPred[r.pid] = Number(r.cnt) || 0;
+
+  const { rows: bpRows } = await query(
+    `SELECT bp.prediction_id AS pid, bp.phase, bp.slot, bp.team_id
+     FROM bracket_predictions bp JOIN predictions p ON p.id = bp.prediction_id
+     WHERE p.pool_id = $1`, [poolId]
+  );
+  const picksByPred: Record<number, { phase: string; slot: number; teamId: number | null }[]> = {};
+  for (const r of bpRows) (picksByPred[r.pid] ??= []).push({ phase: r.phase, slot: Number(r.slot), teamId: r.team_id });
+
+  const oddsEntries: OddsEntryIn[] = entries.map((e) => ({
+    id: e.id, userId: e.user_id, name: e.display_name, label: e.label,
+    base: e.total_score - (koPtsByPred[e.id] ?? 0),
+    baseCorrect: groupCorrectByPred[e.id] ?? 0,
+    picks: picksByPred[e.id] ?? [],
+  }));
+
+  koMatchesOut = koMatches;
+  bracketEntries = oddsEntries;
+
+  // Odds enumeration is the expensive part and only meaningful once R32 is done.
   const r32Rows = koRows.filter((m: any) => m.phase === 'r32');
   const r32AllDone = r32Rows.length > 0 && r32Rows.every((m: any) => m.status === 'finished' && m.home_score != null);
   if (r32AllDone) {
-    // Assign each match its 0-based index within its phase (sort_order order).
-    const idxByPhase: Record<string, number> = {};
-    const koMatches: OddsMatchIn[] = koRows.map((m: any) => {
-      const i = (idxByPhase[m.phase] = (idxByPhase[m.phase] ?? -1) + 1);
-      return {
-        phase: m.phase as Phase, index: i,
-        finished: m.status === 'finished' && m.home_score != null && m.away_score != null,
-        homeTeamId: m.home_team_id, awayTeamId: m.away_team_id,
-        homeScore: m.home_score, awayScore: m.away_score, penaltyWinnerId: m.penalty_winner_id ?? null,
-      };
-    });
-
-    // Per-entry fixed inputs: base = total_score minus already-earned knockout
-    // points (so we can re-add the full simulated knockout total), plus the
-    // fixed correct-pick count (group correct) for the ranking tiebreak, plus
-    // their bracket picks.
-    const { rows: koPtsRows } = await query(
-      `SELECT bp.prediction_id AS pid, COALESCE(SUM(bp.points_earned), 0) AS pts
-       FROM bracket_predictions bp JOIN predictions p ON p.id = bp.prediction_id
-       WHERE p.pool_id = $1 GROUP BY bp.prediction_id`, [poolId]
-    );
-    const koPtsByPred: Record<number, number> = {};
-    for (const r of koPtsRows) koPtsByPred[r.pid] = Number(r.pts) || 0;
-
-    const { rows: gcRows } = await query(
-      `SELECT mp.prediction_id AS pid, COUNT(*) FILTER (WHERE mp.points_earned > 0) AS cnt
-       FROM match_predictions mp JOIN predictions p ON p.id = mp.prediction_id
-       WHERE p.pool_id = $1 GROUP BY mp.prediction_id`, [poolId]
-    );
-    const groupCorrectByPred: Record<number, number> = {};
-    for (const r of gcRows) groupCorrectByPred[r.pid] = Number(r.cnt) || 0;
-
-    const { rows: bpRows } = await query(
-      `SELECT bp.prediction_id AS pid, bp.phase, bp.slot, bp.team_id
-       FROM bracket_predictions bp JOIN predictions p ON p.id = bp.prediction_id
-       WHERE p.pool_id = $1`, [poolId]
-    );
-    const picksByPred: Record<number, { phase: string; slot: number; teamId: number | null }[]> = {};
-    for (const r of bpRows) (picksByPred[r.pid] ??= []).push({ phase: r.phase, slot: Number(r.slot), teamId: r.team_id });
-
-    const oddsEntries: OddsEntryIn[] = entries.map((e) => ({
-      id: e.id, userId: e.user_id, name: e.display_name, label: e.label,
-      base: e.total_score - (koPtsByPred[e.id] ?? 0),
-      baseCorrect: groupCorrectByPred[e.id] ?? 0,
-      picks: picksByPred[e.id] ?? [],
-    }));
-
     const result = computeKnockoutOdds(koMatches, oddsEntries, scoring);
     odds = result.rows;
     oddsMeta = { scenarios: result.scenarios, remaining: result.remaining, exact: result.exact };
-    koMatchesOut = koMatches;
-    bracketEntries = oddsEntries;
   }
 
   const payload = { pool: safePool, betsLocked: true, teams, entries, matches, picks, orders, matchOutcomePts, groupPositionPts, odds, oddsMeta, koMatches: koMatchesOut, bracketEntries, knockoutRules };
