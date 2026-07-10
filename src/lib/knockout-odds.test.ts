@@ -130,4 +130,14 @@ describe('resolveTree with external R32 participants', () => {
     expect(tree.pw.r32.has(10)).toBe(true);
     expect(tree.pw.r32.has(20)).toBe(false);
   });
+
+  it('omitting r32Participants keeps an unfinished R32 (even with known teams) undecided', () => {
+    const ko = emptyKo();
+    ko[0] = { ...ko[0], homeTeamId: 10, awayTeamId: 20 }; // known teams, NOT finished
+    const byPhase = groupByPhase(ko);
+    // a choose that WOULD pick team 10 if ever consulted for r32
+    const tree = resolveTree(byPhase, (m) => (m.phase === 'r32' ? 10 : null));
+    expect(tree.pw.r32.has(10)).toBe(false); // legacy: unfinished R32 → no winner
+    expect(tree.rounds.r32[0].winner).toBe(null);
+  });
 });

@@ -71,7 +71,7 @@ export interface OddsOutput {
 export interface TreeSlot { a: number | null; b: number | null; winner: number | null; }
 
 export interface ResolvedTree {
-  rounds: { r16: TreeSlot[]; qf: TreeSlot[]; sf: TreeSlot[]; final: TreeSlot; third: TreeSlot };
+  rounds: { r32: TreeSlot[]; r16: TreeSlot[]; qf: TreeSlot[]; sf: TreeSlot[]; final: TreeSlot; third: TreeSlot };
   pw: Record<Phase, Set<number>>; // teams that win a match in each phase
   finalists: Set<number>;
 }
@@ -116,18 +116,25 @@ export function resolveTree(
     return { winner: w, loser: w == null ? null : (w === a ? b : a) };
   };
 
-  // R32 is the only round whose participants come from OUTSIDE the KO tree (group
-  // results). If r32Participants is supplied (unified sim), use it and let R32 be
-  // picked; otherwise fall back to each DB r32 row's own teams (odds path: those
-  // rows are finished, so pick() returns the real winner and choose is never hit).
+  // R32 participants come from OUTSIDE the KO tree (group results). Three cases:
+  //  • the DB r32 match is finished → use its real result (participants = its teams)
+  //  • r32Participants supplied (unified sim) → R32 is pickable via choose()
+  //  • neither → legacy finished-only behavior: an unfinished R32 stays undecided
+  //    (winner null), so resolveTree(byPhase, choose) with no 3rd arg is exactly
+  //    the pre-generalization function for EVERY input, not just the gated caller.
   const r32Slots: TreeSlot[] = [];
   const r32w: (number | null)[] = [];
   for (let i = 0; i < 16; i++) {
     const m = byPhase.r32?.[i];
     const ext = r32Participants?.[i];
-    const a = m && m.finished ? m.homeTeamId : (ext ? ext.a : (m?.homeTeamId ?? null));
-    const b = m && m.finished ? m.awayTeamId : (ext ? ext.b : (m?.awayTeamId ?? null));
-    const w = pick(m, a, b).winner;
+    let a: number | null, b: number | null, w: number | null;
+    if (m && m.finished) {
+      a = m.homeTeamId; b = m.awayTeamId; w = finishedWinner(m);
+    } else if (ext) {
+      a = ext.a; b = ext.b; w = pick(m, a, b).winner;
+    } else {
+      a = null; b = null; w = null;
+    }
     r32Slots.push({ a, b, winner: w });
     r32w.push(w);
   }
@@ -165,7 +172,7 @@ export function resolveTree(
   // the final not yet chosen credits neither finalist, and a zero-pick projection
   // equals the live standings.
   const finalists = final.winner != null ? S([sf[0].winner, sf[1].winner]) : new Set<number>();
-  return { rounds: { r16, qf, sf, final, third }, pw, finalists };
+  return { rounds: { r32: r32Slots, r16, qf, sf, final, third }, pw, finalists };
 }
 
 // Per-entry, precomputed team lists per phase (occupant R32 slots removed), so
