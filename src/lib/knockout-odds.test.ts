@@ -198,4 +198,21 @@ describe('cascade regression: stale picks & 3rd place', () => {
     const thirdPick = prepEntry({ id: 2, userId: 2, name: 'y', label: null, base: 0, baseCorrect: 0, picks: [{ phase: '3rd', slot: 0, teamId: sfLoserA }] });
     expect(scoreEntry(thirdPick, tree, rules).pts).toBe(3);
   });
+
+  it('a chosen R32 winner scores knockout_r32 for an entry that picked it (and not for the loser)', () => {
+    const byPhase = groupByPhase(emptyKo());
+    const parts = Array.from({ length: 16 }, (_, i) => ({ a: 100 + i * 2, b: 101 + i * 2 }));
+    const tree = resolveTree(byPhase, (m) => (m.phase === 'r32' && m.index === 0 ? 100 : null), parts);
+    const rules = { knockout_r32: 4 };
+    const winnerPick = prepEntry({ id: 1, userId: 1, name: 'x', label: null, base: 0, baseCorrect: 0, picks: [{ phase: 'r32', slot: 0, teamId: 100 }] });
+    expect(scoreEntry(winnerPick, tree, rules).pts).toBe(4);
+    const loserPick = prepEntry({ id: 2, userId: 2, name: 'y', label: null, base: 0, baseCorrect: 0, picks: [{ phase: 'r32', slot: 0, teamId: 101 }] });
+    expect(scoreEntry(loserPick, tree, rules).pts).toBe(0);
+  });
+
+  it('R32 occupant rule preserved: an even-slot pick whose odd sibling is filled is excluded from scoring', () => {
+    const pe = prepEntry({ id: 1, userId: 1, name: 'x', label: null, base: 0, baseCorrect: 0, picks: [{ phase: 'r32', slot: 1, teamId: 50 }, { phase: 'r32', slot: 2, teamId: 60 }] });
+    expect(pe.r32).toContain(50);      // odd slot 1 → scores normally
+    expect(pe.r32).not.toContain(60);  // even slot 2 whose sibling slot 1 is filled → occupant, excluded
+  });
 });

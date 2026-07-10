@@ -13,7 +13,7 @@ function emptyByPhase() {
 
 function entry(id: number, base: number, groupPicks: Record<number, '1' | 'X' | '2'> = {}): UnifiedEntry {
   return {
-    id, userId: id, name: 'U' + id, label: null,
+    id, userId: id, name: 'U' + id, label: null, live: base,
     prepped: prepEntry({ id, userId: id, name: 'U' + id, label: null, base, baseCorrect: 0, picks: [] }),
     groupPicks, groupOrders: {},
   };
@@ -47,5 +47,22 @@ describe('computeUnifiedProjection', () => {
     const ctx: ProjCtx = { ...baseCtx, sim: { 500: '1' }, unplayedByGroup: { A: [{ id: 500 }] } };
     const rows = computeUnifiedProjection([e], tree, {}, ctx);
     expect(rows[0].total).toBe(10);
+  });
+
+  it('finished KO with zero picks: total equals live total_score and delta is zero', () => {
+    const rules = { knockout_r32: 3 };
+    const byPhase = emptyByPhase();
+    // r32[0] finished: team 10 beat team 20
+    byPhase.r32[0] = { phase: 'r32', index: 0, finished: true, homeTeamId: 10, awayTeamId: 20, homeScore: 2, awayScore: 1, penaltyWinnerId: null };
+    const tree = resolveTree(byPhase, () => null); // no picks; finished r32 resolves itself
+    const totalScore = 15, realizedKO = 3;         // entry already earned knockout_r32
+    const e: UnifiedEntry = {
+      id: 1, userId: 1, name: 'A', label: null, live: totalScore,
+      prepped: prepEntry({ id: 1, userId: 1, name: 'A', label: null, base: totalScore - realizedKO, baseCorrect: 0, picks: [{ phase: 'r32', slot: 0, teamId: 10 }] }),
+      groupPicks: {}, groupOrders: {},
+    };
+    const rows = computeUnifiedProjection([e], tree, rules, baseCtx);
+    expect(rows[0].total).toBe(totalScore);       // base(12) + re-awarded knockout_r32(3)
+    expect(rows[0].total - rows[0].live).toBe(0); // no spurious delta
   });
 });

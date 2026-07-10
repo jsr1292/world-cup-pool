@@ -7,6 +7,7 @@ export interface UnifiedEntry {
   userId: number;
   name: string;
   label: string | null;
+  live: number;                                  // entry's current live total_score
   prepped: PreppedEntry;                         // prepEntry(bracketEntry) — prepped.in.base = total_score − realizedKO
   groupPicks: Record<number, '1' | 'X' | '2'>;   // this member's group pick per matchId
   groupOrders: Record<string, number[]>;         // this member's predicted [p1,p2,p3,p4] per group
@@ -23,7 +24,7 @@ export interface ProjCtx {
 
 export interface UnifiedRow {
   id: number; userId: number; name: string; label: string | null;
-  base: number; total: number; correct: number; rank: number; move: number;
+  base: number; live: number; total: number; correct: number; rank: number; move: number;
 }
 
 /** Points/correct a member earns from the SIMULATED (undecided) group items only.
@@ -58,11 +59,12 @@ export function computeUnifiedProjection(
     return {
       id: e.id, userId: e.userId, name: e.name, label: e.label,
       base: e.prepped.in.base,
+      live: e.live,
       total: ko.pts + gs.pts,
       correct: ko.correct + gs.correct,
     };
   });
-  rows.sort((a, b) => b.total - a.total || b.correct - a.correct || b.base - a.base);
+  rows.sort((a, b) => b.total - a.total || b.correct - a.correct || b.live - a.live);
   let r = 0, prevT: number | null = null, prevC: number | null = null;
   return rows.map((row, i) => {
     if (i === 0 || row.total !== prevT || row.correct !== prevC) { r = i + 1; prevT = row.total; prevC = row.correct; }

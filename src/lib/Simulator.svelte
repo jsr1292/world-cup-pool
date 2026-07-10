@@ -105,11 +105,19 @@
     return out;
   });
 
+  // live total_score per entry id (for delta badges/filters vs current standing)
+  const liveByEntryId = $derived.by(() => {
+    const m: Record<number, number> = {};
+    for (const e of (data.entries as any[]) ?? []) m[e.id] = e.total_score;
+    return m;
+  });
+
   // prepped unified entries (bracket picks + this member's group picks/orders)
   const unifiedEntries = $derived.by((): UnifiedEntry[] => {
     const bes = (data.bracketEntries as any[]) ?? [];
     return bes.map((be) => ({
       id: be.id, userId: be.userId, name: be.name, label: be.label,
+      live: liveByEntryId[be.id] ?? 0,
       prepped: prepEntry(be),
       groupPicks: (data.picks[be.id] as Record<number, '1' | 'X' | '2'>) ?? {},
       groupOrders: (data.orders[be.id] as Record<string, number[]>) ?? {},
@@ -123,7 +131,7 @@
   });
   const leaderboard = $derived(computeUnifiedProjection(unifiedEntries, koTree, koRules, projCtx));
   let onlyChanges = $state(false);
-  const visibleLeaderboard = $derived(onlyChanges ? leaderboard.filter((e) => e.move !== 0 || e.total !== e.base) : leaderboard);
+  const visibleLeaderboard = $derived(onlyChanges ? leaderboard.filter((e) => e.move !== 0 || e.total !== e.live) : leaderboard);
 
   const decidedCount = $derived(Object.keys(sim).length + Object.keys(koChoice).length);
   function setPick(mid: number, code: '1' | 'X' | '2') {
@@ -341,7 +349,7 @@
                 <span style="flex:1; min-width:0; font-size:11px; font-weight:{mine?'700':'500'}; color:{mine?'var(--gold)':'var(--text)'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{e.name}{#if data.pool.allow_multiple_predictions && e.label} · {e.label}{:else if e.label} ({e.label}){/if}</span>
                 <span style="flex-shrink:0; text-align:right;">
                   <span style="font-size:13px; font-weight:700; color:var(--gold);">{e.total}</span>
-                  {#if e.total!==e.base}<span style="font-size:9px; color:{e.total>e.base?'var(--green)':'var(--red)'}; margin-left:3px;">{e.total>e.base?'+':''}{e.total-e.base}</span>{/if}
+                  {#if e.total!==e.live}<span style="font-size:9px; color:{e.total>e.live?'var(--green)':'var(--red)'}; margin-left:3px;">{e.total>e.live?'+':''}{e.total-e.live}</span>{/if}
                 </span>
               </div>
             {/each}
@@ -353,7 +361,7 @@
         <div class="impact-bar">
           <span>Vas <strong style="color:var(--gold);">{myRow.rank}.º</strong></span>
           <span style="color:{myRow.move>0?'var(--green)':myRow.move<0?'var(--red)':'var(--text-muted)'};">{myRow.move>0?`▲ subes ${myRow.move}`:myRow.move<0?`▼ bajas ${Math.abs(myRow.move)}`:'sin cambios'}</span>
-          <span style="color:var(--gold); font-weight:700;">{myRow.total}{#if myRow.total!==myRow.base} ({myRow.total>myRow.base?'+':''}{myRow.total-myRow.base}){/if}</span>
+          <span style="color:var(--gold); font-weight:700;">{myRow.total}{#if myRow.total!==myRow.live} ({myRow.total>myRow.live?'+':''}{myRow.total-myRow.live}){/if}</span>
         </div>
       {/if}
     {/if}
