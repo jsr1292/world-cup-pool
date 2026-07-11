@@ -135,7 +135,10 @@
 
   const paidCount = $derived(data.members.filter((m: any) => m.has_paid).length);
   const memberCount = $derived(data.members.length);
-  const pot = $derived((Number(pool.buy_in) || 0) * paidCount);
+  // Buy-in is charged per bet (pronóstico), not per person: a member with 2
+  // pronósticos contributes 2 buy-ins. The pot assumes every bet is paid.
+  const predCount = $derived(((data.leaderboard as any[]) ?? []).length);
+  const pot = $derived((Number(pool.buy_in) || 0) * predCount);
   const curSymbol = ({ EUR: '€', USD: '$', GBP: '£' } as Record<string, string>)[pool.currency] ?? '';
   const fmtMoney = (n: number) => curSymbol ? `${n.toFixed(2)}${curSymbol}` : `${n.toFixed(2)} ${pool.currency || ''}`.trim();
 
