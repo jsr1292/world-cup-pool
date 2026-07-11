@@ -369,7 +369,7 @@
             <h2>Clasificación proyectada</h2>
             <div class="panel-actions">
               <button class="pill" class:on={onlyChanges} onclick={() => (onlyChanges = !onlyChanges)}>🧭 Solo cambios</button>
-              <span class="muted">{onlyChanges && decidedCount > 0 ? `${visibleLeaderboard.length} con cambios` : `${leaderboard.length} participantes`}</span>
+              <span class="muted">{onlyChanges && decidedCount > 0 ? `${visibleLeaderboard.length} con cambios` : `${leaderboard.length} pronóstico${leaderboard.length === 1 ? '' : 's'}`}</span>
             </div>
           </div>
 
