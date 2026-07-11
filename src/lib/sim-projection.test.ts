@@ -65,4 +65,21 @@ describe('computeUnifiedProjection', () => {
     expect(rows[0].total).toBe(totalScore);       // base(12) + re-awarded knockout_r32(3)
     expect(rows[0].total - rows[0].live).toBe(0); // no spurious delta
   });
+
+  it('entries level on points share a position (dense 1-2-2-3), regardless of aciertos', () => {
+    const tree = resolveTree(emptyByPhase(), () => null, Array(16).fill({ a: null, b: null }));
+    // base = points; baseCorrect = aciertos (must NOT affect the position number)
+    const mk = (id: number, base: number, correct: number): UnifiedEntry => ({
+      id, userId: id, name: 'U' + id, label: null, live: base,
+      prepped: prepEntry({ id, userId: id, name: 'U' + id, label: null, base, baseCorrect: correct, picks: [] }),
+      groupPicks: {}, groupOrders: {},
+    });
+    // 30, then two tied on 20 (different aciertos), then 10
+    const rows = computeUnifiedProjection([mk(1, 30, 0), mk(2, 20, 5), mk(3, 20, 8), mk(4, 10, 0)], tree, {}, baseCtx);
+    const rankById = Object.fromEntries(rows.map((r) => [r.id, r.rank]));
+    expect(rankById[1]).toBe(1);
+    expect(rankById[2]).toBe(2); // both 20-pt entries share 2nd…
+    expect(rankById[3]).toBe(2); // …not 2nd and 3rd
+    expect(rankById[4]).toBe(3); // dense: next is 3rd, not 4th
+  });
 });

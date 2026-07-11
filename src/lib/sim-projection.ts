@@ -65,9 +65,12 @@ export function computeUnifiedProjection(
     };
   });
   rows.sort((a, b) => b.total - a.total || b.correct - a.correct || b.live - a.live);
-  let r = 0, prevT: number | null = null, prevC: number | null = null;
-  return rows.map((row, i) => {
-    if (i === 0 || row.total !== prevT || row.correct !== prevC) { r = i + 1; prevT = row.total; prevC = row.correct; }
+  // Dense ranking by POINTS only (1-2-2-3), matching the app's Clasificación
+  // (leaderboardRanks): entries level on points SHARE a position. Aciertos is
+  // NOT a position tiebreak — it only orders display within a tie.
+  let r = 0, prevT: number | null = null;
+  return rows.map((row) => {
+    if (prevT === null || row.total !== prevT) { r += 1; prevT = row.total; }
     return { ...row, rank: r, move: (ctx.baseRankById[row.id] ?? r) - r };
   });
 }
