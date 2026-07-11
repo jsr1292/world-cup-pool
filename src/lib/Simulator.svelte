@@ -85,6 +85,19 @@
     return w === a || w === b ? w : null;
   }, r32parts));
 
+  // A knockout tie is worth showing only while it's still open: both teams known
+  // (from real results or your upstream picks) and NOT already played. Finished
+  // ties still cascade their winner forward — they just don't take up space here.
+  function koPending(phase: string, index: number, slot: { a: number | null; b: number | null }): boolean {
+    const m = koByPhase[phase as Phase]?.[index];
+    return slot.a != null && slot.b != null && !(m?.finished ?? false);
+  }
+  const anyKoPending = $derived(
+    (['r32', 'r16', 'qf', 'sf'] as const).some((ph) => koTree.rounds[ph].some((s, i) => koPending(ph, i, s)))
+    || koPending('final', 0, koTree.rounds.final)
+    || koPending('3rd', 0, koTree.rounds.third)
+  );
+
   // groups the sim FULLY completes → their resulting order (for group_position pts)
   const simOrderByGroup = $derived.by(() => {
     const out: Record<string, number[]> = {};
@@ -283,11 +296,11 @@
 
       <!-- a knockout round: label (spans the grid) + its revealed ties -->
       {#snippet koRound(label: string, phase: Phase, slots: any[])}
-        {@const live = slots.filter((s) => s.a != null || s.b != null)}
-        {#if live.length > 0}
+        {@const shown = slots.filter((s, i) => koPending(phase, i, s))}
+        {#if shown.length > 0}
           <div class="round-label">{label}</div>
           {#each slots as slot, i}
-            {#if slot.a != null || slot.b != null}{@render koMatchCard(phase, i, slot)}{/if}
+            {#if koPending(phase, i, slot)}{@render koMatchCard(phase, i, slot)}{/if}
           {/each}
         {/if}
       {/snippet}
@@ -314,7 +327,7 @@
             <div class="me-legend"><span class="me-dot"></span> Tu apuesta</div>
           {/if}
 
-          {#if pendingGroups.length === 0 && koTree.rounds.r32.every((s) => s.a == null && s.b == null)}
+          {#if pendingGroups.length === 0 && !anyKoPending}
             <div class="empty">No hay nada pendiente por ahora.</div>
           {:else}
             <div class="match-list">
