@@ -5,6 +5,7 @@ import { getScoringRules } from '$lib/server/scoring.js';
 import { logAudit } from '$lib/server/audit.js';
 import { parseJsonBody } from '$lib/server/json-body.js';
 import { errCode } from '$lib/server/err-code.js';
+import { canManagePool } from '$lib/server/authz.js';
 
 const VALID_RULES = new Set([
   // match_outcome = points per correct 1/X/2 group result; group_position = bonus
@@ -26,7 +27,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const { rows: poolRows } = await query('SELECT created_by FROM pools WHERE id = $1', [poolId]);
     const pool = poolRows[0] ?? null;
     // §1.7 — Pool creator OR site admin can manage scoring rules.
-    if (!pool || (pool.created_by !== locals.user.id && !locals.user.is_admin)) {
+    if (!canManagePool(pool, locals.user)) {
       return json({ error: 'Prohibido' }, { status: 403 });
     }
 
@@ -59,7 +60,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   try {
     const { rows: poolRows } = await query('SELECT created_by FROM pools WHERE id = $1', [pool_id]);
     const pool = poolRows[0] ?? null;
-    if (!pool || pool.created_by !== locals.user.id) {
+    // §1.7 — Pool creator OR site admin can manage scoring rules (matches GET).
+    if (!canManagePool(pool, locals.user)) {
       return json({ error: 'Prohibido' }, { status: 403 });
     }
 

@@ -1,9 +1,9 @@
 import { errCode } from '$lib/server/err-code.js';
-import { verifyPwd, hashPwd } from '$lib/server/queries.js';
+import { verifyPwd, hashPwd, hashSessionToken } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { checkAuthRate } from '$lib/server/rate-limit.js';
-import { invalidateCachedSession } from '$lib/server/cache.js';
+import { invalidateCachedSessionByUserId } from '$lib/server/cache.js';
 
 export const POST: RequestHandler = async ({ request, locals, cookies }) => {
   if (!locals.user) return json({ error: 'Inicia sesión' }, { status: 401 });
@@ -32,18 +32,16 @@ export const POST: RequestHandler = async ({ request, locals, cookies }) => {
       return json({ error: 'Contraseña actual incorrecta' }, { status: 401 });
 
     await query('UPDATE users SET password_hash = $1 WHERE id = $2', [await hashPwd(new_password), locals.user.id]);
-    // §1.3 — Capture other sessions BEFORE deletion so we can clear their
-    // entries from the in-process session cache (otherwise a stolen cookie
-    // remains "valid" against the cache for up to 60s after this call).
-    const currentToken = cookies.get('session');
-    const { rows: otherTokens } = await query(
-      'SELECT token FROM sessions WHERE user_id = $1 AND token != $2',
-      [locals.user.id, currentToken]
-    );
-    await query('DELETE FROM sessions WHERE user_id = $1 AND token != $2', [locals.user.id, currentToken]);
-    for (const row of otherTokens) {
-      invalidateCachedSession(row.token);
-    }
+    // §1.3 — Revoke every OTHER session for this user, keeping the caller's.
+    // Session tokens are SHA-256 hashed at rest, so we compare the current
+    // cookie's hash against the stored hashes.
+    const currentTokenHash = hashSessionToken(cookies.get('session') ?? '');
+    await query('DELETE FROM sessions WHERE user_id = $1 AND token != $2', [locals.user.id, currentTokenHash]);
+    // Evict this user's cached sessions too (the cache is keyed by RAW token, so
+    // we can't target the now-deleted hashed rows individually). The caller's
+    // session simply re-populates from the DB on the next request; the revoked
+    // ones can't, closing the "stolen cookie rides the cache for 60s" window.
+    invalidateCachedSessionByUserId(locals.user.id);
     return json({ ok: true });
   } catch (e) {
     const code = errCode();

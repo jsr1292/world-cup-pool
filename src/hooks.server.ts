@@ -1,6 +1,5 @@
 import { redirect, type Handle } from '@sveltejs/kit';
-import { query } from '$lib/server/db.js';
-import { cleanSessions } from '$lib/server/queries.js';
+import { cleanSessions, getSessionUser } from '$lib/server/queries.js';
 import { getCachedSession, setCachedSession } from '$lib/server/cache.js';
 import { startSyncScheduler } from '$lib/server/sync-runner.js';
 import { startNotificationScheduler } from '$lib/server/notifications.js';
@@ -104,11 +103,9 @@ export const handle: Handle = async ({ event, resolve }) => {
     let user = getCachedSession(token);
     if (!user) {
       try {
-        const { rows } = await query(
-          "SELECT u.id, u.username, u.email, u.display_name, u.is_admin, u.created_at FROM users u JOIN sessions s ON s.user_id = u.id WHERE s.token = $1 AND s.expires_at > NOW()",
-          [token]
-        );
-        user = rows[0] as any ?? null;
+        // getSessionUser hashes the raw cookie token before the DB lookup.
+        // The in-process cache stays keyed by the raw token (never persisted).
+        user = await getSessionUser(token);
         if (user) setCachedSession(token, user);
       } catch (e) {
         console.error('[hooks] DB error during session lookup:', e);

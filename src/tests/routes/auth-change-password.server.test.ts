@@ -9,15 +9,23 @@ vi.mock('$lib/server/db.js', () => ({
 vi.mock('$lib/server/queries.js', () => ({
 	verifyPwd: vi.fn(),
 	hashPwd: vi.fn(),
+	// Deterministic stand-in for the SHA-256 helper so we can assert the DELETE
+	// compares against the HASHED current token, not the raw cookie value.
+	hashSessionToken: vi.fn((t: string) => `HASH(${t})`),
 }));
 
 vi.mock('$lib/server/rate-limit.js', () => ({
 	checkAuthRate: vi.fn().mockReturnValue(true),
 }));
 
+vi.mock('$lib/server/cache.js', () => ({
+	invalidateCachedSessionByUserId: vi.fn(),
+}));
+
 import { query } from '$lib/server/db.js';
 import { verifyPwd, hashPwd } from '$lib/server/queries.js';
 import { checkAuthRate } from '$lib/server/rate-limit.js';
+import { invalidateCachedSessionByUserId } from '$lib/server/cache.js';
 
 // --- Helpers ---
 const mockRequest = (body: any) => ({ json: vi.fn().mockResolvedValue(body) });
@@ -66,14 +74,19 @@ describe('POST /api/auth/change-password', () => {
 		expect(body.ok).toBe(true);
 		expect(verifyPwd).toHaveBeenCalledWith('oldPass', 'salt:hash');
 		expect(hashPwd).toHaveBeenCalledWith('newPass123');
-		// §1.3 — 4 calls now: SELECT hash, UPDATE hash, SELECT other tokens, DELETE sessions
-		expect(query).toHaveBeenCalledTimes(4);
+		// §1.3 — 3 calls now: SELECT password_hash, UPDATE hash, DELETE other sessions.
+		// The otherTokens SELECT is gone: tokens are hashed at rest, so we can no
+		// longer recover raw tokens to invalidate cache entries individually.
+		expect(query).toHaveBeenCalledTimes(3);
 		expect(query).toHaveBeenCalledWith('UPDATE users SET password_hash = $1 WHERE id = $2', ['newhash', 5]);
+		// DELETE must exclude the caller's session by its HASH — comparing against
+		// the raw token would fail to match the stored hash and delete it too.
 		expect(query).toHaveBeenCalledWith(
-			'SELECT token FROM sessions WHERE user_id = $1 AND token != $2',
-			[5, 'current-session-token']
+			'DELETE FROM sessions WHERE user_id = $1 AND token != $2',
+			[5, 'HASH(current-session-token)']
 		);
-		expect(query).toHaveBeenCalledWith('DELETE FROM sessions WHERE user_id = $1 AND token != $2', [5, 'current-session-token']);
+		// The caller's cached sessions are evicted by user id.
+		expect(invalidateCachedSessionByUserId).toHaveBeenCalledWith(5);
 	});
 
 	// 3. Wrong current password

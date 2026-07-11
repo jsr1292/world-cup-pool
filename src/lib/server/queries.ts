@@ -38,6 +38,16 @@ export function generateToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+/**
+ * SHA-256 the raw session token before it touches the DB. The raw token only
+ * ever lives in the user's cookie; the DB stores the hash. Mirrors the
+ * password-reset / email-verification token handling (hashResetToken) so a
+ * read-only DB leak can't be replayed as a live session cookie.
+ */
+export function hashSessionToken(raw: string): string {
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
 // User CRUD
 
 /** Normalize an email for storage/lookup (trim + lowercase). */
@@ -401,12 +411,26 @@ export async function getScoringConfig(poolId: number) {
 export async function createSession(userId: number): Promise<string> {
   const token = generateToken();
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
-  await query('INSERT INTO sessions (user_id, token, expires_at) VALUES ($1, $2, $3)', [userId, token, expires]);
+  // Store the hash; hand the raw token back for the cookie.
+  await query('INSERT INTO sessions (user_id, token, expires_at) VALUES ($1, $2, $3)', [userId, hashSessionToken(token), expires]);
   return token;
 }
 
+/**
+ * Resolve the authenticated user for a raw session-cookie token, or null.
+ * Hashes the token and matches an unexpired session. The `token` column now
+ * holds SHA-256 hashes.
+ */
+export async function getSessionUser(token: string): Promise<User | null> {
+  const { rows } = await query(
+    'SELECT u.id, u.username, u.email, u.display_name, u.is_admin, u.created_at FROM users u JOIN sessions s ON s.user_id = u.id WHERE s.token = $1 AND s.expires_at > NOW()',
+    [hashSessionToken(token)]
+  );
+  return (rows[0] as User) ?? null;
+}
+
 export async function deleteSession(token: string) {
-  await query('DELETE FROM sessions WHERE token = $1', [token]);
+  await query('DELETE FROM sessions WHERE token = $1', [hashSessionToken(token)]);
   invalidateCachedSession(token);
 }
 
