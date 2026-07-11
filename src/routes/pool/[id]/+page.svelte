@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { headerTitle } from '$lib/stores/header';
   import { haptic } from '$lib/haptic';
   import { flagEmoji, shortName } from '$lib/teams.js';
   import { liveMatchIds } from '$lib/live.js';
@@ -165,11 +164,6 @@
     return out;
   });
   const anyPrize = $derived(leaderboardPrizes.some((p) => p > 0));
-
-  $effect(() => {
-    headerTitle.set({ text: pool.name, emoji: pool.emoji || '🏆', showBack: false, poolName: pool.name, poolEmoji: pool.emoji || '🏆' });
-    return () => { headerTitle.set({ text: 'Mundial 2026', emoji: '🏆', showBack: false, poolName: null, poolEmoji: null }); };
-  });
 
   const phaseOrder = ['r32', 'r16', 'qf', 'sf', '3rd', 'final'];
 

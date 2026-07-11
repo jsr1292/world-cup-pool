@@ -2,7 +2,6 @@
   import { untrack } from 'svelte';
   import { showToast } from '$lib/toast';
   import { haptic } from '$lib/haptic';
-  import { headerTitle } from '$lib/stores/header';
   import { flagEmoji, shortName } from '$lib/teams.js';
   import { goto } from '$app/navigation';
   import {
@@ -10,11 +9,6 @@
     SF_LABELS, FINAL_LABEL, THIRD_LABEL, THIRD_GROUP_MAP,
   } from '$lib/bracket-2026.js';
   let { data } = $props();
-
-  $effect(() => {
-    headerTitle.set({ text: 'Mi Quiniela', emoji: '⚔️', showBack: true, poolName: data.pool?.name, poolEmoji: data.pool?.emoji || '⚔️' });
-    return () => { headerTitle.set({ text: 'Mundial 2026', emoji: '🏆', showBack: false, poolName: null, poolEmoji: null }); };
-  });
 
   // Bracket constants (WILDCARD, R32_MAP, R32_TO_R16, labels, THIRD_GROUP_MAP)
   // live in $lib/bracket-2026.ts — the single source of truth, locked by
