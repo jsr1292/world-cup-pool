@@ -855,7 +855,7 @@
     {:else if !simData}
       <p style="font-size: 12px; color: var(--text-muted); padding: 24px; text-align: center;">Cargando simulador…</p>
     {:else}
-      <Simulator data={simData} />
+      <div class="sim-breakout"><Simulator data={simData} /></div>
     {/if}
   {/if}
 
@@ -1405,6 +1405,10 @@
   .tab-content-wrapper {
     transition: transform 0.2s ease-out, opacity 0.2s ease-out;
   }
+  /* The Simulador tab breaks out of the 860px page cap to use the full width on
+     web (its own content re-centers at 1400px). Phones stay within the page. */
+  .sim-breakout { width: 100vw; margin-left: calc(50% - 50vw); padding: 0 16px; box-sizing: border-box; }
+  @media (max-width: 900px) { .sim-breakout { width: auto; margin-left: 0; padding: 0; } }
   .slide-left {
     animation: slideFromRight 0.2s ease-out;
   }

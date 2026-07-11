@@ -27,16 +27,8 @@
     if (!ts) return 'Fecha por confirmar';
     return new Date(ts).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
   }
-  const unplayedByDate = $derived.by((): [string, any[]][] => {
-    const out: [string, any[]][] = [];
-    let cur: [string, any[]] | null = null;
-    for (const m of unplayed) {
-      const label = fmtDate(m.kickoff_time);
-      if (!cur || cur[0] !== label) { cur = [label, []]; out.push(cur); }
-      cur[1].push(m);
-    }
-    return out;
-  });
+  // Pending group matches (all of data.matches are group-phase), in kickoff order.
+  const pendingGroups = $derived((unplayed as any[]).filter((m) => m.group_name));
 
   const realByGroup = $derived.by(() => {
     const out: Record<string, GsMatch[]> = {};
@@ -130,6 +122,7 @@
     baseRankById,
   });
   const leaderboard = $derived(computeUnifiedProjection(unifiedEntries, koTree, koRules, projCtx));
+  const moverCount = $derived(leaderboard.filter((e) => e.move !== 0).length);
   let onlyChanges = $state(false);
   const visibleLeaderboard = $derived(onlyChanges ? leaderboard.filter((e) => e.move !== 0 || e.total !== e.live) : leaderboard);
 
@@ -142,12 +135,12 @@
     const k = koKey(phase, index);
     if (koChoice[k] === teamId) { const { [k]: _d, ...rest } = koChoice; koChoice = rest; } else koChoice = { ...koChoice, [k]: teamId };
   }
-  function resetAll() { sim = {}; koChoice = {}; }
+  function resetAll() { sim = {}; koChoice = {}; forecastId = null; }
 
   let forecastId = $state<number | null>(null);
   function applyForecast(predId: number | null) {
     forecastId = predId;
-    if (predId == null) { resetAll(); return; }
+    if (predId == null) { sim = {}; koChoice = {}; return; }
     const be = ((data.bracketEntries as any[]) ?? []).find((e) => e.id === predId);
     if (!be) return;
     // 1) group stage from their 1/X/2
@@ -187,6 +180,18 @@
   function myPick(mid: number): string | null { return myPrimaryId != null ? (data.picks[myPrimaryId]?.[mid] ?? null) : null; }
   const myRow = $derived(myPrimaryId != null ? leaderboard.find((e) => e.id === myPrimaryId) : null);
 
+  // Your own bracket picks, so a pending KO tie can show a gold dot on the team
+  // you backed (parallel to the group "tu apuesta" dot from myPick).
+  const myKoByPhaseTeam = $derived.by(() => {
+    const be = ((data.bracketEntries as any[]) ?? []).find((e) => e.id === myPrimaryId);
+    return new Set(((be?.picks ?? []) as any[]).filter((p) => p.teamId != null).map((p) => p.phase + ':' + p.teamId));
+  });
+  function myKoDot(phase: string, a: number | null, b: number | null): number | null {
+    if (a != null && myKoByPhaseTeam.has(phase + ':' + a)) return a;
+    if (b != null && myKoByPhaseTeam.has(phase + ':' + b)) return b;
+    return null;
+  }
+
   // ── Knockout win/podium probabilities (computed server-side) ────────────────
   const oddsRows = $derived((data.odds as any[]) ?? []);
   const oddsMeta = $derived(data.oddsMeta as any);
@@ -199,29 +204,29 @@
   }
 </script>
 
-<div style="max-width: 900px; margin: 0 auto;">
+<div class="sim-page">
   {#if standalone}
-    <a href="/pool/{data.pool.id}" style="font-size: 10px; color: var(--text-muted); display: inline-flex; gap: 4px; margin-bottom: 12px;">← {data.pool.name}</a>
+    <a href="/pool/{data.pool.id}" class="back-link">← {data.pool.name}</a>
   {/if}
-  <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold); margin-bottom: 4px;">🎲 Simulador</h1>
+  <h1 class="sim-title">🎲 Simulador</h1>
 
   {#if !data.betsLocked}
-    <div style="margin-top: 16px; padding: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; text-align: center;">
+    <div class="locked">
       <div style="font-size: 28px; margin-bottom: 8px;">🔒</div>
-      <p style="font-size: 12px; color: var(--text-muted);">Disponible cuando se cierren las apuestas.</p>
+      <p style="font-size: 12px; color: var(--text-muted); margin: 0;">Disponible cuando se cierren las apuestas.</p>
     </div>
   {:else}
     {#if koMatches.length > 0}
-      <div style="display:flex; gap:6px; margin:6px 0 14px;">
-        <button onclick={() => (tab = 'sim')} style="flex:1; font-size:10px; font-weight:600; padding:7px; border-radius:7px; cursor:pointer; border:1px solid {tab==='sim'?'var(--gold)':'var(--border)'}; background:{tab==='sim'?'rgba(201,168,76,0.12)':'var(--bg-card)'}; color:{tab==='sim'?'var(--gold)':'var(--text-muted)'};">🎯 Simulador</button>
-        <button onclick={() => (tab = 'odds')} style="flex:1; font-size:10px; font-weight:600; padding:7px; border-radius:7px; cursor:pointer; border:1px solid {tab==='odds'?'var(--gold)':'var(--border)'}; background:{tab==='odds'?'rgba(201,168,76,0.12)':'var(--bg-card)'}; color:{tab==='odds'?'var(--gold)':'var(--text-muted)'};">🔮 Probabilidades</button>
+      <div class="subtabs">
+        <button class="subtab" class:on={tab === 'sim'} onclick={() => (tab = 'sim')}>🎯 Simulador</button>
+        <button class="subtab" class:on={tab === 'odds'} onclick={() => (tab = 'odds')}>🔮 Probabilidades</button>
       </div>
     {/if}
 
     {#if tab === 'odds'}
       {#if oddsRows.length > 0}
-      <!-- Knockout win / podium probabilities -->
-      <div style="margin: 0 0 20px;">
+      <!-- Knockout win / podium probabilities (unchanged) -->
+      <div style="margin: 0 0 20px; max-width: 620px;">
         <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 2px;">
           <h2 style="font-size: 13px; font-weight: 700; color: var(--text); margin: 0;">🔮 ¿Quién puede ganar?</h2>
           {#if oddsMeta}<span style="font-size: 8px; color: var(--text-dim);">{oddsMeta.remaining} partido{oddsMeta.remaining === 1 ? '' : 's'} · {oddsMeta.scenarios.toLocaleString('es-ES')} escenarios{#if !oddsMeta.exact} (muestra){/if}</span>{/if}
@@ -253,115 +258,149 @@
         <p style="font-size: 12px; color: var(--text-muted); margin-top: 16px;">Todavía no hay probabilidades que mostrar.</p>
       {/if}
     {:else}
-      <p style="font-size: 10px; color: var(--text-muted); margin: 4px 0 12px; line-height: 1.5;">
+      <div class="banner">
         Decide los partidos que faltan —grupos (1/X/2) y eliminatorias— y mira cómo cambiaría la clasificación del bote.
-        {#if data.groupPositionPts > 0}Si completas <strong>todos</strong> los partidos de un grupo, también se suman los puntos por la tabla final.{/if}
-      </p>
+        {#if data.groupPositionPts > 0} Si completas <strong>todos</strong> los partidos de un grupo, también se suman los puntos por la tabla final.{/if}
+      </div>
 
-      {#snippet koMatch(phase: Phase, index: number, slot: any)}
+      <!-- one pending knockout tie, porra-style 2-button card -->
+      {#snippet koMatchCard(phase: Phase, index: number, slot: any)}
         {@const m = koByPhase[phase]?.[index]}
         {@const fin = m?.finished ?? false}
         {@const w = slot.winner}
-        <div style="display: flex; align-items: stretch; gap: 4px; margin-bottom: 4px;">
-          {#each [slot.a, slot.b] as tid}
-            {@const isW = w != null && w === tid}
-            <button onclick={() => setKoWinner(phase, index, tid)} disabled={fin || tid == null}
-              style="flex: 1; min-width: 0; text-align: left; font-size: 10px; padding: 6px 8px; border-radius: 6px; cursor: {fin || tid == null ? 'default' : 'pointer'}; border: 1px solid {isW ? 'var(--gold)' : 'var(--border)'}; background: {isW ? 'rgba(201,168,76,0.16)' : 'var(--bg-surface)'}; color: {tid == null ? 'var(--text-dim)' : isW ? 'var(--gold)' : 'var(--text)'}; font-weight: {isW ? '700' : '400'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-              {#if tid != null}{@html tFlag(tid)} {tName(tid)}{#if isW} ✓{/if}{:else}—{/if}
-            </button>
-          {/each}
+        {@const dot = myKoDot(phase, slot.a, slot.b)}
+        <div class="sim-match">
+          <div class="ko">
+            {#each [slot.a, slot.b] as tid}
+              <button class="ko-btn" class:on={w != null && w === tid} class:me-pred={dot != null && dot === tid}
+                disabled={fin || tid == null} onclick={() => setKoWinner(phase, index, tid)}>
+                {#if tid != null}{@html tFlag(tid)} <span class="seg-name">{tName(tid)}</span>{:else}<span class="seg-name" style="color:var(--text-dim);">—</span>{/if}
+              </button>
+            {/each}
+          </div>
         </div>
       {/snippet}
 
+      <!-- a knockout round: label (spans the grid) + its revealed ties -->
       {#snippet koRound(label: string, phase: Phase, slots: any[])}
         {@const live = slots.filter((s) => s.a != null || s.b != null)}
         {#if live.length > 0}
-          <div style="font-size:9px; color:var(--gold); text-transform:uppercase; letter-spacing:0.08em; margin:12px 0 5px;">{label}</div>
+          <div class="round-label">{label}</div>
           {#each slots as slot, i}
-            {#if slot.a != null || slot.b != null}{@render koMatch(phase, i, slot)}{/if}
+            {#if slot.a != null || slot.b != null}{@render koMatchCard(phase, i, slot)}{/if}
           {/each}
         {/if}
       {/snippet}
 
-      <div class="sim-grid">
-        <!-- LEFT: Pendientes -->
-        <div class="sim-col">
-          <select onchange={(e) => applyForecast(e.currentTarget.value ? Number(e.currentTarget.value) : null)} style="width:100%; font-size:11px; padding:6px 8px; border-radius:6px; background:var(--bg-card); border:1px solid var(--border); color:var(--text); margin-bottom:10px;">
-            <option value="">Pronóstico de… (elige un participante)</option>
+      <div class="layout">
+        <!-- ── Pendientes ─────────────────────────────────────────────────── -->
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Pendientes</h2>
+            <div class="panel-actions">
+              <span class="sim-count" class:active={decidedCount > 0}>{decidedCount} fijado{decidedCount === 1 ? '' : 's'}</span>
+              {#if decidedCount > 0}<button class="pill" onclick={resetAll}>Reiniciar</button>{/if}
+            </div>
+          </div>
+
+          <select class="forecast-select" onchange={(e) => applyForecast(e.currentTarget.value ? Number(e.currentTarget.value) : null)}>
+            <option value="">Pronóstico de… (rellena con las apuestas de un participante)</option>
             {#each (data.bracketEntries as any[]) ?? [] as be}
               <option value={be.id} selected={forecastId === be.id}>{be.name}{be.label ? ' · ' + be.label : ''}</option>
             {/each}
           </select>
 
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-            <h2 style="font-size:12px; font-weight:700; color:var(--text); margin:0;">Pendientes</h2>
-            <span style="font-size:9px; color:var(--text-dim);">{decidedCount} decidido{decidedCount===1?'':'s'}{#if decidedCount>0} · <button onclick={resetAll} style="background:none; border:none; color:var(--gold); font-size:9px; cursor:pointer; padding:0; text-decoration:underline;">limpiar</button>{/if}</span>
-          </div>
+          {#if myPrimaryId != null}
+            <div class="me-legend"><span class="me-dot"></span> Tu apuesta</div>
+          {/if}
 
-          <!-- (a) pending GROUP matches by date (1/X/2 controls) -->
-          {#each unplayedByDate as [dateLabel, ms]}
-            <div style="font-size: 9px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 5px;">{dateLabel}</div>
-            <div style="display: flex; flex-direction: column; gap: 5px;">
-              {#each ms as m}
-                {@const mp = myPick(m.id)}
-                <div style="background: var(--bg-surface); border: 1px solid {sim[m.id] ? 'rgba(201,168,76,0.3)' : 'var(--border)'}; border-radius: 7px; padding: 7px 9px;">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 8px; color: var(--text-dim); width: 12px; flex-shrink: 0;">{m.group_name}</span>
-                    <span style="flex: 1; min-width: 0; text-align: right; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; {sim[m.id] === '1' ? 'font-weight: 700; color: var(--text);' : 'color: var(--text-muted);'}">{tName(m.home_team_id)} {@html tFlag(m.home_team_id)}</span>
-                    <div style="display: flex; gap: 3px; flex-shrink: 0;">
-                      {#each ['1', 'X', '2'] as code}
-                        <button onclick={() => setPick(m.id, code as '1' | 'X' | '2')} style="width: 24px; height: 24px; border-radius: 5px; font-size: 11px; font-weight: 700; cursor: pointer; border: 1px solid {sim[m.id] === code ? 'var(--gold)' : mp === code ? 'rgba(201,168,76,0.45)' : 'var(--border)'}; background: {sim[m.id] === code ? 'var(--gold)' : 'var(--bg-card)'}; color: {sim[m.id] === code ? '#1a1a2e' : 'var(--text-muted)'};">{code}</button>
-                      {/each}
+          {#if pendingGroups.length === 0 && koTree.rounds.r32.every((s) => s.a == null && s.b == null)}
+            <div class="empty">No hay nada pendiente por ahora.</div>
+          {:else}
+            <div class="match-list">
+              {#if pendingGroups.length > 0}
+                <div class="round-label">Fase de grupos</div>
+                {#each pendingGroups as m (m.id)}
+                  {@const mp = myPick(m.id)}
+                  <div class="sim-match">
+                    <div class="sim-meta">
+                      <span class="sim-phase">Grupo {m.group_name}</span>
+                      <span class="sim-time">{fmtDate(m.kickoff_time)}</span>
                     </div>
-                    <span style="flex: 1; min-width: 0; text-align: left; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; {sim[m.id] === '2' ? 'font-weight: 700; color: var(--text);' : 'color: var(--text-muted);'}">{@html tFlag(m.away_team_id)} {tName(m.away_team_id)}</span>
+                    <div class="seg">
+                      <button class="seg-btn left" class:on={sim[m.id] === '1'} class:me-pred={mp === '1'} onclick={() => setPick(m.id, '1')}>
+                        {@html tFlag(m.home_team_id)} <span class="seg-name">{tName(m.home_team_id)}</span>
+                      </button>
+                      <button class="seg-btn mid" class:on={sim[m.id] === 'X'} class:me-pred={mp === 'X'} onclick={() => setPick(m.id, 'X')}>X</button>
+                      <button class="seg-btn right" class:on={sim[m.id] === '2'} class:me-pred={mp === '2'} onclick={() => setPick(m.id, '2')}>
+                        <span class="seg-name">{tName(m.away_team_id)}</span> {@html tFlag(m.away_team_id)}
+                      </button>
+                    </div>
                   </div>
-                  {#if mp}
-                    <div style="margin-top: 6px; padding-top: 5px; border-top: 1px dashed var(--border); text-align: center; font-size: 8px; color: var(--text-dim);">
-                      tu apuesta: <strong style="color: {sim[m.id] === mp ? 'var(--green)' : 'var(--gold)'};">{mp}</strong>{#if sim[m.id] === mp} · +{data.matchOutcomePts} pt{/if}
-                    </div>
-                  {/if}
-                </div>
-              {/each}
+                {/each}
+              {/if}
+
+              {@render koRound('Dieciseisavos', 'r32', koTree.rounds.r32)}
+              {@render koRound('Octavos', 'r16', koTree.rounds.r16)}
+              {@render koRound('Cuartos', 'qf', koTree.rounds.qf)}
+              {@render koRound('Semifinales', 'sf', koTree.rounds.sf)}
+              {@render koRound('Final', 'final', [koTree.rounds.final])}
+              {@render koRound('3.er puesto', '3rd', [koTree.rounds.third])}
             </div>
-          {/each}
+          {/if}
+        </section>
 
-          <!-- (b) KO rounds, revealed progressively as participants become known -->
-          {@render koRound('Dieciseisavos', 'r32', koTree.rounds.r32)}
-          {@render koRound('Octavos', 'r16', koTree.rounds.r16)}
-          {@render koRound('Cuartos', 'qf', koTree.rounds.qf)}
-          {@render koRound('Semifinales', 'sf', koTree.rounds.sf)}
-          {@render koRound('Final', 'final', [koTree.rounds.final])}
-          {@render koRound('3.er puesto', '3rd', [koTree.rounds.third])}
-        </div>
-
-        <!-- RIGHT: projected leaderboard -->
-        <div class="sim-col">
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-            <h2 style="font-size:12px; font-weight:700; color:var(--text); margin:0;">Clasificación proyectada</h2>
-            <button onclick={() => (onlyChanges = !onlyChanges)} style="background:none; border:1px solid {onlyChanges?'var(--gold)':'var(--border)'}; color:{onlyChanges?'var(--gold)':'var(--text-muted)'}; font-size:9px; border-radius:5px; padding:2px 6px; cursor:pointer;">Solo cambios</button>
+        <!-- ── Clasificación proyectada ───────────────────────────────────── -->
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Clasificación proyectada</h2>
+            <div class="panel-actions">
+              <button class="pill" class:on={onlyChanges} onclick={() => (onlyChanges = !onlyChanges)}>🧭 Solo cambios</button>
+              <span class="muted">{onlyChanges && decidedCount > 0 ? `${visibleLeaderboard.length} con cambios` : `${leaderboard.length} participantes`}</span>
+            </div>
           </div>
-          <div style="display:flex; flex-direction:column; gap:3px;">
+
+          <div class="board">
+            {#if visibleLeaderboard.length === 0}
+              <div class="empty">Nadie cambia de puesto con esta simulación.</div>
+            {/if}
             {#each visibleLeaderboard as e (e.id)}
               {@const mine = myIds.has(e.id)}
-              <div style="display:flex; align-items:center; gap:8px; padding:6px 9px; border-radius:6px; background:{mine?'rgba(201,168,76,0.1)':'var(--bg-card)'}; border:1px solid {mine?'var(--gold)':'var(--border)'};">
-                <span style="width:18px; font-size:11px; font-weight:700; color:{e.rank===1?'var(--gold)':'var(--text-muted)'};">{e.rank}</span>
-                {#if e.move!==0}<span style="font-size:9px; font-weight:700; color:{e.move>0?'var(--green)':'var(--red)'};">{e.move>0?'▲':'▼'}{Math.abs(e.move)}</span>{:else}<span style="width:12px;"></span>{/if}
-                <span style="flex:1; min-width:0; font-size:11px; font-weight:{mine?'700':'500'}; color:{mine?'var(--gold)':'var(--text)'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{e.name}{#if data.pool.allow_multiple_predictions && e.label} · {e.label}{:else if e.label} ({e.label}){/if}</span>
-                <span style="flex-shrink:0; text-align:right;">
-                  <span style="font-size:13px; font-weight:700; color:var(--gold);">{e.total}</span>
-                  {#if e.total!==e.live}<span style="font-size:9px; color:{e.total>e.live?'var(--green)':'var(--red)'}; margin-left:3px;">{e.total>e.live?'+':''}{e.total-e.live}</span>{/if}
-                </span>
+              {@const medal = e.rank === 1 ? 'gold' : e.rank === 2 ? 'silver' : e.rank === 3 ? 'bronze' : ''}
+              {@const d = e.total - e.live}
+              <div class="row" class:me={mine} class:mover={e.move !== 0} class:medal-gold={e.rank === 1}>
+                <div class="avatar {medal}">{e.name?.[0]?.toUpperCase() ?? '?'}</div>
+                <div class="row-main">
+                  <div class="row-name">{e.rank}. {e.name}{#if data.pool.allow_multiple_predictions && e.label}<span class="row-ini"> · {e.label}</span>{:else if e.label}<span class="row-ini"> ({e.label})</span>{/if}</div>
+                  <div class="row-delta">
+                    {#if e.move > 0}<span class="delta up">▲{e.move}</span>
+                    {:else if e.move < 0}<span class="delta down">▼{Math.abs(e.move)}</span>
+                    {:else}<span class="delta flat">=</span>{/if}
+                    {#if d !== 0}<span class="pts-delta {d > 0 ? 'up' : 'down'}">{d > 0 ? '+' : ''}{d} pts</span>{/if}
+                  </div>
+                </div>
+                <div class="row-right">
+                  <div class="row-total">{e.total}</div>
+                  <div class="row-pts">pts</div>
+                </div>
               </div>
             {/each}
           </div>
-        </div>
+        </section>
       </div>
 
+      <!-- Phone: fixed impact bar above the tab bar -->
       {#if myRow && decidedCount > 0}
         <div class="impact-bar">
-          <span>Vas <strong style="color:var(--gold);">{myRow.rank}.º</strong></span>
-          <span style="color:{myRow.move>0?'var(--green)':myRow.move<0?'var(--red)':'var(--text-muted)'};">{myRow.move>0?`▲ subes ${myRow.move}`:myRow.move<0?`▼ bajas ${Math.abs(myRow.move)}`:'sin cambios'}</span>
-          <span style="color:var(--gold); font-weight:700;">{myRow.total}{#if myRow.total!==myRow.live} ({myRow.total>myRow.live?'+':''}{myRow.total-myRow.live}){/if}</span>
+          <span class="im-block">
+            <span class="im-label">Tú</span>
+            <span class="im-rank">{myRow.rank}º</span>
+            {#if myRow.move > 0}<span class="im-d up">▲{myRow.move}</span>
+            {:else if myRow.move < 0}<span class="im-d down">▼{Math.abs(myRow.move)}</span>{/if}
+            {#if myRow.total !== myRow.live}<span class="im-pts {myRow.total > myRow.live ? 'up' : 'down'}">{myRow.total > myRow.live ? '+' : ''}{myRow.total - myRow.live}</span>{/if}
+          </span>
+          <span class="im-movers">{moverCount} {moverCount === 1 ? 'se mueve' : 'se mueven'}</span>
+          <span class="im-cta">📊 Ver tabla</span>
         </div>
       {/if}
     {/if}
@@ -369,13 +408,120 @@
 </div>
 
 <style>
-  .sim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
-  .sim-col { min-width: 0; }
+  .sim-page { max-width: 1400px; margin: 0 auto; padding: 0 4px; }
+  .back-link { font-size: 10px; color: var(--text-muted); display: inline-flex; gap: 4px; margin-bottom: 12px; }
+  .sim-title { font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold); margin: 0 0 12px; }
+
+  .locked { margin-top: 16px; padding: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; text-align: center; }
+
+  /* WCP sub-menu (kept) */
+  .subtabs { display: flex; gap: 6px; margin: 6px 0 14px; max-width: 460px; }
+  .subtab { flex: 1; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 7px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-muted); }
+  .subtab.on { border-color: var(--gold); background: rgba(201,168,76,0.12); color: var(--gold); }
+
+  .banner { font-size: 11px; color: var(--text-muted); background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.18); border-radius: 8px; padding: 8px 12px; margin-bottom: 18px; line-height: 1.5; }
+
+  /* Web uses the width: Pendientes gets the wider track, the board sits beside it. */
+  .layout { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; gap: 12px; } }
+
+  .panel { min-width: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .panel-head h2 { font-size: 15px; font-weight: 800; color: var(--gold); margin: 0; }
+  .panel-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .muted { font-size: 11px; color: var(--text-muted); }
+  .sim-count { font-size: 11px; color: var(--text-muted); }
+  .sim-count.active { color: var(--gold); font-weight: 600; }
+  .empty { text-align: center; padding: 24px 12px; font-size: 12px; color: var(--text-muted); }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; color: var(--text-dim); background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+  .pill.on { color: var(--gold); background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.4); }
+
+  .forecast-select { width: 100%; font-size: 11px; padding: 7px 9px; border-radius: 7px; background: var(--bg-card-solid); border: 1px solid var(--border); color: var(--text); margin-bottom: 10px; cursor: pointer; }
+
+  .me-legend { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-muted); margin-bottom: 10px; }
+  .me-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); display: inline-block; }
+
+  /* Multi-column on web; single column on phones. Round labels span the grid. */
+  .match-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+  @media (max-width: 520px) { .match-list { grid-template-columns: 1fr; } }
+  .round-label { grid-column: 1 / -1; font-size: 9px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin: 8px 0 2px; }
+  .round-label:first-child { margin-top: 0; }
+
+  .sim-match { background: var(--bg-card-solid); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  .sim-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .sim-phase { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+  .sim-time { font-size: 10px; color: var(--text-dim); }
+
+  /* 3-way segmented control [home | X | away] */
+  .seg { display: grid; grid-template-columns: 1fr auto 1fr; gap: 4px; }
+  .seg-btn, .ko-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    font-size: 12px; color: var(--text-muted);
+    background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 8px; cursor: pointer; min-width: 0;
+    transition: border-color 0.12s, background 0.12s, color 0.12s;
+  }
+  .seg-btn.left { justify-content: flex-end; }
+  .seg-btn.right { justify-content: flex-start; }
+  .seg-btn.mid { font-weight: 700; padding-left: 12px; padding-right: 12px; }
+  .seg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seg-btn :global(img), .ko-btn :global(img) { flex-shrink: 0; }
+  .seg-btn:not(:disabled):hover, .ko-btn:not(:disabled):hover { border-color: var(--border-hover); color: var(--text); }
+  .seg-btn.on, .ko-btn.on {
+    color: var(--gold); font-weight: 700;
+    background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.5);
+    box-shadow: inset 0 0 0 1px rgba(201,168,76,0.3);
+  }
+  .ko-btn:disabled { cursor: default; }
+  .ko { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  /* the member's own pick: a gold dot in the option's corner */
+  .seg-btn.me-pred, .ko-btn.me-pred { position: relative; }
+  .seg-btn.me-pred::after, .ko-btn.me-pred::after {
+    content: ''; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 2px var(--bg-card-solid);
+  }
+
+  /* ── projected board ─────────────────────────────────────────────────── */
+  .board { display: flex; flex-direction: column; gap: 6px; }
+  .row { display: flex; align-items: center; gap: 10px; background: var(--bg-card-solid); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; }
+  .row.medal-gold { border-color: rgba(201,168,76,0.2); box-shadow: 0 0 16px rgba(201,168,76,0.08); }
+  .row.mover { border-color: rgba(201,168,76,0.32); }
+  .row.me { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 14px rgba(201,168,76,0.22); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; background: rgba(255,255,255,0.06); color: var(--text-dim); }
+  .avatar.gold { background: linear-gradient(135deg, #c9a84c, #e8c96a); color: #1a1a2e; }
+  .avatar.silver { background: linear-gradient(135deg, #a0a0a0, #c0c0c0); color: #1a1a2e; }
+  .avatar.bronze { background: linear-gradient(135deg, #b87333, #cd7f32); color: #1a1a2e; }
+  .row-main { flex: 1; min-width: 0; }
+  .row-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-ini { color: var(--text-muted); font-weight: 400; }
+  .row-delta { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  .delta { font-size: 11px; font-weight: 700; }
+  .delta.up { color: var(--green); } .delta.down { color: var(--red); } .delta.flat { color: var(--text-dim); }
+  .pts-delta { font-size: 10px; font-weight: 600; }
+  .pts-delta.up { color: var(--green); } .pts-delta.down { color: var(--red); }
+  .row-right { text-align: right; flex-shrink: 0; }
+  .row-total { font-size: 17px; font-weight: 800; color: var(--gold); line-height: 1; font-variant-numeric: tabular-nums; }
+  .row-pts { font-size: 9px; color: var(--text-muted); }
+
+  /* ── phone impact bar (fixed, mobile only) ───────────────────────────── */
   .impact-bar { display: none; }
-  @media (max-width: 720px) {
-    .impact-bar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; gap: 12px; justify-content: space-around; align-items: center; padding: 8px 12px; font-size: 11px; background: var(--bg-card); border-top: 1px solid var(--gold); }
+  @media (max-width: 900px) {
+    .impact-bar {
+      display: flex; align-items: center; gap: 10px;
+      position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 95;
+      padding: 9px 14px; background: var(--bg-card-solid);
+      border: 1px solid rgba(201,168,76,0.4); border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
   }
-  @media (max-width: 720px) {
-    .sim-grid { grid-template-columns: 1fr; gap: 10px; }
-  }
+  .im-block { display: inline-flex; align-items: baseline; gap: 5px; }
+  .im-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
+  .im-rank { font-size: 16px; font-weight: 800; color: var(--gold); }
+  .im-d { font-size: 11px; font-weight: 700; }
+  .im-d.up, .im-pts.up { color: var(--green); }
+  .im-d.down, .im-pts.down { color: var(--red); }
+  .im-pts { font-size: 11px; font-weight: 700; }
+  .im-movers { flex: 1; text-align: center; font-size: 11px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+  .im-cta { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: 11px; font-weight: 700; color: #1a1a2e; background: linear-gradient(135deg, #e8c96a, #c9a84c); border-radius: 999px; padding: 4px 11px; }
 </style>
