@@ -17,7 +17,7 @@
 
   {#if data.pools == null}
     <!-- Skeleton while loading -->
-    <div style="display: grid; gap: 8px;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px;">
       {#each [1,2,3] as _}
         <div style="display: block; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -45,7 +45,7 @@
       </div>
     </div>
   {:else}
-    <div style="display: grid; gap: 8px;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px;">
       {#each data.pools as pool}
         <a href="/pool/{pool.id}" style="display: block; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-decoration: none; transition: border-color 0.15s;">
           <div style="display: flex; justify-content: space-between; align-items: center;">

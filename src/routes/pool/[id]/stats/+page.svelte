@@ -41,7 +41,7 @@
 
 <svelte:head><title>Estadísticas · {data.pool.name}</title></svelte:head>
 
-<div style="max-width: 560px; margin: 0 auto; padding: 16px;">
+<div style="max-width: 1000px; margin: 0 auto;">
   <a href="/pool/{data.pool.id}" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 12px;">← {data.pool.name}</a>
   <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold); margin-bottom: 4px;">📊 Estadísticas</h1>
 
@@ -98,6 +98,8 @@
     {/snippet}
 
     <!-- Champions -->
+    <!-- Champions + Finalists: side-by-side on desktop -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 20px; align-items: start;">
     <section style="margin-bottom: 26px;">
       <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">🏆 Campeón más votado</h2>
       {#if data.champions.length > 0}
@@ -117,13 +119,14 @@
         <p style="font-size: 11px; color: var(--text-muted);">Sin finalistas elegidos todavía.</p>
       {/if}
     </section>
+    </div>
 
     <!-- Most divisive matches -->
     {#if data.divisive.length > 0}
       <section style="margin-bottom: 26px;">
         <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px;">🔥 Partidos más reñidos</h2>
         <p style="font-size: 9px; color: var(--text-dim); margin-bottom: 10px;">Donde el grupo está más dividido (1 = gana local · X = empate · 2 = gana visitante).</p>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; align-items: start;">
           {#each data.divisive as d}
             <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px;">
               <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 7px;">
@@ -186,7 +189,7 @@
         <p style="font-size: 9px; color: var(--text-dim); margin-bottom: 10px;">Cómo votó el grupo en cada partido, en orden cronológico (1 = gana local · X = empate · 2 = gana visitante). ✓ marca el resultado real.</p>
         {#each breakdownByDate as [dateLabel, ms]}
           <div style="font-size: 9px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 5px;">{dateLabel}</div>
-          <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; align-items: start;">
             {#each ms as d}
               <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px;">
                 <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 7px;">
@@ -207,7 +210,7 @@
     <!-- Group winners -->
     <section style="margin-bottom: 20px;">
       <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">🥇 Ganador de cada grupo</h2>
-      <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px 16px; align-items: start;">
         {#each groupOrder as g}
           <div>
             <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px;">Grupo {g}</div>

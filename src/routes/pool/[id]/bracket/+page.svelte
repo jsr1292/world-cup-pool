@@ -10,6 +10,36 @@
   } from '$lib/bracket-2026.js';
   let { data } = $props();
 
+  // --- Bracket horizontal-scroll discoverability -------------------------
+  // The Final / 3rd-place column sits in the visual centre of the desktop
+  // bracket, so on a narrow (768–1199px) laptop it's the first thing clipped.
+  // On first reveal we centre the scroll on it, and we show edge fades as a
+  // hint that there's more bracket off-screen.
+  /** @type {HTMLDivElement | null} */
+  let scrollEl = $state(null);
+  let canScrollLeft = $state(false);
+  let canScrollRight = $state(false);
+  function updateFades() {
+    const el = scrollEl;
+    if (!el) return;
+    canScrollLeft = el.scrollLeft > 1;
+    canScrollRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 1;
+  }
+  $effect(() => {
+    const el = scrollEl;
+    if (!el) return;
+    // Centre on the Final column on first reveal, but only on desktop and only
+    // when the bracket actually overflows — don't fight a phone's touch scroll.
+    requestAnimationFrame(() => {
+      if (window.innerWidth >= 768 && el.scrollWidth > el.clientWidth) {
+        el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+      }
+      updateFades();
+    });
+    window.addEventListener('resize', updateFades);
+    return () => window.removeEventListener('resize', updateFades);
+  });
+
   // Bracket constants (WILDCARD, R32_MAP, R32_TO_R16, labels, THIRD_GROUP_MAP)
   // live in $lib/bracket-2026.ts — the single source of truth, locked by
   // bracket-2026.test.ts against the official 2026 knockout tree.
@@ -1002,7 +1032,10 @@
   {/if}
 
   <!-- Bracket Grid -->
-  <div class="bracket-scroll" ontouchend={(e) => { if (!e.target.closest('.team-btn')) pinnedTeam = null; }}>
+  <div class="bracket-scroll-wrap">
+  <div class="bracket-fade bracket-fade-left" class:show={canScrollLeft}></div>
+  <div class="bracket-fade bracket-fade-right" class:show={canScrollRight}></div>
+  <div class="bracket-scroll" bind:this={scrollEl} onscroll={updateFades} ontouchend={(e) => { if (!e.target.closest('.team-btn')) pinnedTeam = null; }}>
     <!-- Desktop: split bracket layout -->
     <div class="bracket-grid desktop-bracket">
       <!-- LEFT WING -->
@@ -1344,6 +1377,7 @@
       </div>
     </div>
   </div>
+  </div>
   <!-- Legend -->
   <div class="bracket-legend">
     <span class="legend-item"><span class="pick-star">★</span> Tu elección</span>
@@ -1426,9 +1460,33 @@
   }
 
   /* Bracket grid */
+  .bracket-scroll-wrap {
+    position: relative;
+  }
   .bracket-scroll {
     overflow-x: auto;
     padding-bottom: 16px;
+  }
+  /* Edge hints that the bracket scrolls horizontally (the Final may be
+     off-screen). Shown only when there's content to scroll to on that side. */
+  .bracket-fade {
+    position: absolute;
+    top: 0;
+    bottom: 16px;
+    width: 48px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 2;
+  }
+  .bracket-fade.show { opacity: 1; }
+  .bracket-fade-left {
+    left: 0;
+    background: linear-gradient(to right, var(--bg-base), transparent);
+  }
+  .bracket-fade-right {
+    right: 0;
+    background: linear-gradient(to left, var(--bg-base), transparent);
   }
 
   .bracket-grid {
@@ -1772,6 +1830,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* On desktop the tiebreaker card is hundreds of px wide — let names breathe. */
+  @media (min-width: 768px) {
+    .tiebreaker-teamname { max-width: 200px; }
+  }
 
   .tiebreaker-teamname-empty {
     color: var(--text-dim);
@@ -1882,6 +1944,13 @@
     .bracket-subtitle { font-size: 13px; }
   }
 
+  /* ≥1400px screens have room to spare — widen the bracket columns so the
+     matches aren't pinned to 180px. */
+  @media (min-width: 1400px) {
+    .col-header { max-width: 240px; }
+    .match-list { max-width: 240px; }
+  }
+
   @media (max-width: 600px) {
     .team-btn {
       padding: 10px 10px;
@@ -1943,6 +2012,11 @@
     width: 100%; max-width: 480px;
     padding-bottom: calc(20px + env(safe-area-inset-bottom));
     max-height: 70vh; overflow-y: auto;
+  }
+  /* Desktop: center the 3rd-place picker as a dialog. */
+  @media (min-width: 768px) {
+    .third-selector-overlay { align-items: center; }
+    .third-selector-sheet { border-radius: 16px; max-height: 85vh; margin: auto; }
   }
   .third-selector-header {
     display: flex; justify-content: space-between; align-items: center;

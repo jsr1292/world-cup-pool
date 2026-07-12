@@ -721,7 +721,7 @@
 
   <!-- Calendario Tab -->
   {#if tab === 'calendar'}
-    <div style="max-width: 600px; margin: 0 auto;">
+    <div style="max-width: 900px; margin: 0 auto;">
       <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5;">
         Todos los partidos en orden. ✓ = acertaste el ganador (o el 1/X/2 en grupos), ✗ = fallaste.
         {#if data.predictions.length === 0}<br><span style="color: var(--text-dim);">Haz tus pronósticos para ver tus aciertos.</span>{/if}
@@ -729,7 +729,7 @@
       {#each calendarByDay as group}
         <div style="margin-bottom: 18px;">
           <div style="font-size: 10px; font-weight: 600; color: var(--gold); text-transform: capitalize; letter-spacing: 0.04em; margin-bottom: 8px; position: sticky; top: 40px; background: var(--bg-base); padding: 2px 0;">{group.label}</div>
-          <div style="display: flex; flex-direction: column; gap: 5px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 5px 10px; align-items: start;">
             {#each group.matches as mt}
               {@const finished = mt.status === 'finished' && mt.home_score != null}
               {@const live = !finished && ($liveMatchIds.has(mt.id) || mt.status === 'live')}
@@ -797,8 +797,8 @@
 
     <!-- Per-match "what everyone bet" modal -->
     {#if matchBetsOpen}
-      <div role="presentation" onclick={closeMatchBets} style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1300; display: flex; align-items: flex-end; justify-content: center;">
-        <div role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()} style="width: 100%; max-width: 520px; max-height: 85vh; overflow-y: auto; background: var(--bg-base); border: 1px solid var(--border); border-radius: 14px 14px 0 0; padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + 20px); box-shadow: 0 -8px 30px rgba(0,0,0,0.5);">
+      <div role="presentation" class="match-bets-overlay" onclick={closeMatchBets} style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1300; display: flex; justify-content: center;">
+        <div role="dialog" aria-modal="true" class="match-bets-sheet" onclick={(e) => e.stopPropagation()} style="width: 100%; max-width: 520px; max-height: 85vh; overflow-y: auto; background: var(--bg-base); border: 1px solid var(--border); padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + 20px); box-shadow: 0 -8px 30px rgba(0,0,0,0.5);">
           <div style="display: flex; justify-content: flex-end;">
             <button onclick={closeMatchBets} aria-label="Cerrar" style="background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 2px 6px;">✕</button>
           </div>
@@ -1006,7 +1006,7 @@
   {/if}
 
    {#if tab === 'summary'}
-    <div style="max-width: 500px; margin: 0 auto;">
+    <div style="max-width: 900px; margin: 0 auto;">
       {#if data.predictions.length === 0}
         <div style="text-align: center; padding: 40px 20px;">
           <div style="font-size: 40px; margin-bottom: 12px;">📋</div>
@@ -1027,8 +1027,9 @@
         <!-- Group predictions -->
         <div style="margin-bottom: 24px;">
           <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">🏆 Fase de Grupos</h2>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; align-items: start;">
           {#each groupPreds as gp}
-            <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px;">
+            <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;">
               <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;">Grupo {gp.group_name}</div>
               <div style="display: flex; flex-direction: column; gap: 2px;">
                 {#each [gp.position_1, gp.position_2, gp.position_3, gp.position_4] as tid, idx}
@@ -1045,6 +1046,7 @@
               </div>
             </div>
           {/each}
+          </div>
           {#if groupPreds.length === 0}
             <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No has predicho grupos aún.</p>
           {/if}
@@ -1082,7 +1084,7 @@
   {/if}
 
    {#if tab === 'results'}
-    <div style="max-width: 600px; margin: 0 auto;">
+    <div style="max-width: 1000px; margin: 0 auto;">
       {#if data.predictions.length > 0}
         {@const totalUserPoints = data.userGroupPredsFull.reduce((sum: number, g: any) => sum + (g.points_earned || 0), 0) + data.userBracketPredsFull.reduce((sum: number, b: any) => sum + (b.points_earned || 0), 0) + (data.userMatchPredsFull || []).reduce((sum: number, m: any) => sum + (m.points_earned || 0), 0)}
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -1106,9 +1108,10 @@
             </div>
 
             {#if phase === 'group'}
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; align-items: start;">
               {#each Object.entries(data.resultsGroupStandings).sort(([a], [b]) => a.localeCompare(b)) as [group, teams]}
                 {@const predicted = groupPredLookup[group]}
-                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px;">
                   <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px;">Grupo {group}</div>
                   <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
                     <tbody>
@@ -1131,15 +1134,18 @@
                   </table>
                 </div>
               {/each}
+              </div>
               {#if Object.keys(data.resultsGroupStandings).length === 0}
                 <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No hay resultados de fase de grupos todavía.</p>
               {/if}
             {:else}
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; align-items: start;">
               {#each matches as match, mi}
                 {@const pred = bracketLookup[phase]?.[mi]}
                 {@const isFinished = match.status === 'finished'}
                 {@const homeWin = isFinished && match.home_score > match.away_score}
                 {@const awayWin = isFinished && match.away_score > match.home_score}
+                <div>
                 <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
                   <span style="flex: 1; text-align: right; font-size: 12px; {homeWin ? 'font-weight: 600; color: var(--text);' : isFinished ? 'color: var(--text-muted);' : 'color: var(--text);'}">{@html flagEmoji(match.home_flag)} {match.home_name ? shortName(match.home_name) : 'TBD'}</span>
                   <div style="min-width: 56px; text-align: center;">
@@ -1155,11 +1161,13 @@
                   {@const actualWinner = homeWin ? match.home_team_id : awayWin ? match.away_team_id : null}
                   {@const correct = actualWinner && pred.team_id === actualWinner}
                   <div style="font-size: 9px; padding: 0 0 6px 0; text-align: center;">
-                    Tu predicción: {getTeamFlag(pred.team_id)} {getTeamName(pred.team_id)}
+                    Tu predicción: {@html getTeamFlag(pred.team_id)} {getTeamName(pred.team_id)}
                     {#if correct}<span style="color: var(--green);"> ✓ +{pred.points_earned}pts</span>{:else}<span style="color: var(--red);"> ✗</span>{/if}
                   </div>
                 {/if}
+                </div>
               {/each}
+              </div>
             {/if}
           </div>
         {/if}
@@ -1362,6 +1370,19 @@
     padding: 12px 14px calc(env(safe-area-inset-bottom, 0px) + 10px);
     box-shadow: 0 -8px 30px rgba(0,0,0,0.5);
   }
+  /* Desktop: center the chat as a dialog instead of docking it to the bottom. */
+  @media (min-width: 768px) {
+    .chat-overlay { align-items: center; }
+    .chat-sheet { height: 85vh; border-radius: 16px; margin: auto; }
+  }
+  /* Match-bets modal: base (mobile) values live here rather than inline so the
+     desktop media query can override align-items / border-radius. */
+  .match-bets-overlay { align-items: flex-end; }
+  .match-bets-sheet { border-radius: 14px 14px 0 0; }
+  @media (min-width: 768px) {
+    .match-bets-overlay { align-items: center; }
+    .match-bets-sheet { border-radius: 14px; }
+  }
   .chat-head {
     display: flex; align-items: center; justify-content: space-between;
     padding-bottom: 8px; margin-bottom: 4px;
@@ -1402,10 +1423,13 @@
   .tab-content-wrapper {
     transition: transform 0.2s ease-out, opacity 0.2s ease-out;
   }
-  /* The Simulador tab breaks out of the 860px page cap to use the full width on
-     web (its own content re-centers at 1400px). Phones stay within the page. */
+  /* Phones break the Simulador tab out to full viewport width. Once the desktop
+     sidebar appears (≥768px) the content box already spans the available width,
+     and a 100vw breakout would slide under the fixed sidebar and force a
+     body-wide horizontal scrollbar — so reset it there (the simulator's own
+     content re-centers at 1400px). */
   .sim-breakout { width: 100vw; margin-left: calc(50% - 50vw); padding: 0 16px; box-sizing: border-box; }
-  @media (max-width: 900px) { .sim-breakout { width: auto; margin-left: 0; padding: 0; } }
+  @media (min-width: 768px) { .sim-breakout { width: auto; margin-left: 0; padding: 0; } }
   .slide-left {
     animation: slideFromRight 0.2s ease-out;
   }

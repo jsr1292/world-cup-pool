@@ -74,7 +74,7 @@
 
 <svelte:head><title>Comparar · {data.pool.name}</title></svelte:head>
 
-<div style="max-width: 560px; margin: 0 auto; padding: 16px;">
+<div style="max-width: 840px; margin: 0 auto;">
   <a href="/pool/{data.pool.id}" style="font-size: 10px; color: var(--text-muted); display: inline-flex; gap: 4px; margin-bottom: 12px;">← {data.pool.name}</a>
   <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold); margin-bottom: 12px;">⚔️ Comparar</h1>
 
@@ -174,7 +174,7 @@
           <p style="font-size: 8px; color: var(--text-dim); margin: 0 0 6px;">columna izq. = {data.a.owner.split(' ')[0]} · der. = {data.b.owner.split(' ')[0]} · <span style="color: var(--green);">✓</span> acertó · = mismo pronóstico</p>
           {#each matchesByDate as [dateLabel, ms]}
             <div style="font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin: 10px 0 4px;">{dateLabel}</div>
-            <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 4px 12px; align-items: start;">
               {#each ms as m}{@render matchRow(m)}{/each}
             </div>
           {/each}

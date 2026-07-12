@@ -100,7 +100,7 @@
   <title>Resultados · {data.pool.name}</title>
 </svelte:head>
 
-<div style="max-width: 600px; margin: 0 auto;">
+<div style="max-width: 1000px; margin: 0 auto;">
   <!-- Header -->
   <a href="/pool/{data.pool.id}" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 16px; position: sticky; top: 0; background: var(--bg-base); padding: 8px 0; z-index: 5;">← {data.pool.name}</a>
 
@@ -144,6 +144,7 @@
 
         {#if phase === 'group'}
           <!-- Group standings -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; align-items: start;">
           {#each Object.entries(data.groupStandings).sort(([a], [b]) => a.localeCompare(b)) as [group, teams]}
             {@const predicted = groupPredLookup[group]}
             <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
@@ -195,19 +196,22 @@
               {/if}
             </div>
           {/each}
+          </div>
 
           {#if Object.keys(data.groupStandings).length === 0}
             <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No hay resultados de fase de grupos todavía.</p>
           {/if}
         {:else}
           <!-- Knockout matches -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; align-items: start;">
           {#each matches as match, mi}
             {@const isFinished = match.status === 'finished'}
             {@const homeWin = isFinished && match.home_score > match.away_score}
             {@const awayWin = isFinished && match.away_score > match.home_score}
             {@const mp = matchPredLookup[match.id]}
             {@const resultClass = isFinished ? getMatchResultClass(match.id) : null}
-
+            <!-- match + prediction caption form one grid cell -->
+            <div>
             <div style="background: var(--bg-surface); border: 1px solid {resultClass === 'exact' ? 'rgba(0,229,160,0.5)' : (resultClass === 'gd' || resultClass === 'outcome') ? 'rgba(255,200,0,0.4)' : resultClass === 'wrong' ? 'rgba(255,77,106,0.3)' : 'var(--border)'}; border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
               <!-- Home -->
               <span style="flex: 1; text-align: right; font-size: 12px; {homeWin ? 'font-weight: 600; color: var(--text);' : isFinished ? 'color: var(--text-muted);' : 'color: var(--text);'}">
@@ -252,7 +256,9 @@
                 </div>
               {/if}
             {/if}
+            </div>
           {/each}
+          </div>
         {/if}
       </div>
     {/if}

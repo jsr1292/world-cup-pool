@@ -86,7 +86,7 @@
   <title>Resumen · {data.pool.name}</title>
 </svelte:head>
 
-<div style="max-width: 500px; margin: 0 auto;">
+<div style="max-width: 960px; margin: 0 auto;">
   <a href="/pool/{data.pool.id}" style="font-size: 10px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 16px; position: sticky; top: 0; background: var(--bg-base); padding: 8px 0; z-index: 5;">← {data.pool.name}</a>
 
   <h1 style="font-family: 'Libre Baskerville', serif; font-size: 20px; color: var(--gold); margin-bottom: 4px;">📋 {data.viewing ? 'Predicciones' : 'Resumen de Predicciones'}</h1>
@@ -135,8 +135,10 @@
       </div>
     {/if}
 
-    <!-- Group match picks (1/X/2 per game) — chronological, surfaced first -->
-    <div style="margin-bottom: 24px;">
+    <!-- Group match picks (1/X/2 per game) — chronological, surfaced first.
+         Kept single-column (dates as dividers read best linearly) and capped so
+         the rows don't stretch across the wider desktop page. -->
+    <div style="margin-bottom: 24px; max-width: 620px;">
       <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px;">⚽ Partidos de grupos · 1 / X / 2</h2>
       <p style="font-size: 9px; color: var(--text-dim); margin-bottom: 6px;">1 = gana el local · X = empate · 2 = gana el visitante</p>
       {#each getMatchPredsByDate() as [dateLabel, mps]}
@@ -170,6 +172,7 @@
     <div style="margin-bottom: 24px;">
       <h2 style="font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px;">🏆 Clasificación de grupos (orden final)</h2>
       <p style="font-size: 10px; color: var(--text-muted); margin: 0 0 10px;">Verde = posición acertada. El ✗ muestra qué equipo quedó realmente en ese puesto.</p>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; align-items: start;">
       {#each getGroupPreds() as gp}
         {@const actual = data.actualGroups?.[gp.group_name]}
         {@const fin = data.groupFinished?.[gp.group_name] ?? 0}
@@ -205,6 +208,7 @@
           {/if}
         </div>
       {/each}
+      </div>
 
       {#if getGroupPreds().length === 0}
         <p style="font-size: 11px; color: var(--text-muted); padding: 12px;">No has predicho grupos aún.</p>
