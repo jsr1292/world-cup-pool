@@ -1,4 +1,5 @@
 import { getPoolById, getUserPredictions, getGroupPredictions, getAllTeams, createPrediction, resolveSelectedPrediction } from '$lib/server/queries.js';
+import { toSafePool } from '$lib/server/pool-safe.js';
 import { query } from '$lib/server/db.js';
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
@@ -95,7 +96,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   }));
 
   return {
-    pool,
+    pool: toSafePool(pool),
     entries,
     selectedId: predictionId,
     selectedLabel: selectedPrediction?.label || '',

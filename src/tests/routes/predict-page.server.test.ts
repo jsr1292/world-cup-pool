@@ -126,7 +126,7 @@ describe('predict page load', () => {
 			],
 		});
 
-		const result = await load({
+		const result: any = await load({
 			params: mockParams('1'),
 			locals: mockLocals(1) as any,
 			url: mockUrl(),
@@ -142,7 +142,7 @@ describe('predict page load', () => {
 	it('returns empty teamsByGroup when no teams', async () => {
 		setupDefaultMocks({ teams: [] });
 
-		const result = await load({
+		const result: any = await load({
 			params: mockParams('1'),
 			locals: mockLocals(1) as any,
 			url: mockUrl(),
@@ -159,7 +159,7 @@ describe('predict page load', () => {
 		];
 		setupDefaultMocks({ predictions: preds });
 
-		const result = await load({
+		const result: any = await load({
 			params: mockParams('1'),
 			locals: mockLocals(1) as any,
 			url: mockUrl(),
@@ -191,7 +191,7 @@ describe('predict page load', () => {
 			.mockResolvedValueOnce({ rows: [] }); // group_predictions order query
 		(createPrediction as any).mockResolvedValue(undefined);
 
-		const result = await load({
+		const result: any = await load({
 			params: mockParams('1'),
 			locals: mockLocals(1) as any,
 			url: mockUrl(),
@@ -226,7 +226,7 @@ describe('predict page load', () => {
 		const pastDate = new Date('2020-01-01').toISOString();
 		setupDefaultMocks({ pool: { id: 1, deadline_group: pastDate, created_by: 1 } });
 
-		const result = await load({
+		const result: any = await load({
 			params: mockParams('1'),
 			locals: mockLocals(1) as any,
 			url: mockUrl(),
@@ -240,7 +240,7 @@ describe('predict page load', () => {
 		const futureDate = new Date('2099-12-31').toISOString();
 		setupDefaultMocks({ pool: { id: 1, deadline_group: futureDate, created_by: 1 } });
 
-		const result = await load({
+		const result: any = await load({
 			params: mockParams('1'),
 			locals: mockLocals(1) as any,
 			url: mockUrl(),
@@ -253,7 +253,7 @@ describe('predict page load', () => {
 	it('sets isLocked=false when no deadline_group', async () => {
 		setupDefaultMocks({ pool: { id: 1, deadline_group: null, created_by: 1 } });
 
-		const result = await load({
+		const result: any = await load({
 			params: mockParams('1'),
 			locals: mockLocals(1) as any,
 			url: mockUrl(),
@@ -270,7 +270,7 @@ describe('predict page load', () => {
 		];
 		setupDefaultMocks({ predictions: preds });
 
-		const result = await load({
+		const result: any = await load({
 			params: mockParams('1'),
 			locals: mockLocals(1) as any,
 			url: mockUrl({ entry: 'Alt' }),
@@ -288,7 +288,7 @@ describe('predict page load', () => {
 		];
 		setupDefaultMocks({ predictions: preds });
 
-		const result = await load({
+		const result: any = await load({
 			params: mockParams('1'),
 			locals: mockLocals(1) as any,
 			url: mockUrl({ entry: 'NonExistent' }),
@@ -307,7 +307,7 @@ describe('predict page load', () => {
 			],
 		});
 
-		const result = await load({
+		const result: any = await load({
 			params: mockParams('1'),
 			locals: mockLocals(1) as any,
 			url: mockUrl(),
@@ -315,6 +315,33 @@ describe('predict page load', () => {
 
 		expect(result.existingMatchPreds[5]).toEqual({ home_score: 2, away_score: 1 });
 		expect(result.existingMatchPreds[6]).toEqual({ home_score: 0, away_score: 3 });
+	});
+
+	// 15. Never serializes sensitive pool columns (invite_code, share_token) to the client
+	it('strips invite_code and share_token from the returned pool', async () => {
+		setupDefaultMocks({
+			pool: {
+				id: 1,
+				name: 'Quiniela',
+				deadline_group: null,
+				created_by: 1,
+				allow_multiple_predictions: false,
+				invite_code: 'SECRET_INVITE',
+				share_token: 'SECRET_SHARE',
+			},
+		});
+
+		const result: any = await load({
+			params: mockParams('1'),
+			locals: mockLocals(1) as any,
+			url: mockUrl(),
+		} as any);
+
+		expect(result.pool).not.toHaveProperty('invite_code');
+		expect(result.pool).not.toHaveProperty('share_token');
+		// Still returns the non-sensitive fields the page needs
+		expect(result.pool.id).toBe(1);
+		expect(result.pool.created_by).toBe(1);
 	});
 
 	// 14. Returns empty existing predictions when no selected prediction
@@ -329,7 +356,7 @@ describe('predict page load', () => {
 		// group matches query
 		(query as any).mockResolvedValueOnce({ rows: [] });
 
-		const result = await load({
+		const result: any = await load({
 			params: mockParams('1'),
 			locals: mockLocals(1) as any,
 			url: mockUrl(),

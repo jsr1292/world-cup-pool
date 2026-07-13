@@ -1,4 +1,5 @@
 import { getPoolById, getUserPredictions, resolveSelectedPrediction, getScoringConfig } from '$lib/server/queries.js';
+import { toSafePool } from '$lib/server/pool-safe.js';
 import { DEFAULT_SCORING_RULES } from '$lib/server/scoring.js';
 import { query } from '$lib/server/db.js';
 import { error } from '@sveltejs/kit';
@@ -161,7 +162,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   }
 
   return {
-    pool,
+    pool: toSafePool(pool),
     phases,
     groupStandings,
     userPredictions,
