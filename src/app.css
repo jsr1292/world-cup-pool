@@ -482,9 +482,19 @@ button {
   border-radius: 8px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  /* When the tabs overflow, the desktop browser shows a scrollbar as an
+     affordance. Style it thin + theme-dark so platforms with classic
+     (non-overlay) scrollbars — notably Windows — don't paint a jarring white
+     track on the dark UI. macOS overlay scrollbars ignore this and stay hidden
+     until scrolling. */
+  scrollbar-width: thin;                       /* Firefox */
+  scrollbar-color: var(--border) transparent;  /* Firefox: thumb / track */
 }
-/* Hide the scrollbar only in the installed PWA; the desktop browser keeps it
-   as a fallback affordance when the tabs still overflow. */
+.pool-tabs::-webkit-scrollbar { height: 6px; }               /* Chrome / Edge / Safari */
+.pool-tabs::-webkit-scrollbar-track { background: transparent; }
+.pool-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+/* Hide the scrollbar entirely only in the installed PWA (this block comes after
+   the styled rules above, so it wins when running standalone). */
 @media (display-mode: standalone) {
   .pool-tabs { scrollbar-width: none; }
   .pool-tabs::-webkit-scrollbar { display: none; }
