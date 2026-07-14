@@ -3,6 +3,7 @@
   import { flagEmoji, shortName } from '$lib/teams.js';
   import { liveMatchIds } from '$lib/live.js';
   import Simulator from '$lib/Simulator.svelte';
+  import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
   let { data } = $props();
   let tab = $state(data.deadlinePassed ? 'leaderboard' : 'predictions');
@@ -385,14 +386,14 @@
   const showScrollTop = $derived((tab === 'calendar' || tab === 'leaderboard') && scrollY > 320);
 
   const tabs = [
-    { id: 'predictions', label: '🔮 Pronósticos' },
-    { id: 'simulator', label: '🎲 Simulador' },
-    { id: 'leaderboard', label: '🏅 Clasificación' },
-    { id: 'calendar', label: '📅 Calendario' },
-    { id: 'members', label: '👥 Miembros' },
-    { id: 'summary', label: '📋 Resumen' },
-    { id: 'results', label: '🏆 Resultados' },
-    { id: 'scoring', label: '🔢 Puntuación' },
+    { id: 'predictions', icon: 'sparkles', label: 'Pronósticos' },
+    { id: 'simulator', icon: 'route', label: 'Simulador' },
+    { id: 'leaderboard', icon: 'medal', label: 'Clasificación' },
+    { id: 'calendar', icon: 'calendar', label: 'Calendario' },
+    { id: 'members', icon: 'users', label: 'Miembros' },
+    { id: 'summary', icon: 'clipboard', label: 'Resumen' },
+    { id: 'results', icon: 'trophy', label: 'Resultados' },
+    { id: 'scoring', icon: 'hash', label: 'Puntuación' },
   ];
 
   const phaseLabels: Record<string, string> = {
@@ -553,7 +554,7 @@
         onclick={() => switchTab(t.id)}
         class="pool-tab"
         class:active={tab === t.id}
-      >{t.label}</button>
+      ><span class="pool-tab-inner"><Icon name={t.icon} size={15} /> {t.label}</span></button>
     {/each}
   </div>
 
@@ -674,8 +675,8 @@
       <!-- Stats / compare / share buttons -->
       <div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; margin-bottom: 4px;">
         {#if betsLocked}
-          <a href="/pool/{pool.id}/stats" style="border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: var(--text-muted); text-decoration: none; margin-right: auto;">📊 Estadísticas</a>
-          <a href="/pool/{pool.id}/h2h" style="border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: var(--text-muted); text-decoration: none;">⚔️ Comparar</a>
+          <a href="/pool/{pool.id}/stats" style="border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: var(--text-muted); text-decoration: none; margin-right: auto; display: inline-flex; align-items: center; gap: 5px;"><Icon name="chart" size={13} /> Estadísticas</a>
+          <a href="/pool/{pool.id}/h2h" style="border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: var(--text-muted); text-decoration: none; display: inline-flex; align-items: center; gap: 5px;"><Icon name="swords" size={13} /> Comparar</a>
         {/if}
         <button onclick={() => { shareScoreboard(); haptic(10); }} style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 10px; color: {shared ? 'var(--green)' : 'var(--text-muted)'}; cursor: pointer;">
           {shared ? '✓ Enlace copiado' : '🔗 Compartir'}

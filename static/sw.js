@@ -10,7 +10,7 @@
 //     natively (SvelteKit assets are immutable + content-hashed, so the browser's
 //     own cache is correct and never stale).
 //   • Icons / manifest → cache-first (safe: their URLs are stable).
-const CACHE_NAME = 'mundial2026-v3';
+const CACHE_NAME = 'mundial2026-v4';
 const ASSETS = [
   '/manifest.json',
   '/icon-192.png',
@@ -19,6 +19,22 @@ const ASSETS = [
   '/icon-512.svg',
   '/icon.svg',
 ];
+
+// A resumed PWA can meet a network that neither works nor fails: the tunnel
+// accepts the connection and then says nothing, so a plain fetch() hangs forever
+// and the app sits on a blank screen until a hard refresh. The navigation
+// handler below RACES the fetch against this timeout so a stalled connection
+// behaves like a failed one and falls through to the offline page.
+const NET_TIMEOUT_MS = 8000;
+function fetchOrTimeout(request, ms = NET_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('sw-timeout')), ms);
+    fetch(request).then(
+      (res) => { clearTimeout(timer); resolve(res); },
+      (err) => { clearTimeout(timer); reject(err); }
+    );
+  });
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
@@ -44,11 +60,13 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return; // never touch cross-origin
 
-  // Navigations: always network. Only fall back to a minimal offline page on a
-  // genuine network failure — never to a (possibly stale) cached app shell.
+  // Navigations: always network (still no app-shell caching — a stale SSR shell
+  // referencing removed JS chunks is exactly what caused the old blank-page bug).
+  // Fall back to a minimal offline page on a genuine network failure OR a stalled
+  // connection that never resolves (the fetchOrTimeout race), never to a shell.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() =>
+      fetchOrTimeout(request).catch(() =>
         new Response(OFFLINE_HTML, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } })
       )
     );

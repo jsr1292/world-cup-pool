@@ -72,7 +72,7 @@
   <div class="login-brand">
     <div>
       <div style="font-size: 56px; margin-bottom: 16px;">🏆</div>
-      <h1 style="font-family: 'Libre Baskerville', serif; font-size: 36px; color: var(--gold); line-height: 1.2;">Mundial<br/>2026</h1>
+      <h1 style="font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 38px; color: var(--gold); line-height: 1.1; letter-spacing: -0.01em;">Mundial<br/>2026</h1>
       <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px; max-width: 280px; line-height: 1.6;">Predice los resultados del mundial con tus amigos. Crea o únete a una quiniela y compite por el primer puesto.</p>
       <div style="display: flex; gap: 20px; margin-top: 24px; font-size: 10px; color: var(--text-dim);">
         <div><span style="color: var(--gold); font-size: 18px; font-weight: 700; display: block;">48</span>Equipos</div>
@@ -88,7 +88,7 @@
       <!-- Mobile header (hidden on desktop) -->
       <div class="login-mobile-header" style="text-align: center; margin-bottom: 32px;">
         <div style="font-size: 40px; margin-bottom: 8px;">⚽</div>
-        <h1 style="font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold);">Mundial 2026</h1>
+        <h1 style="font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 24px; color: var(--gold); letter-spacing: -0.01em;">Mundial 2026</h1>
         <p style="font-size: 10px; color: var(--text-muted); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px;">Quiniela</p>
       </div>
 

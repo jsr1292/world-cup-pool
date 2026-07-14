@@ -2,13 +2,15 @@
   import { browser } from '$app/environment';
   import '../app.css';
   import { page } from '$app/stores';
-  import { invalidateAll } from '$app/navigation';
+  import { invalidateAll, onNavigate } from '$app/navigation';
   import { toast } from '$lib/toast.js';
   import { logout } from '$lib/logout.js';
   import { WORLD_CUP_KICKOFF_MS, WORLD_CUP_DURATION_MS } from '$lib/constants.js';
   import LiveTicker from '$lib/LiveTicker.svelte';
   import NextMatch from '$lib/NextMatch.svelte';
   import InstallPrompt from '$lib/InstallPrompt.svelte';
+  import BackToTop from '$lib/BackToTop.svelte';
+  import Icon from '$lib/Icon.svelte';
   import { liveMatchIds } from '$lib/live.js';
 
   let { children, data } = $props();
@@ -50,6 +52,9 @@
       else if (y > lastY + 5) topHidden = true;
       else if (y < lastY - 5) topHidden = false;
       lastY = y;
+      // Mirror the collapsed state onto <html> so sibling chrome (the BackToTop
+      // FAB) can drop into the reclaimed corner in pure CSS.
+      document.documentElement.classList.toggle('nav-collapsed', topHidden);
     };
     window.addEventListener('scroll', onScroll, { passive: true });
   }
@@ -63,6 +68,19 @@
   let liveTimer = null;
   // Auto-hide the mobile top bar on scroll-down (more screen), reveal on scroll-up.
   let topHidden = $state(false);
+
+  // Cross-fade between pages via the View Transitions API (the CSS keyframes live
+  // in app.css). No-op where unsupported or when the user prefers reduced motion.
+  onNavigate((navigation) => {
+    if (typeof document === 'undefined' || !document.startViewTransition) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    return new Promise((resolve) => {
+      document.startViewTransition(async () => {
+        resolve();
+        await navigation.complete;
+      });
+    });
+  });
   const inTournamentWindow = () => {
     const now = Date.now();
     return now >= WORLD_CUP_KICKOFF_MS && now <= WORLD_CUP_KICKOFF_MS + WORLD_CUP_DURATION_MS;
@@ -273,10 +291,16 @@
 </script>
 
 <InstallPrompt />
+{#if data?.user}<BackToTop />{/if}
 
 <div class="app-layout" style="height: 100vh; padding-bottom: 0;">
   <!-- Top Bar (mobile only) -->
   {#if data?.user}
+    <!-- Frosted strip behind the iOS status bar. Height is 0 in a browser tab
+         (safe-area inset 0), so it only shows in the installed PWA — where it
+         stays put while the top bar auto-hides, masking content that would
+         otherwise scroll under the notch. Sits just below the top bar (z:50). -->
+    <div class="statusbar-fill" aria-hidden="true"></div>
     <header class="top-bar" class:top-hidden={topHidden}>
       <div class="top-bar-inner">
         <div class="top-bar-brand">
@@ -295,8 +319,8 @@
               <NextMatch match={nextMatch} />
             {/if}
           {/if}
-          <button onclick={toggleTheme} class="theme-toggle" title="Cambiar tema">
-            {isDark ? '☀️' : '🌙'}
+          <button onclick={toggleTheme} class="theme-toggle" title="Cambiar tema" aria-label="Cambiar tema">
+            <Icon name={isDark ? 'sun' : 'moon'} size={17} />
           </button>
           <a href="/profile" class="top-bar-avatar" title="Perfil">
             {data.user.display_name?.charAt(0).toUpperCase() ?? '?'}
@@ -311,9 +335,9 @@
   <nav class="sidebar">
     <div class="sidebar-header">
       <div style="display: flex; align-items: center; gap: 10px;">
-        <div style="width: 36px; height: 36px; background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.22); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px;">🏆</div>
+        <div style="width: 36px; height: 36px; background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.22); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--gold);"><Icon name="trophy" size={20} /></div>
         <div>
-          <div style="font-family: 'Libre Baskerville', serif; font-size: 17px; color: var(--gold); line-height: 1.2;">Mundial 2026</div>
+          <div style="font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 18px; color: var(--gold); line-height: 1.2;">Mundial 2026</div>
           <div style="font-size: 9px; color: var(--text-muted); letter-spacing: 0.14em; text-transform: uppercase; margin-top: 2px;">Quiniela</div>
         </div>
       </div>
@@ -366,7 +390,7 @@
         </div>
       </div>
       <button type="button" onclick={toggleTheme} class="btn-ghost" style="width: 100%; font-size: 9px; padding: 8px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 6px;">
-        {isDark ? '☀️ Modo claro' : '🌙 Modo oscuro'}
+        <Icon name={isDark ? 'sun' : 'moon'} size={13} /> {isDark ? 'Modo claro' : 'Modo oscuro'}
       </button>
       <button type="button" onclick={logout} class="btn-ghost" style="width: 100%; font-size: 9px; padding: 8px;">
         Cerrar sesión
@@ -415,7 +439,7 @@
      and ask the user to rotate back — effectively portrait-only everywhere. -->
 <div class="rotate-lock" aria-hidden="true">
   <div class="rotate-lock-inner">
-    <div style="font-size: 34px;">🔄</div>
+    <div style="color: var(--gold);"><Icon name="rotate" size={34} /></div>
     <p>Gira el teléfono a vertical</p>
   </div>
 </div>
@@ -459,6 +483,23 @@
   }
 
   /* Mobile top bar */
+  .statusbar-fill {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top, 0px);
+    z-index: 49;
+    background: var(--bg-nav);
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    pointer-events: none;
+  }
+  /* No notch / no mobile top bar on desktop — never paint the strip there. */
+  @media (min-width: 768px) {
+    .statusbar-fill { display: none; }
+  }
+
   .top-bar {
     /* Fixed (not sticky) so it stays anchored to the viewport top — a sticky bar
        rubber-bands down with the content on iOS overscroll, and because it leaves
@@ -489,7 +530,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Archivo', sans-serif;
     font-size: 14px;
     font-weight: 600;
     letter-spacing: 0.01em;

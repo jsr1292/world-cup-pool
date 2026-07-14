@@ -42,6 +42,16 @@
       "name": "Mis Quinielas",
       "url": "/",
       "description": "Ver mis quinielas"
+    },
+    {
+      "name": "Unirse a una quiniela",
+      "url": "/join",
+      "description": "Entrar con un código de invitación"
+    },
+    {
+      "name": "Crear quiniela",
+      "url": "/pools/create",
+      "description": "Crear una nueva quiniela"
     }
   ]
 }

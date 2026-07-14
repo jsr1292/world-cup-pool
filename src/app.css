@@ -68,6 +68,10 @@ input[inputmode="decimal"]::-webkit-outer-spin-button {
   --green: #00e5a0;
   --red: #ff4d6a;
   --blue: #5b9cf5;
+  /* AI / exhibition accent — its own token so it adapts per theme (was a
+     hardcoded #aab6e0 inline, invisible on the light background). */
+  --ai: #aab6e0;
+  --ai-bg: rgba(120, 140, 200, 0.14);
   --bg-nav: rgba(15, 19, 35, 0.95);
 }
 
@@ -82,15 +86,34 @@ input[inputmode="decimal"]::-webkit-outer-spin-button {
   --border: rgba(0, 0, 0, 0.1);
   --border-hover: rgba(0, 0, 0, 0.18);
   --text: #1a1a2e;
-  --text-muted: #6b7280;
-  --text-dim: #9ca3af;
+  /* Darkened to clear WCAG AA on the small dim labels: muted #6b7280 (4.4:1)
+     and dim #9ca3af (2.3:1 — failed) → 5.9:1 / 4.6:1 on the #f5f5f0 bg. */
+  --text-muted: #585f6c;
+  --text-dim: #68707d;
   --gold: #a07c1c;
   --gold-light: #c9a84c;
   --green: #059669;
   --red: #dc2626;
   --blue: #2563eb;
+  --ai: #4f46e5;
+  --ai-bg: rgba(79, 70, 229, 0.12);
   --bg-nav: rgba(230, 230, 225, 0.95);
 }
+
+/* Rank avatar — the medal/AI initial badge shared by the leaderboard and the
+   Simulador projection (single source of truth). Medal gradients are literal
+   metal colors (theme-independent); the AI variant is token-driven so it adapts
+   to light mode. */
+.rank-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 12px;
+  background: rgba(255, 255, 255, 0.06); color: var(--text-dim);
+}
+.rank-avatar.gold { background: linear-gradient(135deg, #c9a84c, #e8c96a); color: #1a1a2e; }
+.rank-avatar.silver { background: linear-gradient(135deg, #a0a0a0, #c0c0c0); color: #1a1a2e; }
+.rank-avatar.bronze { background: linear-gradient(135deg, #b87333, #cd7f32); color: #1a1a2e; }
+.rank-avatar.ai { background: var(--ai-bg); color: var(--ai); }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -105,7 +128,7 @@ html {
   height: -webkit-fill-available;
   height: 100dvh;
   height: 100%;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -517,6 +540,7 @@ button {
   border-right: 1px solid var(--border);
 }
 .pool-tab:last-child { border-right: none; }
+.pool-tab-inner { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .pool-tab:hover { color: var(--text); }
 .pool-tab.active {
   background: rgba(201,168,76,0.15);
@@ -531,6 +555,76 @@ button {
      colliding. */
   .pool-tab { flex: 1 0 auto; font-size: 12px; padding: 13px 14px; letter-spacing: 0.06em; text-transform: uppercase; }
 }
+
+/* ── Premium interaction layer (HeroUI-inspired) ─────────────────────────────
+   Three signatures applied globally so every page inherits them without per-page
+   CSS: 1. press-scale — tappable things visibly compress under the finger;
+   2. layered soft shadows + hover lift on card-like surfaces (desktop only);
+   3. crisp focus-visible rings (keyboard/a11y) that never fire on taps.        */
+
+/* 1 — press feedback on everything tappable. Buttons and links get the subtle
+   press; row-sized surfaces (leaderboard, calendar) a gentler one so the whole
+   card doesn't feel wobbly. */
+button:active,
+.bottom-nav a:active,
+.nav-link:active,
+.pool-tab:active {
+  transform: scale(0.97);
+}
+button,
+.bottom-nav a,
+.nav-link,
+.pool-tab {
+  transition: transform 0.12s ease, background-color 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+a.leaderboard-row:active,
+a.cal-row:active,
+.chip:active {
+  transform: scale(0.985);
+}
+a.leaderboard-row,
+a.cal-row,
+.chip {
+  transition: transform 0.12s ease, border-color 0.15s, background-color 0.15s, box-shadow 0.2s;
+}
+
+/* 2 — layered depth: lift + gold-tinged glow on hover (desktop only — hover on
+   touch is sticky and just looks broken). :not(:active) keeps the press-scale in
+   charge during the click itself. */
+@media (hover: hover) {
+  a.leaderboard-row:hover:not(:active),
+  a.cal-row:hover:not(:active) {
+    border-color: rgba(201, 168, 76, 0.4);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15), 0 6px 22px rgba(201, 168, 76, 0.07);
+    transform: translateY(-1px);
+  }
+}
+
+/* 3 — focus rings: only for keyboard focus, gold, offset so it reads as a ring
+   rather than a border change. */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; }
+
+/* Motion is a garnish, never a barrier. */
+@media (prefers-reduced-motion: reduce) {
+  button:active, .bottom-nav a:active, .nav-link:active, .pool-tab:active,
+  a.leaderboard-row:active, a.cal-row:active, .chip:active {
+    transform: none;
+  }
+  a.leaderboard-row:hover, a.cal-row:hover { transform: none; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}
+
+/* Cross-fade page transitions (driven by onNavigate + startViewTransition in
+   the root layout). Short and subtle — navigation should feel instant. */
+::view-transition-old(root) { animation: vt-out 90ms ease both; }
+::view-transition-new(root) { animation: vt-in 130ms ease both; }
+@keyframes vt-out { to { opacity: 0; } }
+@keyframes vt-in { from { opacity: 0; transform: translateY(4px); } }
 
 /* Staggered card entrance */
 @keyframes cardIn {
