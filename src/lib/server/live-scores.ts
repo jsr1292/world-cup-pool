@@ -60,9 +60,13 @@ export async function fetchLiveTicker(): Promise<TickerMatch[]> {
     const resolver = new Map<string, number>();
     for (const r of rows) resolver.set(normalizeTeamName(r.canon), r.id);
     const teams = await getTeamsMapCached();
-    // Map each group fixture by its unordered team pair, so a live game can be
-    // tied back to our match id (live group games aren't synced with a fifa_id).
-    const { rows: gmRows } = await query(`SELECT id, home_team_id, away_team_id FROM matches WHERE phase = 'group'`);
+    // Map each not-yet-finished fixture by its unordered team pair, so a live
+    // game — group OR knockout — can be tied back to our match id (live games
+    // aren't synced with a fifa_id, and knockouts previously resolved to null,
+    // so their live row never got highlighted). Excluding finished matches keeps
+    // the key unambiguous when two teams meet twice (e.g. a group game and a
+    // later knockout): the live fixture is never finished.
+    const { rows: gmRows } = await query(`SELECT id, home_team_id, away_team_id FROM matches WHERE status <> 'finished'`);
     const pairKey = (x: number, y: number) => `${Math.min(x, y)}-${Math.max(x, y)}`;
     const matchByPair = new Map<string, number>();
     const homeByMatch = new Map<number, number>();
