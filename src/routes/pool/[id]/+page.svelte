@@ -25,6 +25,7 @@
   // the pool page's initial load). Renders inline via the shared component.
   let simData = $state<any>(null);
   let simLoading = $state(false);
+  let simImpact = $state(false); // is the Simulador's phone impact bar on screen?
   let simErr = $state('');
   async function loadSim() {
     if (simData || simLoading) return;
@@ -391,7 +392,7 @@
   });
   // The back-to-top FAB shows on the long tabs once scrolled; the chat FAB then
   // sits above it.
-  const showScrollTop = $derived((tab === 'calendar' || tab === 'leaderboard') && scrollY > 320);
+  const showScrollTop = $derived((tab === 'calendar' || tab === 'leaderboard' || tab === 'simulator') && scrollY > 320);
 
   const tabs = [
     { id: 'predictions', icon: 'sparkles', label: 'Pronósticos' },
@@ -869,7 +870,7 @@
         <div class="load-bar" aria-hidden="true"></div>
       </div>
     {:else}
-      <div class="sim-breakout"><Simulator data={simData} /></div>
+      <div class="sim-breakout"><Simulator data={simData} bind:impactVisible={simImpact} /></div>
     {/if}
   {/if}
 
@@ -1233,10 +1234,10 @@
 <!-- Floating actions: back-to-top (when scrolled) + chat (always). Chat sits
      above the back-to-top button when both are showing. -->
 {#if showScrollTop}
-  <button onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} class="scroll-top-fab" aria-label="Volver arriba"><Icon name="arrow-up" size={22} stroke={2.1} /></button>
+  <button onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} class="scroll-top-fab" class:on-sim={tab === 'simulator' && simImpact} aria-label="Volver arriba"><Icon name="arrow-up" size={22} stroke={2.1} /></button>
 {/if}
 {#if !chatOpen}
-  <button onclick={openChat} class="chat-fab" class:raised={showScrollTop} aria-label="Abrir chat de la quiniela">💬</button>
+  <button onclick={openChat} class="chat-fab" class:raised={showScrollTop} class:on-sim={tab === 'simulator' && simImpact} aria-label="Abrir chat de la quiniela">💬</button>
 {/if}
 
 {#if chatOpen}
@@ -1347,6 +1348,7 @@
     box-shadow: 0 4px 14px rgba(0,0,0,0.4);
     display: flex; align-items: center; justify-content: center;
     animation: fabIn 0.18s ease-out;
+    transition: bottom 0.25s ease;
   }
   @keyframes fabIn { from { opacity: 0; transform: translateY(8px) scale(0.9); } to { opacity: 1; transform: none; } }
   @media (min-width: 768px) { .scroll-top-fab { bottom: 24px; } }
@@ -1371,6 +1373,26 @@
   @media (min-width: 768px) {
     .chat-fab { bottom: 24px; }
     .chat-fab.raised { bottom: 78px; }
+  }
+
+  /* When the bottom nav auto-hides on scroll-down, drop the floating buttons into
+     the space it vacates (phones only — desktop has a sidebar, no bottom bar).
+     Mirrors the global BackToTop FAB so every screen behaves the same. */
+  @media (max-width: 767px) {
+    :global(html.nav-collapsed) .scroll-top-fab { bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); }
+    :global(html.nav-collapsed) .chat-fab { bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); }
+    :global(html.nav-collapsed) .chat-fab.raised { bottom: calc(env(safe-area-inset-bottom, 0px) + 72px); }
+
+    /* Simulador: a full-width impact bar owns the bottom edge (only while it's on
+       screen — .on-sim is gated on that), so lift the FABs above it and stack the
+       chat over the back-to-top when both show. The nav-collapsed variants carry
+       extra specificity so they beat the generic collapsed drops above. */
+    .scroll-top-fab.on-sim,
+    .chat-fab.on-sim { bottom: calc(env(safe-area-inset-bottom, 0px) + 116px); }
+    .chat-fab.on-sim.raised { bottom: calc(env(safe-area-inset-bottom, 0px) + 166px); }
+    :global(html.nav-collapsed) .scroll-top-fab.on-sim,
+    :global(html.nav-collapsed) .chat-fab.on-sim { bottom: calc(env(safe-area-inset-bottom, 0px) + 64px); }
+    :global(html.nav-collapsed) .chat-fab.on-sim.raised { bottom: calc(env(safe-area-inset-bottom, 0px) + 114px); }
   }
   .chat-overlay {
     position: fixed; inset: 0; z-index: 1300;

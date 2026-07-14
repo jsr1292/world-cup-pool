@@ -6,7 +6,7 @@
   import { buildForecastSim } from '$lib/sim-forecast.js';
   import { flagEmoji, shortName } from '$lib/teams.js';
   import Icon from '$lib/Icon.svelte';
-  let { data, standalone = false } = $props();
+  let { data, standalone = false, impactVisible = $bindable(false) } = $props();
 
   // Two tabs now: the fused simulator, and the (unchanged) odds tab.
   let tab = $state<'sim' | 'odds'>('sim');
@@ -193,6 +193,10 @@
   const myPrimaryId = $derived((data.entries as any[]).find((e) => e.user_id === data.userId)?.id ?? null);
   function myPick(mid: number): string | null { return myPrimaryId != null ? (data.picks[myPrimaryId]?.[mid] ?? null) : null; }
   const myRow = $derived(myPrimaryId != null ? leaderboard.find((e) => e.id === myPrimaryId) : null);
+
+  // Tell the host (the pool hub) whether the phone impact bar is on screen, so it
+  // can lift its floating buttons above it instead of overlapping it.
+  $effect(() => { impactVisible = !!(myRow && decidedCount > 0); });
 
   // "Ver tabla" on the impact bar: scroll the projected standings to your row
   // (falls back to the top of the board if your row is filtered out by "Solo
