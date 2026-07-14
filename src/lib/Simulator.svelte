@@ -231,7 +231,7 @@
   {#if standalone}
     <a href="/pool/{data.pool.id}" class="back-link">← {data.pool.name}</a>
   {/if}
-  <h1 class="sim-title">🎲 Simulador</h1>
+  <h1 class="sim-title"><Icon name="route" size={18} /> Simulador</h1>
 
   {#if !data.betsLocked}
     <div class="locked">
@@ -241,8 +241,8 @@
   {:else}
     {#if koMatches.length > 0}
       <div class="subtabs">
-        <button class="subtab" class:on={tab === 'sim'} onclick={() => (tab = 'sim')}>🎯 Simulador</button>
-        <button class="subtab" class:on={tab === 'odds'} onclick={() => (tab = 'odds')}>🔮 Probabilidades</button>
+        <button class="subtab" class:on={tab === 'sim'} onclick={() => (tab = 'sim')}><Icon name="route" size={13} /> Simulador</button>
+        <button class="subtab" class:on={tab === 'odds'} onclick={() => (tab = 'odds')}><Icon name="sparkles" size={13} /> Probabilidades</button>
       </div>
     {/if}
 
@@ -251,7 +251,7 @@
       <!-- Knockout win / podium probabilities (unchanged) -->
       <div style="margin: 0 0 20px; max-width: 620px;">
         <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 2px;">
-          <h2 style="font-size: 13px; font-weight: 700; color: var(--text); margin: 0;">🔮 ¿Quién puede ganar?</h2>
+          <h2 style="font-size: 13px; font-weight: 700; color: var(--text); margin: 0; display: inline-flex; align-items: center; gap: 6px;"><Icon name="sparkles" size={14} /> ¿Quién puede ganar?</h2>
           {#if oddsMeta}<span style="font-size: 8px; color: var(--text-dim);">{oddsMeta.remaining} partido{oddsMeta.remaining === 1 ? '' : 's'} · {oddsMeta.scenarios.toLocaleString('es-ES')} escenarios{#if !oddsMeta.exact} (muestra){/if}</span>{/if}
         </div>
         <p style="font-size: 9px; color: var(--text-muted); margin: 0 0 10px; line-height: 1.5;">
@@ -378,7 +378,7 @@
           <div class="panel-head">
             <h2>Clasificación proyectada</h2>
             <div class="panel-actions">
-              <button class="pill" class:on={onlyChanges} onclick={() => (onlyChanges = !onlyChanges)}>🧭 Solo cambios</button>
+              <button class="pill" class:on={onlyChanges} onclick={() => (onlyChanges = !onlyChanges)}><Icon name="filter" size={12} /> Solo cambios</button>
               <span class="muted">{onlyChanges && decidedCount > 0 ? `${visibleLeaderboard.length} con cambios` : `${leaderboard.length} pronóstico${leaderboard.length === 1 ? '' : 's'}`}</span>
             </div>
           </div>
@@ -433,13 +433,13 @@
 <style>
   .sim-page { max-width: 1400px; margin: 0 auto; padding: 0 4px; }
   .back-link { font-size: 10px; color: var(--text-muted); display: inline-flex; gap: 4px; margin-bottom: 12px; }
-  .sim-title { font-family: 'Libre Baskerville', serif; font-size: 22px; color: var(--gold); margin: 0 0 12px; }
+  .sim-title { font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; color: var(--gold); margin: 0 0 12px; display: inline-flex; align-items: center; gap: 8px; }
 
   .locked { margin-top: 16px; padding: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; text-align: center; }
 
   /* WCP sub-menu (kept) */
   .subtabs { display: flex; gap: 6px; margin: 6px 0 14px; max-width: 460px; }
-  .subtab { flex: 1; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 7px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-muted); }
+  .subtab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 8px; border-radius: 7px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-muted); }
   .subtab.on { border-color: var(--gold); background: rgba(201,168,76,0.12); color: var(--gold); }
 
   .banner { font-size: 11px; color: var(--text-muted); background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.18); border-radius: 8px; padding: 8px 12px; margin-bottom: 18px; line-height: 1.5; }

@@ -114,6 +114,8 @@
     <path d="M9 2h6" />
     <circle cx="12" cy="15" r="6" />
     <path d="m12 12 1 2 2 .3-1.5 1.4.4 2-1.9-1-1.9 1 .4-2L10 14.3l2-.3 1-2Z" />
+  {:else if name === 'filter'}
+    <path d="M3 4h18l-7 8v6l-4 2v-8L3 4Z" />
   {/if}
 </svg>
 
