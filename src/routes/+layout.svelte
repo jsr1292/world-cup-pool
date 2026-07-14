@@ -428,7 +428,7 @@
 
 <!-- Mobile Bottom Nav — OUTSIDE the wrapper so position:fixed is truly viewport-relative -->
 {#if data?.user}
-<div class="bottom-nav">
+<div class="bottom-nav" class:nav-hidden={topHidden}>
   {#each navItems as item}
     <a href={item.href} class:active={isActive(item.path)} aria-label={item.label}
        onclick={() => { try { navigator.vibrate(5); } catch {} }}>
