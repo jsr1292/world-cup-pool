@@ -3,6 +3,7 @@
   import { flagEmoji, shortName } from '$lib/teams.js';
   import { liveMatchIds } from '$lib/live.js';
   import Simulator from '$lib/Simulator.svelte';
+  import StakesBanner from '$lib/StakesBanner.svelte';
   import Icon from '$lib/Icon.svelte';
   import { onMount } from 'svelte';
   let { data } = $props();
@@ -54,8 +55,18 @@
       setTimeout(() => el.classList.remove('arrived'), 1300);
     }, 90);
   }
+  let stakes = $state<any>(null); // "qué se juega" certainties for the banner
   onMount(() => {
     if (tab === 'calendar') scrollToCurrentGame();
+    // Late-tournament certainties (champion decided / a game that decides it).
+    // Only meaningful once bets are locked; the endpoint reuses the cached
+    // simulator enumeration so this is cheap.
+    if (betsLocked) {
+      fetch(`/api/pools/${pool.id}/stakes`)
+        .then((r) => r.json())
+        .then((d) => { stakes = d.stakes ?? null; })
+        .catch(() => {});
+    }
     const onScroll = () => { scrollY = window.scrollY; };
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
@@ -573,6 +584,7 @@
   <div class="tab-content-wrapper" class:slide-left={slideDir === 'left'} class:slide-right={slideDir === 'right'} onanimationend={() => slideDir = ''}>
   <!-- Clasificación -->
   {#if tab === 'leaderboard'}
+    <StakesBanner {stakes} />
     {#if data.leaderboard == null}
       <!-- Skeleton -->
       <div style="display: flex; flex-direction: column; gap: 8px;">

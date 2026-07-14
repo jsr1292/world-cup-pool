@@ -3,6 +3,7 @@ import { query } from './db.js';
 import { getTeamsMapCached } from './cache.js';
 import { DEFAULT_SCORING_RULES } from './scoring.js';
 import { computeKnockoutOdds, type OddsMatchIn, type OddsEntryIn, type Phase } from '../knockout-odds.js';
+import { computeStakes } from '../stakes.js';
 
 // Small process-wide cache for the pool-wide payload (everything except the
 // per-request userId). The knockout-odds enumeration + a handful of queries only
@@ -33,7 +34,7 @@ export async function getSimulatorData(
   const safePool = { id: pool.id, name: pool.name, allow_multiple_predictions: pool.allow_multiple_predictions };
 
   if (!betsLocked) {
-    return { pool: safePool, betsLocked: false, teams: {}, entries: [], matches: [], picks: {}, orders: {}, matchOutcomePts: 0, groupPositionPts: 0, odds: [], oddsMeta: null, koMatches: [], bracketEntries: [], knockoutRules: {}, userId };
+    return { pool: safePool, betsLocked: false, teams: {}, entries: [], matches: [], picks: {}, orders: {}, matchOutcomePts: 0, groupPositionPts: 0, odds: [], oddsMeta: null, stakes: null, koMatches: [], bracketEntries: [], knockoutRules: {}, userId };
   }
 
   const cached = cache.get(poolId);
@@ -92,6 +93,7 @@ export async function getSimulatorData(
   // knockout bracket exists.
   let odds: any[] = [];
   let oddsMeta: any = null;
+  let stakes: any = null;    // "qué se juega" certainties (champions / decisive games)
   let koMatchesOut: any[] = [];      // for the interactive what-if bracket
   let bracketEntries: any[] = [];    // per-entry base + picks (client scores a chosen scenario)
   const knockoutRules: Record<string, number> = {
@@ -101,7 +103,7 @@ export async function getSimulatorData(
     third_place: Number(scoring.third_place) || 0,
   };
   const { rows: koRows } = await query(
-    `SELECT phase, sort_order, status, home_team_id, away_team_id, home_score, away_score, penalty_winner_id
+    `SELECT id, phase, sort_order, status, home_team_id, away_team_id, home_score, away_score, penalty_winner_id, kickoff_time
      FROM matches WHERE phase IN ('r32','r16','qf','sf','3rd','final')
      ORDER BY phase, sort_order`
   );
@@ -117,6 +119,11 @@ export async function getSimulatorData(
       homeScore: m.home_score, awayScore: m.away_score, penaltyWinnerId: m.penalty_winner_id ?? null,
     };
   });
+  // Parallel to koMatches: db id + kickoff for the stakes banner display.
+  const koMeta = koRows.map((m: any) => ({
+    id: Number(m.id),
+    kickoff: m.kickoff_time instanceof Date ? m.kickoff_time.toISOString() : (m.kickoff_time ? String(m.kickoff_time) : null),
+  }));
 
   // Per-entry fixed inputs: base = total_score minus already-earned knockout
   // points (so we can re-add the full simulated knockout total), plus the
@@ -163,9 +170,13 @@ export async function getSimulatorData(
     const result = computeKnockoutOdds(koMatches, oddsEntries, scoring);
     odds = result.rows;
     oddsMeta = { scenarios: result.scenarios, remaining: result.remaining, exact: result.exact };
+    stakes = computeStakes(koMatches, oddsEntries, scoring, koMeta, (id: number) => ({
+      name: (teams as Record<number, any>)[id]?.name ?? '?',
+      flag: (teams as Record<number, any>)[id]?.flag_code ?? '',
+    }));
   }
 
-  const payload = { pool: safePool, betsLocked: true, teams, entries, matches, picks, orders, matchOutcomePts, groupPositionPts, odds, oddsMeta, koMatches: koMatchesOut, bracketEntries, knockoutRules };
+  const payload = { pool: safePool, betsLocked: true, teams, entries, matches, picks, orders, matchOutcomePts, groupPositionPts, odds, oddsMeta, stakes, koMatches: koMatchesOut, bracketEntries, knockoutRules };
   cache.set(poolId, { at: Date.now(), payload });
   return { ...payload, userId };
 }
