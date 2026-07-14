@@ -5,6 +5,7 @@
   import { computeUnifiedProjection, type UnifiedEntry, type ProjCtx } from '$lib/sim-projection.js';
   import { buildForecastSim } from '$lib/sim-forecast.js';
   import { flagEmoji, shortName } from '$lib/teams.js';
+  import Icon from '$lib/Icon.svelte';
   let { data, standalone = false } = $props();
 
   // Two tabs now: the fused simulator, and the (unchanged) odds tab.
@@ -192,6 +193,15 @@
   const myPrimaryId = $derived((data.entries as any[]).find((e) => e.user_id === data.userId)?.id ?? null);
   function myPick(mid: number): string | null { return myPrimaryId != null ? (data.picks[myPrimaryId]?.[mid] ?? null) : null; }
   const myRow = $derived(myPrimaryId != null ? leaderboard.find((e) => e.id === myPrimaryId) : null);
+
+  // "Ver tabla" on the impact bar: scroll the projected standings to your row
+  // (falls back to the top of the board if your row is filtered out by "Solo
+  // cambios" when you haven't moved).
+  function goToMyRow() {
+    if (typeof document === 'undefined') return;
+    const el = document.getElementById('sim-me-row') ?? document.querySelector('.board');
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 
   // Your own bracket picks, so a pending KO tie can show a gold dot on the team
   // you backed (parallel to the group "tu apuesta" dot from myPick).
@@ -381,7 +391,7 @@
               {@const mine = myIds.has(e.id)}
               {@const medal = e.rank === 1 ? 'gold' : e.rank === 2 ? 'silver' : e.rank === 3 ? 'bronze' : ''}
               {@const d = e.total - e.live}
-              <div class="row" class:me={mine} class:mover={e.move !== 0} class:medal-gold={e.rank === 1}>
+              <div class="row" id={mine ? 'sim-me-row' : undefined} class:me={mine} class:mover={e.move !== 0} class:medal-gold={e.rank === 1}>
                 <div class="avatar {medal}">{e.name?.[0]?.toUpperCase() ?? '?'}</div>
                 <div class="row-main">
                   <div class="row-name">{e.rank}. {e.name}{#if data.pool.allow_multiple_predictions && e.label}<span class="row-ini"> · {e.label}</span>{:else if e.label}<span class="row-ini"> ({e.label})</span>{/if}</div>
@@ -404,7 +414,7 @@
 
       <!-- Phone: fixed impact bar above the tab bar -->
       {#if myRow && decidedCount > 0}
-        <div class="impact-bar">
+        <button type="button" class="impact-bar" onclick={goToMyRow} aria-label="Ver tu posición en la tabla proyectada">
           <span class="im-block">
             <span class="im-label">Tú</span>
             <span class="im-rank">{myRow.rank}º</span>
@@ -413,8 +423,8 @@
             {#if myRow.total !== myRow.live}<span class="im-pts {myRow.total > myRow.live ? 'up' : 'down'}">{myRow.total > myRow.live ? '+' : ''}{myRow.total - myRow.live}</span>{/if}
           </span>
           <span class="im-movers">{moverCount} {moverCount === 1 ? 'se mueve' : 'se mueven'}</span>
-          <span class="im-cta">📊 Ver tabla</span>
-        </div>
+          <span class="im-cta"><Icon name="table" size={13} /> Ver tabla</span>
+        </button>
       {/if}
     {/if}
   {/if}
@@ -522,12 +532,20 @@
   @media (max-width: 900px) {
     .impact-bar {
       display: flex; align-items: center; gap: 10px;
-      position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 95;
+      /* Sit ABOVE the bottom nav (~56px + safe area) so it doesn't cover it. */
+      position: fixed; left: 10px; right: 10px; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); z-index: 95;
       padding: 9px 14px; background: var(--bg-card-solid);
       border: 1px solid rgba(201,168,76,0.4); border-radius: 12px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      cursor: pointer; text-align: left; font: inherit; color: inherit; width: auto;
       /* Slide up when it appears (you've decided a pick, so a projection exists). */
       animation: impact-in 0.25s ease;
+      /* Glide down into the space the nav vacates when it auto-hides on scroll. */
+      transition: bottom 0.25s ease;
+    }
+    /* When the nav auto-hides on scroll-down, drop the bar to the bottom edge. */
+    :global(html.nav-collapsed) .impact-bar {
+      bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     }
   }
   @keyframes impact-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
