@@ -366,7 +366,7 @@
         class="nav-link"
         class:active={isActive(item.path)}
       >
-        <svg class="nav-icon"><use href="/icon.svg#{item.icon}" /></svg>
+        <Icon name={item.icon} size={18} stroke={2} />
         {item.label}
       </a>
     {/each}
@@ -375,7 +375,7 @@
       <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
         <div style="font-size: 9px; color: var(--text-dim); letter-spacing: 0.15em; text-transform: uppercase; padding: 0 12px 8px;">Administración</div>
         <a href="/admin" class="nav-link" class:active={currentPath.startsWith('/admin')}>
-          <svg class="nav-icon"><use href="/icon.svg#settings" /></svg>
+          <Icon name="settings" size={18} stroke={2} />
           Ajustes
         </a>
       </div>
@@ -432,7 +432,7 @@
   {#each navItems as item}
     <a href={item.href} class:active={isActive(item.path)} aria-label={item.label}
        onclick={() => { try { navigator.vibrate(5); } catch {} }}>
-      <svg class="nav-icon-mobile"><use href="/icon.svg#{item.icon}" /></svg>
+      <Icon name={item.icon} size={24} stroke={2} />
     </a>
   {/each}
 </div>
