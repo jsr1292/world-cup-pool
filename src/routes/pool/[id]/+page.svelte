@@ -42,7 +42,15 @@
     if (typeof document === 'undefined' || scrollTargetId == null) return;
     // Let the tab content render/animate in first, then centre the target row.
     setTimeout(() => {
-      document.getElementById(`cal-m${scrollTargetId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const el = document.getElementById(`cal-m${scrollTargetId}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // One-shot golden pulse on landing. Remove after it plays so a live match's
+      // own pulse resumes and re-opening the tab can replay it.
+      el.classList.remove('arrived');
+      void el.offsetWidth; // force reflow so re-adding the class replays it
+      el.classList.add('arrived');
+      setTimeout(() => el.classList.remove('arrived'), 1300);
     }, 90);
   }
   onMount(() => {
@@ -804,7 +812,10 @@
             <button onclick={closeMatchBets} aria-label="Cerrar" style="background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 2px 6px;">✕</button>
           </div>
           {#if matchBetsLoading}
-            <p style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 24px;">Cargando apuestas…</p>
+            <div style="max-width: 220px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 12px; align-items: center;">
+          <span class="calc-pulse" style="color: var(--text-muted); font-size: 12px;">Cargando apuestas…</span>
+          <div class="load-bar" aria-hidden="true"></div>
+        </div>
           {:else if matchBetsErr}
             <p style="text-align: center; color: var(--red); font-size: 12px; padding: 24px;">{matchBetsErr}</p>
           {:else if matchBetsData}
@@ -851,7 +862,10 @@
     {#if simErr}
       <p style="font-size: 12px; color: var(--red); padding: 16px; text-align: center;">{simErr}</p>
     {:else if !simData}
-      <p style="font-size: 12px; color: var(--text-muted); padding: 24px; text-align: center;">Cargando simulador…</p>
+      <div style="max-width: 300px; margin: 0 auto; padding: 28px 16px; display: flex; flex-direction: column; gap: 12px; align-items: center;">
+        <span class="calc-pulse" style="font-size: 12px; color: var(--text-muted);">Cargando simulador…</span>
+        <div class="load-bar" aria-hidden="true"></div>
+      </div>
     {:else}
       <div class="sim-breakout"><Simulator data={simData} /></div>
     {/if}
@@ -1217,7 +1231,7 @@
 <!-- Floating actions: back-to-top (when scrolled) + chat (always). Chat sits
      above the back-to-top button when both are showing. -->
 {#if showScrollTop}
-  <button onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} class="scroll-top-fab" aria-label="Volver arriba">↑</button>
+  <button onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} class="scroll-top-fab" aria-label="Volver arriba"><Icon name="arrow-up" size={22} stroke={2.1} /></button>
 {/if}
 {#if !chatOpen}
   <button onclick={openChat} class="chat-fab" class:raised={showScrollTop} aria-label="Abrir chat de la quiniela">💬</button>
@@ -1397,6 +1411,19 @@
   }
   .chat-empty { text-align: center; color: var(--text-muted); font-size: 11px; padding: 24px; line-height: 1.6; }
   .chat-input-row { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
+
+  /* One-shot golden pulse when the auto-scroll lands on the current/next match.
+     Higher specificity than .cal-live so it wins for ~1.2s on a live target, then
+     the class is removed in JS and the live pulse resumes. */
+  .cal-row.arrived { animation: arrive-pulse 1.2s ease-out 1; }
+  @keyframes arrive-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(201,168,76,0.55); border-color: rgba(201,168,76,0.7); }
+    70%  { box-shadow: 0 0 0 14px rgba(201,168,76,0); border-color: rgba(201,168,76,0.7); }
+    100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cal-row.arrived { animation: none; }
+  }
 
   /* Live game in the Calendario: glowing red, like the live score. */
   .cal-live {

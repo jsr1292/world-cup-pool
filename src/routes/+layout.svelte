@@ -120,6 +120,10 @@
   onDestroy(() => { if (liveTimer) clearTimeout(liveTimer); });
 
   const currentPath = $derived($page.url.pathname);
+  // The pool hub (/pool/<id>) renders its own chat-coordinated back-to-top FAB,
+  // so suppress the global one there to avoid two overlapping buttons. Long
+  // sub-pages (predict, bracket, …) still get the global FAB.
+  const isPoolHub = $derived(/^\/pool\/[^/]+$/.test(currentPath));
 
   function isActive(path) {
     if (path === '/') return currentPath === '/';
@@ -291,7 +295,7 @@
 </script>
 
 <InstallPrompt />
-{#if data?.user}<BackToTop />{/if}
+{#if data?.user && !isPoolHub}<BackToTop />{/if}
 
 <div class="app-layout" style="height: 100vh; padding-bottom: 0;">
   <!-- Top Bar (mobile only) -->

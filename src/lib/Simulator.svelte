@@ -526,8 +526,12 @@
       padding: 9px 14px; background: var(--bg-card-solid);
       border: 1px solid rgba(201,168,76,0.4); border-radius: 12px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      /* Slide up when it appears (you've decided a pick, so a projection exists). */
+      animation: impact-in 0.25s ease;
     }
   }
+  @keyframes impact-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @media (prefers-reduced-motion: reduce) { .impact-bar { animation: none; } }
   .im-block { display: inline-flex; align-items: baseline; gap: 5px; }
   .im-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
   .im-rank { font-size: 16px; font-weight: 800; color: var(--gold); }
