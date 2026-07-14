@@ -1,14 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchFromApiFootball, fetchFromFifaApi, syncScores } from './live-scores.js';
+import { fetchFromApiFootball, fetchFromFifaApi, syncScores, fetchLiveTicker } from './live-scores.js';
 
 // Mock the database module to avoid real DB connections
 vi.mock('$lib/server/db.js', () => ({
 	query: vi.fn()
 }));
 
+// Mock the teams-map cache so fetchLiveTicker doesn't hit the DB for team metadata.
+vi.mock('$lib/server/cache.js', () => ({
+	getTeamsMapCached: vi.fn()
+}));
+
 // Grab reference to the mocked query for write-path tests
 import { query as _mockQuery } from '$lib/server/db.js';
 const dbQuery = _mockQuery as unknown as ReturnType<typeof vi.fn>;
+import { getTeamsMapCached as _mockTeamsMap } from '$lib/server/cache.js';
+const teamsMapCached = _mockTeamsMap as unknown as ReturnType<typeof vi.fn>;
 
 // Helper: build a minimal API-Football fixture response
 function apiFixture(round: string, opts?: { home?: number; away?: number }) {
@@ -462,5 +469,51 @@ describe('syncScores write path', () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ Results: [fifaMatch('289290', { home: 2, away: 2, winner: '43911' })] }) }));
 		const [m] = await fetchFromFifaApi();
 		expect(m.winner_side).toBe('home'); // 43911 = Home.IdTeam in the fixture helper
+	});
+});
+
+describe('fetchLiveTicker', () => {
+	beforeEach(() => {
+		delete process.env.API_FOOTBALL_KEY;
+		delete process.env.DISABLE_FIFA_FALLBACK;
+		vi.restoreAllMocks();
+		dbQuery.mockReset();
+		teamsMapCached.mockReset();
+	});
+	afterEach(() => { delete process.env.DISABLE_FIFA_FALLBACK; });
+
+	// Regression: a LIVE knockout match (e.g. a semifinal) must resolve back to our
+	// DB match id so its row can be highlighted in the calendar. The pair-map query
+	// used to be `WHERE phase = 'group'`, which left knockout fixtures out of the
+	// map and resolved them to match_id: null. It's now `WHERE status <> 'finished'`.
+	// This test returns the knockout row ONLY for the `status <> 'finished'` query,
+	// so it fails against the old `phase = 'group'` query and passes against the fix.
+	it('resolves a live knockout match to its non-finished DB match id', async () => {
+		// FIFA feed: one in-play (MatchStatus 3) semifinal between Team X and Team Y.
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve({ Results: [fifaMatch('289290', { home: 2, away: 1, status: 3 })] })
+		}));
+		// Team metadata for the resolved ids (name/flag) — not the resolver itself.
+		teamsMapCached.mockResolvedValue({
+			101: { name: 'Team X', flag_code: 'xx' },
+			102: { name: 'Team Y', flag_code: 'yy' },
+		});
+		dbQuery.mockImplementation((sql: string) => {
+			if (sql.includes('team_aliases')) {
+				// name → id resolver (teams UNION team_aliases)
+				return Promise.resolve({ rows: [{ id: 101, canon: 'Team X' }, { id: 102, canon: 'Team Y' }] });
+			}
+			if (sql.includes("status <> 'finished'")) {
+				// The (fixed) pair-map query includes not-yet-finished knockout rows.
+				return Promise.resolve({ rows: [{ id: 500, home_team_id: 101, away_team_id: 102 }] });
+			}
+			return Promise.resolve({ rows: [] });
+		});
+
+		const ticker = await fetchLiveTicker();
+		expect(ticker).toHaveLength(1);
+		// The live semifinal is tied back to our DB match id (was null before the fix).
+		expect(ticker[0].match_id).toBe(500);
 	});
 });
