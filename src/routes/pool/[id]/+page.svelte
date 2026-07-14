@@ -743,8 +743,10 @@
               {@const finished = mt.status === 'finished' && mt.home_score != null}
               {@const live = !finished && ($liveMatchIds.has(mt.id) || mt.status === 'live')}
               {@const v = matchVerdict(mt)}
-              {@const homeWin = finished && mt.home_score > mt.away_score}
-              {@const awayWin = finished && mt.away_score > mt.home_score}
+              {@const penHome = finished && mt.penalty_winner_id != null && mt.penalty_winner_id === mt.home_team_id}
+              {@const penAway = finished && mt.penalty_winner_id != null && mt.penalty_winner_id === mt.away_team_id}
+              {@const homeWin = finished && (mt.home_score > mt.away_score || penHome)}
+              {@const awayWin = finished && (mt.away_score > mt.home_score || penAway)}
               {@const clickable = betsLocked && mt.phase === 'group'}
               <svelte:element this={clickable ? 'button' : 'div'} type={clickable ? 'button' : undefined} onclick={clickable ? () => openMatchBets(mt) : undefined} id="cal-m{mt.id}" class="cal-row" class:cal-live={live} style="display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font: inherit; color: inherit; background: var(--bg-card); border: 1px solid {v.correct === true ? 'rgba(0,229,160,0.3)' : v.correct === false ? 'rgba(255,77,106,0.25)' : 'var(--border)'}; border-radius: 7px; padding: 8px 10px; {clickable ? 'cursor: pointer;' : ''}">
                 <!-- phase / time -->
@@ -759,12 +761,12 @@
                   <div style="display: flex; align-items: center; gap: 5px; font-size: 12px; {homeWin ? 'font-weight: 700;' : finished ? 'color: var(--text-muted);' : ''}">
                     <span>{@html mt.home_flag ? flagEmoji(mt.home_flag) : ''}</span>
                     <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{mt.home_name ? shortName(mt.home_name) : 'Por definir'}</span>
-                    {#if finished}<span style="font-weight: 700; color: {homeWin ? 'var(--text)' : 'var(--text-muted)'};">{mt.home_score}</span>{/if}
+                    {#if finished}<span style="font-weight: 700; color: {homeWin ? 'var(--text)' : 'var(--text-muted)'};">{mt.home_score}{#if penHome}<span class="cal-pen-tag">pen</span>{/if}</span>{/if}
                   </div>
                   <div style="display: flex; align-items: center; gap: 5px; font-size: 12px; {awayWin ? 'font-weight: 700;' : finished ? 'color: var(--text-muted);' : ''}">
                     <span>{@html mt.away_flag ? flagEmoji(mt.away_flag) : ''}</span>
                     <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{mt.away_name ? shortName(mt.away_name) : 'Por definir'}</span>
-                    {#if finished}<span style="font-weight: 700; color: {awayWin ? 'var(--text)' : 'var(--text-muted)'};">{mt.away_score}</span>{/if}
+                    {#if finished}<span style="font-weight: 700; color: {awayWin ? 'var(--text)' : 'var(--text-muted)'};">{mt.away_score}{#if penAway}<span class="cal-pen-tag">pen</span>{/if}</span>{/if}
                   </div>
                 </div>
                 <!-- verdict / status -->
@@ -1423,6 +1425,14 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .cal-row.arrived { animation: none; }
+  }
+
+  /* Small "pen" tag next to the winner's score when a knockout tie was decided
+     on penalties (so a 1–1 that went to a shootout doesn't read as unresolved). */
+  .cal-pen-tag {
+    font-size: 8px; font-weight: 800; color: var(--gold);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin-left: 3px; vertical-align: middle;
   }
 
   /* Live game in the Calendario: glowing red, like the live score. */
