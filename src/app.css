@@ -579,11 +579,13 @@ button,
 }
 a.leaderboard-row:active,
 a.cal-row:active,
+.pool-card:active,
 .chip:active {
   transform: scale(0.985);
 }
 a.leaderboard-row,
 a.cal-row,
+.pool-card,
 .chip {
   transition: transform 0.12s ease, border-color 0.15s, background-color 0.15s, box-shadow 0.2s;
 }
@@ -612,7 +614,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 /* Motion is a garnish, never a barrier. */
 @media (prefers-reduced-motion: reduce) {
   button:active, .bottom-nav a:active, .nav-link:active, .pool-tab:active,
-  a.leaderboard-row:active, a.cal-row:active, .chip:active {
+  a.leaderboard-row:active, a.cal-row:active, .pool-card:active, .chip:active {
     transform: none;
   }
   a.leaderboard-row:hover, a.cal-row:hover { transform: none; }
