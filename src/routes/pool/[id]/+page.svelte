@@ -1286,30 +1286,30 @@
   .pool-meta { font-size: 11px; }
 
   .leaderboard-row {
-    display: flex; align-items: center; gap: 12px;
+    display: flex; align-items: center; gap: 10px;
     text-decoration: none; color: inherit;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 12px 16px;
+    padding: 8px 14px;
   }
   .leaderboard-row.is-link { cursor: pointer; }
   .leaderboard-row.is-first { border-color: rgba(201,168,76,0.2); box-shadow: 0 0 16px rgba(201,168,76,0.1); }
   .leaderboard-row.is-me { background: rgba(201,168,76,0.08); border-color: var(--gold); box-shadow: 0 0 12px rgba(201,168,76,0.15); }
   .lb-avatar {
-    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 13px;
+    font-weight: 700; font-size: 12px;
   }
   .lb-main { flex: 1; min-width: 0; }
-  .lb-name { font-size: 13px; font-weight: 600; }
+  .lb-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lb-name.mine { color: var(--gold); }
   .lb-mover { font-size: 9px; font-weight: 700; margin: 0 2px 0 3px; }
   .lb-label { color: var(--text-muted); font-weight: 400; }
-  .lb-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-  .lb-tag { font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 2px 6px; border-radius: 3px; }
+  .lb-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+  .lb-tag { font-size: 9px; color: var(--text-muted); background: var(--bg-surface); padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
   .lb-score { text-align: right; flex-shrink: 0; }
-  .lb-pts { font-size: 18px; font-weight: 700; color: var(--gold); line-height: 1.1; }
+  .lb-pts { font-size: 16px; font-weight: 700; color: var(--gold); line-height: 1.1; }
   .lb-pts-label { font-size: 9px; color: var(--text-muted); }
   .lb-prize { font-size: 10px; font-weight: 700; color: var(--green); margin-top: 3px; }
   .lb-chevron { font-size: 14px; color: var(--text-dim); margin-left: 2px; }
@@ -1320,15 +1320,15 @@
     .pool-title { font-size: 30px; margin-bottom: 8px !important; }
     .pool-meta { font-size: 13px; gap: 16px !important; }
 
-    .leaderboard-row { gap: 16px; padding: 16px 22px; border-radius: 10px; }
-    .lb-avatar { width: 40px; height: 40px; font-size: 16px; }
-    .lb-name { font-size: 15px; }
-    .lb-mover { font-size: 11px; }
-    .lb-tags { gap: 7px; margin-top: 6px; }
-    .lb-tag { font-size: 11px; padding: 3px 8px; border-radius: 4px; }
-    .lb-pts { font-size: 24px; }
+    .leaderboard-row { gap: 12px; padding: 9px 18px; border-radius: 9px; }
+    .lb-avatar { width: 30px; height: 30px; font-size: 13px; }
+    .lb-name { font-size: 14px; }
+    .lb-mover { font-size: 10px; }
+    .lb-tags { gap: 5px; margin-top: 4px; }
+    .lb-tag { font-size: 10px; padding: 1px 7px; border-radius: 4px; }
+    .lb-pts { font-size: 19px; }
     .lb-pts-label { font-size: 10px; }
-    .lb-prize { font-size: 12px; margin-top: 4px; }
+    .lb-prize { font-size: 12px; margin-top: 2px; }
     .lb-chevron { font-size: 18px; }
   }
 
