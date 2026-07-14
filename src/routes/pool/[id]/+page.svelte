@@ -1414,19 +1414,6 @@
   .chat-empty { text-align: center; color: var(--text-muted); font-size: 11px; padding: 24px; line-height: 1.6; }
   .chat-input-row { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); flex-shrink: 0; }
 
-  /* One-shot golden pulse when the auto-scroll lands on the current/next match.
-     Higher specificity than .cal-live so it wins for ~1.2s on a live target, then
-     the class is removed in JS and the live pulse resumes. */
-  .cal-row.arrived { animation: arrive-pulse 1.2s ease-out 1; }
-  @keyframes arrive-pulse {
-    0%   { box-shadow: 0 0 0 0 rgba(201,168,76,0.55); border-color: rgba(201,168,76,0.7); }
-    70%  { box-shadow: 0 0 0 14px rgba(201,168,76,0); border-color: rgba(201,168,76,0.7); }
-    100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .cal-row.arrived { animation: none; }
-  }
-
   /* Small "pen" tag next to the winner's score when a knockout tie was decided
      on penalties (so a 1–1 that went to a shootout doesn't read as unresolved). */
   .cal-pen-tag {

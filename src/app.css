@@ -638,6 +638,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 @keyframes vt-out { to { opacity: 0; } }
 @keyframes vt-in { from { opacity: 0; transform: translateY(4px); } }
 
+/* One-shot golden pulse when the Calendario auto-scrolls onto the current/next
+   match. Global (not component-scoped) because the `.arrived` class is applied
+   from JS — a scoped rule would be pruned by the Svelte compiler as "unused".
+   !important so it briefly wins over the live glow (.cal-live), then JS removes
+   the class and the red pulse resumes. */
+.cal-row.arrived { animation: arrive-pulse 1.2s ease-out 1 !important; }
+@keyframes arrive-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(201,168,76,0.55); border-color: rgba(201,168,76,0.7); }
+  70%  { box-shadow: 0 0 0 14px rgba(201,168,76,0); border-color: rgba(201,168,76,0.7); }
+  100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cal-row.arrived { animation: none !important; }
+}
+
 /* Indeterminate loading bar — a gold segment sweeping across a thin track.
    Reusable for any "cargando/calculando" wait (simulator, match bets, …). */
 .load-bar {
