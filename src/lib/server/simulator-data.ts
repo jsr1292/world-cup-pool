@@ -31,7 +31,7 @@ export async function getSimulatorData(
   const dk = pool.deadline_knockout ? new Date(pool.deadline_knockout) : null;
   const now = new Date();
   const betsLocked = !!dg && dg <= now && !!dk && dk <= now;
-  const safePool = { id: pool.id, name: pool.name, allow_multiple_predictions: pool.allow_multiple_predictions };
+  const safePool = { id: pool.id, name: pool.name, allow_multiple_predictions: pool.allow_multiple_predictions, buy_in: pool.buy_in, currency: pool.currency };
 
   if (!betsLocked) {
     return { pool: safePool, betsLocked: false, teams: {}, entries: [], matches: [], picks: {}, orders: {}, matchOutcomePts: 0, groupPositionPts: 0, odds: [], oddsMeta: null, stakes: null, koMatches: [], bracketEntries: [], knockoutRules: {}, userId };

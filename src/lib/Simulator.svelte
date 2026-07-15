@@ -5,6 +5,7 @@
   import { computeUnifiedProjection, type UnifiedEntry, type ProjCtx } from '$lib/sim-projection.js';
   import { buildForecastSim } from '$lib/sim-forecast.js';
   import { flagEmoji, shortName } from '$lib/teams.js';
+  import { prizesByEntryId, fmtMoney } from '$lib/prizes.js';
   import Icon from '$lib/Icon.svelte';
   let { data, standalone = false, impactVisible = $bindable(false) } = $props();
 
@@ -137,6 +138,14 @@
   });
   const leaderboard = $derived(computeUnifiedProjection(unifiedEntries, koTree, koRules, projCtx));
   const moverCount = $derived(leaderboard.filter((e) => e.move !== 0).length);
+
+  // Projected prize money, mirroring the Clasificación: the pot is the buy-in ×
+  // number of bets (a member with 2 pronósticos pays 2 buy-ins), and it assumes
+  // every bet is paid. Zero buy-in → no pot → no money shown anywhere.
+  const pot = $derived((Number(data.pool.buy_in) || 0) * (data.entries as any[]).length);
+  // Fed the FULL `leaderboard`, never the filtered `visibleLeaderboard` that
+  // the rows render from — prizes depend on every entry's finishing place.
+  const prizeById = $derived(prizesByEntryId(leaderboard.map((e) => ({ id: e.id, score: e.total })), pot));
   let onlyChanges = $state(false);
   const visibleLeaderboard = $derived(onlyChanges ? leaderboard.filter((e) => e.move !== 0 || e.total !== e.live) : leaderboard);
 
@@ -409,6 +418,7 @@
                 <div class="row-right">
                   <div class="row-total">{e.total}</div>
                   <div class="row-pts">pts</div>
+                  {#if prizeById[e.id] > 0}<div class="row-prize">💰 {fmtMoney(prizeById[e.id], data.pool.currency)}</div>{/if}
                 </div>
               </div>
             {/each}
@@ -530,6 +540,8 @@
   .row-right { text-align: right; flex-shrink: 0; }
   .row-total { font-size: 17px; font-weight: 800; color: var(--gold); line-height: 1; font-variant-numeric: tabular-nums; }
   .row-pts { font-size: 9px; color: var(--text-muted); }
+  /* Mirrors .lb-prize on the Clasificación so the same money reads the same way. */
+  .row-prize { font-size: 10px; font-weight: 700; color: var(--green); margin-top: 3px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
   /* ── phone impact bar (fixed, mobile only) ───────────────────────────── */
   .impact-bar { display: none; }
