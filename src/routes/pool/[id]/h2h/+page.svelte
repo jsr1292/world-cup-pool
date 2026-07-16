@@ -8,6 +8,10 @@
   function tFlag(id: number | null) { return id != null ? flagEmoji(teams[id]?.flag_code || '') : ''; }
   const entryLabel = (e: any) => `${e.display_name}${data.pool.allow_multiple_predictions && e.label ? ` · ${e.label}` : ''}`;
 
+  function catLabel(c: string): string {
+    return c === 'posicion' ? 'Posición (tabla)' : c === 'eliminatorias' ? 'Eliminatorias' : 'Resultados 1/X/2';
+  }
+
   let aSel = $state(data.a?.id ? String(data.a.id) : '');
   let bSel = $state(data.b?.id ? String(data.b.id) : '');
   function reload() { if (aSel && bSel && aSel !== bSel) goto(`?a=${aSel}&b=${bSel}`, { invalidateAll: true }); }
@@ -100,6 +104,55 @@
     {#if !data.a || !data.b}
       <p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 20px;">Elige dos participantes para comparar sus pronósticos.</p>
     {:else}
+      {#if data.attribution}
+        {@const at = data.attribution}
+        {@const rival = data.b.owner.split(' ')[0]}
+        {@const maxCat = Math.max(1, ...at.categories.map((c) => Math.abs(c.delta)))}
+        <section style="margin-bottom: 18px; padding: 14px; background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.25); border-radius: 12px;">
+          <div style="text-align: center; font-size: 16px; font-weight: 800; color: {at.gap < 0 ? 'var(--red)' : at.gap > 0 ? 'var(--green)' : 'var(--gold)'};">
+            {#if at.gap < 0}Vas por detrás de {rival} por {Math.abs(at.gap)} pts
+            {:else if at.gap > 0}Le sacas {at.gap} pts a {rival}
+            {:else}Empatados con {rival}{/if}
+          </div>
+          <div style="text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+            Tú {at.yourTotal} · {rival} {at.theirTotal}
+          </div>
+
+          <div style="font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-muted); margin: 14px 0 6px;">DÓNDE SE DECIDIÓ</div>
+          {#each at.categories as c}
+            {@const w = (Math.abs(c.delta) / maxCat) * 50}
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 0;">
+              <span style="flex: 1; color: var(--text);">{catLabel(c.category)}</span>
+              <span style="width: 110px; display: flex; align-items: center; flex-shrink: 0;">
+                <span style="width: 50%; display: flex; justify-content: flex-end;">
+                  {#if c.delta < 0}<span style="height: 8px; width: {w}%; background: var(--red); border-radius: 2px;"></span>{/if}
+                </span>
+                <span style="width: 1px; height: 12px; background: var(--border);"></span>
+                <span style="width: 50%;">
+                  {#if c.delta > 0}<span style="height: 8px; width: {w}%; background: var(--green); border-radius: 2px; display: block;"></span>{/if}
+                </span>
+              </span>
+              <span style="width: 34px; text-align: right; flex-shrink: 0; font-weight: 700; color: {c.delta < 0 ? 'var(--red)' : c.delta > 0 ? 'var(--green)' : 'var(--text-dim)'};">{c.delta > 0 ? '+' : ''}{c.delta}</span>
+            </div>
+          {/each}
+          <div style="display: flex; font-size: 12px; padding: 6px 0 0; margin-top: 4px; border-top: 1px solid var(--border); font-weight: 800;">
+            <span style="flex: 1; color: var(--text-muted);">Total</span>
+            <span style="width: 34px; text-align: right; color: {at.gap < 0 ? 'var(--red)' : at.gap > 0 ? 'var(--green)' : 'var(--text-dim)'};">{at.gap > 0 ? '+' : ''}{at.gap}</span>
+          </div>
+
+          {#if at.swings.length > 0}
+            <div style="font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-muted); margin: 14px 0 6px;">LO QUE MÁS PESÓ</div>
+            {#each at.swings as s}
+              <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 4px 0; border-top: 1px solid rgba(255,255,255,0.04);">
+                <span style="width: 34px; flex-shrink: 0; font-weight: 800; color: {s.delta < 0 ? 'var(--red)' : 'var(--green)'};">{s.delta > 0 ? '+' : ''}{s.delta}</span>
+                <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text);">{s.label}</span>
+                <span style="flex-shrink: 0; font-size: 10px; color: var(--text-dim);">tú {s.you} · {rival} {s.them}</span>
+              </div>
+            {/each}
+          {/if}
+        </section>
+      {/if}
+
       {#if agreement}
         <div style="text-align: center; margin-bottom: 16px; padding: 10px; background: rgba(201,168,76,0.07); border: 1px solid rgba(201,168,76,0.22); border-radius: 10px;">
           <div style="font-size: 20px; font-weight: 800; color: var(--gold);">{agreement.same}/{agreement.total}</div>
