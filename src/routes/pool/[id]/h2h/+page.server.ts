@@ -4,6 +4,7 @@ import { getTeamsMapCached } from '$lib/server/cache.js';
 import { error } from '@sveltejs/kit';
 import { computeAttribution, type ItemPoints } from '$lib/h2h-attribution.js';
 import { shortName } from '$lib/teams.js';
+import { rankGroup, type GsMatch } from '$lib/group-standings.js';
 import type { PageServerLoad } from './$types.js';
 
 // Head-to-head: compare two entries' predictions side by side. Gated to fully
@@ -27,7 +28,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   const betsLocked = !!dg && dg <= now && !!dk && dk <= now;
   const safePool = { id: pool.id, name: pool.name, allow_multiple_predictions: pool.allow_multiple_predictions };
 
-  if (!betsLocked) return { pool: safePool, betsLocked: false, entries: [], a: null, b: null, teams: {}, attribution: null };
+  if (!betsLocked) return { pool: safePool, betsLocked: false, entries: [], a: null, b: null, teams: {}, attribution: null, actualGroupWinners: {}, actualChampion: null };
 
   const { rows: entries } = await query(
     `SELECT p.id, u.display_name, p.label FROM predictions p JOIN users u ON u.id = p.user_id
@@ -50,6 +51,44 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     FROM matches WHERE phase = 'group'
     ORDER BY kickoff_time NULLS LAST, sort_order
   `);
+
+  // Actual group winners, once a group's 6 matches are finished — mirrors the
+  // exact rankGroup() logic that scores the real table (scoring.ts), so the
+  // ✓/✗ marks below can never disagree with the live scoring engine. Read-only,
+  // derived from the groupMatches already fetched above.
+  const actualGroupWinners: Record<string, number> = {};
+  {
+    const byGroup: Record<string, GsMatch[]> = {};
+    const finishedCount: Record<string, number> = {};
+    for (const m of groupMatches) {
+      if (!m.group_name) continue;
+      finishedCount[m.group_name] = (finishedCount[m.group_name] ?? 0) + (m.status === 'finished' ? 1 : 0);
+      if (m.status === 'finished' && m.home_score != null && m.away_score != null) {
+        (byGroup[m.group_name] ??= []).push({
+          homeTeamId: m.home_team_id, awayTeamId: m.away_team_id,
+          homeScore: m.home_score, awayScore: m.away_score,
+        });
+      }
+    }
+    for (const [g, ms] of Object.entries(byGroup)) {
+      if (finishedCount[g] !== 6) continue; // only rank a completed group (matches scoring.ts)
+      actualGroupWinners[g] = rankGroup(ms)[0];
+    }
+  }
+
+  // Actual champion, once the final is finished (same winner rule as
+  // calculateBracketScores in scoring.ts). Read-only SELECT.
+  const { rows: finalRows } = await query(`
+    SELECT home_team_id, away_team_id, home_score, away_score, penalty_winner_id
+    FROM matches WHERE phase = 'final' AND status = 'finished'
+      AND home_score IS NOT NULL AND away_score IS NOT NULL LIMIT 1
+  `);
+  const fm = finalRows[0];
+  const actualChampion: number | null = fm
+    ? (fm.home_score > fm.away_score ? fm.home_team_id
+      : fm.home_score < fm.away_score ? fm.away_team_id
+      : fm.penalty_winner_id ?? null)
+    : null;
 
   let attribution = null;
   if (aId && bId) {
@@ -91,7 +130,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     attribution = computeAttribution(items);
   }
 
-  return { pool: safePool, betsLocked: true, entries, a, b, teams, groupMatches, attribution };
+  return { pool: safePool, betsLocked: true, entries, a, b, teams, groupMatches, attribution, actualGroupWinners, actualChampion };
 };
 
 function pickId(raw: string | null, ids: Set<number>): number | null {

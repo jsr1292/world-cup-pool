@@ -61,19 +61,6 @@
     if (m.status !== 'finished' || m.home_score == null) return null;
     return m.home_score > m.away_score ? '1' : m.home_score < m.away_score ? '2' : 'X';
   }
-  // Who got more right: each side's correct group picks over the played matches.
-  const groupCorrect = $derived.by(() => {
-    if (!data.a || !data.b) return null;
-    let aOk = 0, bOk = 0, played = 0;
-    for (const m of (data.groupMatches || [])) {
-      const act = actualCode(m);
-      if (!act) continue;
-      played++;
-      if (data.a.groupPicks?.[m.id] === act) aOk++;
-      if (data.b.groupPicks?.[m.id] === act) bOk++;
-    }
-    return { aOk, bOk, played };
-  });
 </script>
 
 <svelte:head><title>Comparar · {data.pool.name}</title></svelte:head>
@@ -156,31 +143,29 @@
       {#if agreement}
         <div style="text-align: center; margin-bottom: 16px; padding: 10px; background: rgba(201,168,76,0.07); border: 1px solid rgba(201,168,76,0.22); border-radius: 10px;">
           <div style="font-size: 20px; font-weight: 800; color: var(--gold);">{agreement.same}/{agreement.total}</div>
-          <div style="font-size: 10px; color: var(--text-muted);">coincidencias (campeón + ganadores de grupo) · {sharedFinalists}/2 finalistas en común</div>
+          <div style="font-size: 12px; color: var(--text-muted);">coincidencias (campeón + ganadores de grupo) · {sharedFinalists}/2 finalistas en común</div>
           {#if groupAgreement && groupAgreement.total > 0}
-            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">⚽ coinciden en <strong style="color: var(--gold);">{groupAgreement.same}/{groupAgreement.total}</strong> partidos de grupo</div>
-          {/if}
-          {#if groupCorrect && groupCorrect.played > 0}
-            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">✓ aciertos: <strong style="color: var(--green);">{data.a.owner.split(' ')[0]} {groupCorrect.aOk}</strong> · <strong style="color: var(--green);">{data.b.owner.split(' ')[0]} {groupCorrect.bOk}</strong> <span style="color: var(--text-dim);">(de {groupCorrect.played} jugados)</span></div>
-          {/if}
-          {#if data.a.totalScore != null && data.b.totalScore != null}
-            <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;">
-              🏅 <strong style="color: var(--gold);">{data.a.owner.split(' ')[0]} {data.a.totalScore} pts</strong>
-              <span style="color: var(--text-dim);">({data.a.resultPoints} resultados{#if data.a.positionPoints > 0} · +{data.a.positionPoints} posición{/if}{#if data.a.knockoutPoints > 0} · +{data.a.knockoutPoints} elim.{/if})</span>
-              · <strong style="color: var(--gold);">{data.b.owner.split(' ')[0]} {data.b.totalScore} pts</strong>
-              <span style="color: var(--text-dim);">({data.b.resultPoints} resultados{#if data.b.positionPoints > 0} · +{data.b.positionPoints} posición{/if}{#if data.b.knockoutPoints > 0} · +{data.b.knockoutPoints} elim.{/if})</span>
-            </div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">⚽ coinciden en <strong style="color: var(--gold);">{groupAgreement.same}/{groupAgreement.total}</strong> partidos de grupo</div>
           {/if}
         </div>
       {/if}
 
-      {#snippet row(label: string, av: number | null, bv: number | null)}
+      {#snippet mark(state: 'correct' | 'wrong' | null)}
+        {#if state === 'correct'}<span style="color: var(--green); font-weight: 700;">✓</span>
+        {:else if state === 'wrong'}<span style="color: var(--red); font-weight: 700;">✗</span>{/if}
+      {/snippet}
+
+      {#snippet row(label: string, av: number | null, bv: number | null, actual: number | null)}
         {@const same = av != null && av === bv}
+        {@const aState = actual != null && av != null ? (av === actual ? 'correct' : 'wrong') : null}
+        {@const bState = actual != null && bv != null ? (bv === actual ? 'correct' : 'wrong') : null}
         <div style="display: flex; align-items: center; gap: 6px; padding: 7px 8px; background: {same ? 'rgba(0,229,160,0.05)' : 'var(--bg-card)'}; border: 1px solid {same ? 'rgba(0,229,160,0.2)' : 'var(--border)'}; border-radius: 6px;">
-          <span style="flex: 1; min-width: 0; font-size: 11px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; {same ? 'font-weight: 600;' : ''}">{tName(av)} {@html tFlag(av)}</span>
-          <span style="font-size: 8px; color: var(--text-dim); width: 46px; text-align: center; flex-shrink: 0; text-transform: uppercase;">{label}</span>
-          <span style="flex: 1; min-width: 0; font-size: 11px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; {same ? 'font-weight: 600;' : ''}">{@html tFlag(bv)} {tName(bv)}</span>
-          <span style="width: 12px; flex-shrink: 0; text-align: center; font-size: 11px; color: {same ? 'var(--green)' : 'var(--text-dim)'};">{same ? '=' : '≠'}</span>
+          <span style="flex: 1; min-width: 0; font-size: 13px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; {same ? 'font-weight: 600;' : ''}">{tName(av)} {@html tFlag(av)}</span>
+          <span style="width: 14px; flex-shrink: 0; text-align: center; font-size: 12px;">{@render mark(aState)}</span>
+          <span style="font-size: 12px; color: var(--text-dim); width: 46px; text-align: center; flex-shrink: 0; text-transform: uppercase;">{label}</span>
+          <span style="width: 14px; flex-shrink: 0; text-align: center; font-size: 12px;">{@render mark(bState)}</span>
+          <span style="flex: 1; min-width: 0; font-size: 13px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; {same ? 'font-weight: 600;' : ''}">{@html tFlag(bv)} {tName(bv)}</span>
+          <span style="width: 12px; flex-shrink: 0; text-align: center; font-size: 13px; color: {same ? 'var(--green)' : 'var(--text-dim)'};">{same ? '=' : '≠'}</span>
         </div>
       {/snippet}
 
@@ -188,9 +173,9 @@
         {#if code}
           {@const bg = state === 'correct' ? 'rgba(0,229,160,0.18)' : state === 'wrong' ? 'rgba(255,77,106,0.16)' : (code === 'X' ? 'rgba(255,255,255,0.08)' : 'rgba(201,168,76,0.16)')}
           {@const col = state === 'correct' ? 'var(--green)' : state === 'wrong' ? 'var(--red)' : (code === 'X' ? 'var(--text-muted)' : 'var(--gold)')}
-          <span style="display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: {bg}; color: {col};">{code}{#if state === 'correct'} ✓{:else if state === 'wrong'} ✗{/if}</span>
+          <span style="display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: {bg}; color: {col};">{code}{#if state === 'correct'} ✓{:else if state === 'wrong'} ✗{/if}</span>
         {:else}
-          <span style="font-size: 10px; color: var(--text-dim);">–</span>
+          <span style="font-size: 12px; color: var(--text-dim);">–</span>
         {/if}
       {/snippet}
 
@@ -204,29 +189,29 @@
         <div style="display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;">
           <span style="width: 34px; flex-shrink: 0; text-align: center;">{@render codePill(ac, aState)}</span>
           <span style="flex: 1; min-width: 0; text-align: center; overflow: hidden;">
-            <span style="display: block; font-size: 10px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span style="font-size: 8px; color: var(--text-dim);">{m.group_name}</span> {@html tFlag(m.home_team_id)} {tName(m.home_team_id)}–{tName(m.away_team_id)} {@html tFlag(m.away_team_id)}</span>
-            {#if actual}<span style="font-size: 9px; font-weight: 700; color: var(--gold);">{m.home_score}-{m.away_score}</span>{/if}
+            <span style="display: block; font-size: 13px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><span style="font-size: 12px; color: var(--text-dim);">{m.group_name}</span> {@html tFlag(m.home_team_id)} {tName(m.home_team_id)}–{tName(m.away_team_id)} {@html tFlag(m.away_team_id)}</span>
+            {#if actual}<span style="font-size: 13px; font-weight: 700; color: var(--gold);">{m.home_score}-{m.away_score}</span>{/if}
           </span>
           <span style="width: 34px; flex-shrink: 0; text-align: center;">{@render codePill(bc, bState)}</span>
-          <span style="width: 12px; flex-shrink: 0; text-align: center; font-size: 11px; color: {same ? 'var(--green)' : 'var(--text-dim)'};">{same ? '=' : '≠'}</span>
+          <span style="width: 12px; flex-shrink: 0; text-align: center; font-size: 13px; color: {same ? 'var(--green)' : 'var(--text-dim)'};">{same ? '=' : '≠'}</span>
         </div>
       {/snippet}
 
       <!-- Names header -->
       <div style="display: flex; gap: 6px; margin-bottom: 8px; padding: 0 8px;">
-        <span style="flex: 1; font-size: 11px; font-weight: 700; color: var(--gold); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{data.a.owner}{#if data.a.label} · {data.a.label}{/if}</span>
+        <span style="flex: 1; font-size: 13px; font-weight: 700; color: var(--gold); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{data.a.owner}{#if data.a.label} · {data.a.label}{/if}</span>
         <span style="width: 46px;"></span>
-        <span style="flex: 1; font-size: 11px; font-weight: 700; color: var(--gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{data.b.owner}{#if data.b.label} · {data.b.label}{/if}</span>
+        <span style="flex: 1; font-size: 13px; font-weight: 700; color: var(--gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{data.b.owner}{#if data.b.label} · {data.b.label}{/if}</span>
         <span style="width: 12px;"></span>
       </div>
 
       <!-- Group-game 1/X/2 comparison, chronological — surfaced first -->
       {#if (data.groupMatches || []).length > 0}
         <div style="margin-bottom: 18px;">
-          <div style="font-size: 11px; font-weight: 700; color: var(--gold); margin-bottom: 2px;">⚽ Partidos de grupos · 1 / X / 2</div>
-          <p style="font-size: 8px; color: var(--text-dim); margin: 0 0 6px;">columna izq. = {data.a.owner.split(' ')[0]} · der. = {data.b.owner.split(' ')[0]} · <span style="color: var(--green);">✓</span> acertó · = mismo pronóstico</p>
+          <div style="font-size: 13px; font-weight: 700; color: var(--gold); margin-bottom: 2px;">⚽ Partidos de grupos · 1 / X / 2</div>
+          <p style="font-size: 12px; color: var(--text-dim); margin: 0 0 6px;">columna izq. = {data.a.owner.split(' ')[0]} · der. = {data.b.owner.split(' ')[0]} · <span style="color: var(--green);">✓</span> acertó · = mismo pronóstico</p>
           {#each matchesByDate as [dateLabel, ms]}
-            <div style="font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin: 10px 0 4px;">{dateLabel}</div>
+            <div style="font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; margin: 10px 0 4px;">{dateLabel}</div>
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 4px 12px; align-items: start;">
               {#each ms as m}{@render matchRow(m)}{/each}
             </div>
@@ -235,23 +220,23 @@
       {/if}
 
       <div style="display: flex; flex-direction: column; gap: 4px;">
-        {@render row('Campeón', data.a.champion, data.b.champion)}
+        {@render row('Campeón', data.a.champion, data.b.champion, data.actualChampion)}
         {#each groups as g}
-          {@render row(`1.º ${g}`, data.a.groupWinners[g] ?? null, data.b.groupWinners[g] ?? null)}
+          {@render row(`1.º ${g}`, data.a.groupWinners[g] ?? null, data.b.groupWinners[g] ?? null, data.actualGroupWinners?.[g] ?? null)}
         {/each}
       </div>
 
       <!-- Finalists + tiebreaker -->
       <div style="margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
         <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px;">
-          <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Finalistas · {data.a.owner.split(' ')[0]}</div>
-          {#each data.a.finalists as t}<div style="font-size: 11px;">{@html tFlag(t)} {tName(t)}</div>{/each}
-          {#if data.a.tiebreaker}<div style="font-size: 9px; color: var(--text-dim); margin-top: 6px;">Final: {data.a.tiebreaker.home}-{data.a.tiebreaker.away}</div>{/if}
+          <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Finalistas · {data.a.owner.split(' ')[0]}</div>
+          {#each data.a.finalists as t}<div style="font-size: 13px;">{@html tFlag(t)} {tName(t)}</div>{/each}
+          {#if data.a.tiebreaker}<div style="font-size: 12px; color: var(--text-dim); margin-top: 6px;">Final: {data.a.tiebreaker.home}-{data.a.tiebreaker.away}</div>{/if}
         </div>
         <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px;">
-          <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Finalistas · {data.b.owner.split(' ')[0]}</div>
-          {#each data.b.finalists as t}<div style="font-size: 11px;">{@html tFlag(t)} {tName(t)}</div>{/each}
-          {#if data.b.tiebreaker}<div style="font-size: 9px; color: var(--text-dim); margin-top: 6px;">Final: {data.b.tiebreaker.home}-{data.b.tiebreaker.away}</div>{/if}
+          <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Finalistas · {data.b.owner.split(' ')[0]}</div>
+          {#each data.b.finalists as t}<div style="font-size: 13px;">{@html tFlag(t)} {tName(t)}</div>{/each}
+          {#if data.b.tiebreaker}<div style="font-size: 12px; color: var(--text-dim); margin-top: 6px;">Final: {data.b.tiebreaker.home}-{data.b.tiebreaker.away}</div>{/if}
         </div>
       </div>
     {/if}
