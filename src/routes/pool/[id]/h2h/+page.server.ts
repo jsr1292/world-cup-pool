@@ -2,6 +2,8 @@ import { getPoolById, getUserPredictions } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
 import { getTeamsMapCached } from '$lib/server/cache.js';
 import { error } from '@sveltejs/kit';
+import { computeAttribution, type ItemPoints } from '$lib/h2h-attribution.js';
+import { shortName } from '$lib/teams.js';
 import type { PageServerLoad } from './$types.js';
 
 // Head-to-head: compare two entries' predictions side by side. Gated to fully
@@ -25,7 +27,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
   const betsLocked = !!dg && dg <= now && !!dk && dk <= now;
   const safePool = { id: pool.id, name: pool.name, allow_multiple_predictions: pool.allow_multiple_predictions };
 
-  if (!betsLocked) return { pool: safePool, betsLocked: false, entries: [], a: null, b: null, teams: {} };
+  if (!betsLocked) return { pool: safePool, betsLocked: false, entries: [], a: null, b: null, teams: {}, attribution: null };
 
   const { rows: entries } = await query(
     `SELECT p.id, u.display_name, p.label FROM predictions p JOIN users u ON u.id = p.user_id
@@ -49,12 +51,74 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     ORDER BY kickoff_time NULLS LAST, sort_order
   `);
 
-  return { pool: safePool, betsLocked: true, entries, a, b, teams, groupMatches };
+  let attribution = null;
+  if (aId && bId) {
+    const ai = await itemPointsFor(aId);
+    const bi = await itemPointsFor(bId);
+    const tName = (id: number | null) => (id != null && teams[id]?.name ? shortName(teams[id].name) : '—');
+    const PHASE_LABEL: Record<string, string> = {
+      r32: 'Dieciseisavos', r16: 'Octavos', qf: 'Cuartos', sf: 'Semifinales', final: 'Campeón', '3rd': '3er puesto',
+    };
+    const items: ItemPoints[] = [];
+
+    // Resultados — one item per group fixture (chronological list already loaded).
+    for (const m of groupMatches) {
+      const you = ai.matchPts[m.id] ?? 0, them = bi.matchPts[m.id] ?? 0;
+      items.push({
+        key: `res:${m.id}`, category: 'resultados',
+        label: `${tName(m.home_team_id)}–${tName(m.away_team_id)}`,
+        you, them,
+      });
+    }
+    // Posición — one item per group A..L (union of both sides' group rows).
+    for (const g of new Set([...Object.keys(ai.groupPts), ...Object.keys(bi.groupPts)])) {
+      items.push({
+        key: `pos:${g}`, category: 'posicion', label: `Grupo ${g} · posición`,
+        you: ai.groupPts[g] ?? 0, them: bi.groupPts[g] ?? 0,
+      });
+    }
+    // Eliminatorias — one item per (phase, slot); label by whichever side scored.
+    for (const k of new Set([...Object.keys(ai.bracket), ...Object.keys(bi.bracket)])) {
+      const you = ai.bracket[k]?.pts ?? 0, them = bi.bracket[k]?.pts ?? 0;
+      const phase = k.split(':')[0];
+      const scorerTeam = you >= them ? ai.bracket[k]?.teamId : bi.bracket[k]?.teamId;
+      items.push({
+        key: `ko:${k}`, category: 'eliminatorias',
+        label: `${PHASE_LABEL[phase] ?? phase} · ${tName(scorerTeam ?? null)}`,
+        you, them,
+      });
+    }
+    attribution = computeAttribution(items);
+  }
+
+  return { pool: safePool, betsLocked: true, entries, a, b, teams, groupMatches, attribution };
 };
 
 function pickId(raw: string | null, ids: Set<number>): number | null {
   const n = raw && /^\d+$/.test(raw) ? Number(raw) : null;
   return n && ids.has(n) ? n : null;
+}
+
+async function itemPointsFor(pid: number) {
+  const matchPts: Record<number, number> = {};
+  for (const r of (await query(
+    `SELECT mp.match_id AS mid, mp.points_earned AS pts
+     FROM match_predictions mp JOIN matches m ON m.id = mp.match_id AND m.phase = 'group'
+     WHERE mp.prediction_id = $1`, [pid]
+  )).rows) matchPts[Number(r.mid)] = Number(r.pts) || 0;
+
+  const groupPts: Record<string, number> = {};
+  for (const r of (await query(
+    `SELECT group_name AS g, points_earned AS pts FROM group_predictions WHERE prediction_id = $1`, [pid]
+  )).rows) groupPts[r.g] = Number(r.pts) || 0;
+
+  // Knockout keyed by "phase:slot", carrying the picked team for labels.
+  const bracket: Record<string, { teamId: number | null; pts: number }> = {};
+  for (const r of (await query(
+    `SELECT phase, slot, team_id, points_earned AS pts FROM bracket_predictions WHERE prediction_id = $1`, [pid]
+  )).rows) bracket[`${r.phase}:${r.slot}`] = { teamId: r.team_id, pts: Number(r.pts) || 0 };
+
+  return { matchPts, groupPts, bracket };
 }
 
 async function sideFor(pid: number, entries: any[]) {
