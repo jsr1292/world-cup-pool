@@ -68,4 +68,33 @@ describe('computeAttribution', () => {
     expect(a.swings).toEqual([]);
     expect(a.categories.every((c) => c.delta === 0)).toBe(true);
   });
+
+  it('breaks equal |delta| ties by category order, not key order', () => {
+    // Both deltas are +5; key order would put 'a' first, but category order
+    // (posicion before resultados) must win the tiebreak.
+    const a = computeAttribution([
+      item('res:a', 'resultados', 5, 0),
+      item('pos:z', 'posicion', 5, 0),
+    ]);
+    expect(a.swings.map((s) => s.key)).toEqual(['pos:z', 'res:a']);
+  });
+
+  it('defaults maxSwings to 5 when opts is omitted', () => {
+    const items = [
+      item('res:1', 'resultados', 1, 0), item('res:2', 'resultados', 1, 0),
+      item('res:3', 'resultados', 1, 0), item('res:4', 'resultados', 1, 0),
+      item('res:5', 'resultados', 1, 0), item('res:6', 'resultados', 1, 0),
+    ];
+    const a = computeAttribution(items);
+    expect(a.swings.length).toBe(5);
+  });
+
+  it('handles empty input without throwing', () => {
+    const a = computeAttribution([]);
+    expect(a.gap).toBe(0);
+    expect(a.swings).toEqual([]);
+    expect(a.categories.every((c) => c.delta === 0)).toBe(true);
+    expect(a.yourTotal).toBe(0);
+    expect(a.theirTotal).toBe(0);
+  });
 });

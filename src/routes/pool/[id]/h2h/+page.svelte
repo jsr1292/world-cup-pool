@@ -124,7 +124,7 @@
           {/each}
           <div style="display: flex; font-size: 12px; padding: 6px 0 0; margin-top: 4px; border-top: 1px solid var(--border); font-weight: 800;">
             <span style="flex: 1; color: var(--text-muted);">Total</span>
-            <span style="width: 34px; text-align: right; color: {at.gap < 0 ? 'var(--red)' : at.gap > 0 ? 'var(--green)' : 'var(--text-dim)'};">{at.gap > 0 ? '+' : ''}{at.gap}</span>
+            <span style="width: 34px; text-align: right; color: {at.gap < 0 ? 'var(--red)' : at.gap > 0 ? 'var(--green)' : 'var(--gold)'};">{at.gap > 0 ? '+' : ''}{at.gap}</span>
           </div>
 
           {#if at.swings.length > 0}

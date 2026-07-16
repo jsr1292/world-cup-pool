@@ -2,7 +2,7 @@ import { getPoolById, getUserPredictions } from '$lib/server/queries.js';
 import { query } from '$lib/server/db.js';
 import { getTeamsMapCached } from '$lib/server/cache.js';
 import { error } from '@sveltejs/kit';
-import { computeAttribution, type ItemPoints } from '$lib/h2h-attribution.js';
+import { computeAttribution, type ItemPoints, type Attribution } from '$lib/h2h-attribution.js';
 import { shortName } from '$lib/teams.js';
 import { rankGroup, type GsMatch } from '$lib/group-standings.js';
 import type { PageServerLoad } from './$types.js';
@@ -62,7 +62,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
     const finishedCount: Record<string, number> = {};
     for (const m of groupMatches) {
       if (!m.group_name) continue;
-      finishedCount[m.group_name] = (finishedCount[m.group_name] ?? 0) + (m.status === 'finished' ? 1 : 0);
+      finishedCount[m.group_name] = (finishedCount[m.group_name] ?? 0) +
+        (m.status === 'finished' && m.home_score != null && m.away_score != null ? 1 : 0);
       if (m.status === 'finished' && m.home_score != null && m.away_score != null) {
         (byGroup[m.group_name] ??= []).push({
           homeTeamId: m.home_team_id, awayTeamId: m.away_team_id,
@@ -90,7 +91,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
       : fm.penalty_winner_id ?? null)
     : null;
 
-  let attribution = null;
+  let attribution: Attribution | null = null;
   if (aId && bId) {
     const ai = await itemPointsFor(aId);
     const bi = await itemPointsFor(bId);
