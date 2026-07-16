@@ -70,13 +70,15 @@ describe('computeAttribution', () => {
   });
 
   it('breaks equal |delta| ties by category order, not key order', () => {
-    // Both deltas are +5; key order would put 'a' first, but category order
-    // (posicion before resultados) must win the tiebreak.
+    // Both deltas are +5. Plain keys 'a'/'z' are chosen so key order alone would
+    // put 'a' first — the category tiebreak (posicion before resultados) must
+    // override that and put the posicion item ('z') first. Prefixed keys like
+    // 'pos:'/'res:' would let the key fallback pass this by accident.
     const a = computeAttribution([
-      item('res:a', 'resultados', 5, 0),
-      item('pos:z', 'posicion', 5, 0),
+      item('a', 'resultados', 5, 0),
+      item('z', 'posicion', 5, 0),
     ]);
-    expect(a.swings.map((s) => s.key)).toEqual(['pos:z', 'res:a']);
+    expect(a.swings.map((s) => s.key)).toEqual(['z', 'a']);
   });
 
   it('defaults maxSwings to 5 when opts is omitted', () => {
