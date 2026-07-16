@@ -173,7 +173,7 @@ export async function getSimulatorData(
     stakes = computeStakes(koMatches, oddsEntries, scoring, koMeta, (id: number) => ({
       name: (teams as Record<number, any>)[id]?.name ?? '?',
       flag: (teams as Record<number, any>)[id]?.flag_code ?? '',
-    }));
+    }), { pot: (Number(pool.buy_in) || 0) * entries.length });
   }
 
   const payload = { pool: safePool, betsLocked: true, teams, entries, matches, picks, orders, matchOutcomePts, groupPositionPts, odds, oddsMeta, stakes, koMatches: koMatchesOut, bracketEntries, knockoutRules };

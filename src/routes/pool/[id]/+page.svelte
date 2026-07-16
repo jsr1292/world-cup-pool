@@ -584,7 +584,7 @@
   <div class="tab-content-wrapper" class:slide-left={slideDir === 'left'} class:slide-right={slideDir === 'right'} onanimationend={() => slideDir = ''}>
   <!-- Clasificación -->
   {#if tab === 'leaderboard'}
-    <StakesBanner {stakes} />
+    <StakesBanner {stakes} currency={pool.currency} />
     {#if data.leaderboard == null}
       <!-- Skeleton -->
       <div style="display: flex; flex-direction: column; gap: 8px;">
