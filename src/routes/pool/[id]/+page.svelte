@@ -711,31 +711,36 @@
         {#each data.leaderboard as entry, i}
           {@const mine = entry.user_id === data.userId}
           {@const rank = leaderboardRanks[i]}
-          <svelte:element this={betsLocked ? 'a' : 'div'} href={betsLocked ? `/pool/${pool.id}/summary?view=${entry.id}` : undefined} id={mine ? 'my-row' : ''} class="leaderboard-row" class:is-me={mine} class:is-first={rank === 1} class:is-link={betsLocked}>
-            <div class="lb-avatar" style={rank === 1 ? 'background: linear-gradient(135deg, #c9a84c, #e8c96a); color: #1a1a2e;' : rank === 2 ? 'background: linear-gradient(135deg, #a0a0a0, #c0c0c0); color: #1a1a2e;' : rank === 3 ? 'background: linear-gradient(135deg, #b87333, #cd7f32); color: #1a1a2e;' : 'background: rgba(255,255,255,0.06); color: var(--text-dim);'}>
-              {entry.display_name?.[0]?.toUpperCase() || '?'}
-            </div>
-            <div class="lb-main">
-              <div class="lb-name" class:mine>{rank}.{#if moverDeltas[i] !== 0}<span class="lb-mover" style="color: {moverDeltas[i] > 0 ? 'var(--green)' : 'var(--red)'};">{moverDeltas[i] > 0 ? '▲' : '▼'}{Math.abs(moverDeltas[i])}</span>{/if} {entry.display_name}{#if pool.allow_multiple_predictions}<span class="lb-label"> · {entry.label || 'Principal'}</span>{:else if entry.label}<span class="lb-label"> ({entry.label})</span>{/if}</div>
-              <div class="lb-tags">
-                {#if entry.result_points > 0}
-                  <span class="lb-tag">Resultados +{entry.result_points}</span>
-                {/if}
-                {#if awardsPosition && entry.position_points > 0}
-                  <span class="lb-tag">Posición +{entry.position_points}</span>
-                {/if}
-                {#each Object.entries(entry.bracket_points || {}) as [phase, pts]}
-                  <span class="lb-tag">{phaseLabels[phase] || phase} +{pts}</span>
-                {/each}
+          <div class="lb-row-wrap">
+            <svelte:element this={betsLocked ? 'a' : 'div'} href={betsLocked ? `/pool/${pool.id}/summary?view=${entry.id}` : undefined} id={mine ? 'my-row' : ''} class="leaderboard-row" class:is-me={mine} class:is-first={rank === 1} class:is-link={betsLocked}>
+              <div class="lb-avatar" style={rank === 1 ? 'background: linear-gradient(135deg, #c9a84c, #e8c96a); color: #1a1a2e;' : rank === 2 ? 'background: linear-gradient(135deg, #a0a0a0, #c0c0c0); color: #1a1a2e;' : rank === 3 ? 'background: linear-gradient(135deg, #b87333, #cd7f32); color: #1a1a2e;' : 'background: rgba(255,255,255,0.06); color: var(--text-dim);'}>
+                {entry.display_name?.[0]?.toUpperCase() || '?'}
               </div>
-            </div>
-            <div class="lb-score">
-              <div class="lb-pts">{entry.total_score}</div>
-              <div class="lb-pts-label">pts</div>
-              {#if leaderboardPrizes[i] > 0}<div class="lb-prize">💰 {fmtMoney(leaderboardPrizes[i])}</div>{/if}
-            </div>
-            {#if betsLocked}<span class="lb-chevron">›</span>{/if}
-          </svelte:element>
+              <div class="lb-main">
+                <div class="lb-name" class:mine>{rank}.{#if moverDeltas[i] !== 0}<span class="lb-mover" style="color: {moverDeltas[i] > 0 ? 'var(--green)' : 'var(--red)'};">{moverDeltas[i] > 0 ? '▲' : '▼'}{Math.abs(moverDeltas[i])}</span>{/if} {entry.display_name}{#if pool.allow_multiple_predictions}<span class="lb-label"> · {entry.label || 'Principal'}</span>{:else if entry.label}<span class="lb-label"> ({entry.label})</span>{/if}</div>
+                <div class="lb-tags">
+                  {#if entry.result_points > 0}
+                    <span class="lb-tag">Resultados +{entry.result_points}</span>
+                  {/if}
+                  {#if awardsPosition && entry.position_points > 0}
+                    <span class="lb-tag">Posición +{entry.position_points}</span>
+                  {/if}
+                  {#each Object.entries(entry.bracket_points || {}) as [phase, pts]}
+                    <span class="lb-tag">{phaseLabels[phase] || phase} +{pts}</span>
+                  {/each}
+                </div>
+              </div>
+              <div class="lb-score">
+                <div class="lb-pts">{entry.total_score}</div>
+                <div class="lb-pts-label">pts</div>
+                {#if leaderboardPrizes[i] > 0}<div class="lb-prize">💰 {fmtMoney(leaderboardPrizes[i])}</div>{/if}
+              </div>
+              {#if betsLocked}<span class="lb-chevron">›</span>{/if}
+            </svelte:element>
+            {#if betsLocked && !mine}
+              <a class="vs-me" href="/pool/{pool.id}/h2h?b={entry.id}" aria-label="Comparar conmigo" onclick={(e) => e.stopPropagation()}><Icon name="swords" size={11} /> vs mí</a>
+            {/if}
+          </div>
         {/each}
       </div>
     {/if}
@@ -1326,6 +1331,15 @@
   .lb-pts-label { font-size: 9px; color: var(--text-muted); }
   .lb-prize { font-size: 10px; font-weight: 700; color: var(--green); margin-top: 3px; }
   .lb-chevron { font-size: 14px; color: var(--text-dim); margin-left: 2px; }
+  .lb-row-wrap { position: relative; }
+  .vs-me {
+    position: absolute; top: 6px; right: 8px; z-index: 2;
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 9px; color: var(--text-muted);
+    background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: 5px; padding: 2px 6px; text-decoration: none;
+  }
+  .vs-me:hover { color: var(--gold); border-color: rgba(201,168,76,0.4); }
 
   @media (min-width: 768px) {
     .pool-page { max-width: 860px; margin: 0 auto; }
